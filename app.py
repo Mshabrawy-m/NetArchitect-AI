@@ -1,8 +1,8 @@
 """NetArchitect AI - Streamlit entry point.
 
-Phase 1: minimal skeleton with a sidebar navigation placeholder. No page
-routing logic is implemented yet; functional pages are introduced
-progressively in later phases.
+Phase 3 introduces functional page routing. The Topology Editor is the first
+working engineering page; the remaining planned pages stay as placeholders and
+are added phase by phase.
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ from __future__ import annotations
 import streamlit as st
 
 from config.settings import get_settings
+from ui.pages.topology_editor import render as render_topology_editor
 
 # The 14 planned application pages from the blueprint (section 7).
-# "Dashboard" is the current view; the rest are placeholders.
 PAGES: tuple[str, ...] = (
     "Dashboard",
     "AI Network Designer",
@@ -30,38 +30,25 @@ PAGES: tuple[str, ...] = (
     "Settings",
 )
 
+READY_PAGES: frozenset[str] = frozenset({"Dashboard", "Topology Editor"})
 
-def render_sidebar_navigation() -> None:
-    """Render the sidebar navigation placeholder.
 
-    Lists the planned pages. The current view (Dashboard) is emphasized;
-    every other page is marked as coming soon. This is a placeholder only.
-    """
+def render_sidebar_navigation() -> str:
+    """Render the sidebar navigation and return the selected page."""
     with st.sidebar:
         st.markdown("## Navigation")
-        for index, page in enumerate(PAGES, start=1):
-            if page == "Dashboard":
-                st.markdown(f"**{index}. {page}**  \n_(current view)_")
-            else:
-                st.markdown(f"{index}. {page}  \n_(coming soon)_")
+        page = st.selectbox("Page", PAGES, index=0, key="page_nav")
+        if page in READY_PAGES:
+            st.caption("Available now: Dashboard and Topology Editor.")
+        else:
+            st.caption("This page arrives in a later phase.")
+        st.divider()
+        st.caption("NetArchitect AI - deterministic network engineering first.")
+    return page
 
 
-def main() -> None:
-    """Render the Phase 1 startup page."""
-    st.set_page_config(
-        page_title="NetArchitect AI",
-        page_icon=":gear:",
-        layout="wide",
-        menu_items={
-            "About": (
-                "NetArchitect AI - agentic network architecture, digital "
-                "twin, and multi-objective optimization platform."
-            ),
-        },
-    )
-
-    render_sidebar_navigation()
-
+def render_dashboard() -> None:
+    """Render the application overview page."""
     settings = get_settings()
 
     st.title("NetArchitect AI")
@@ -78,10 +65,40 @@ def main() -> None:
     st.write(f"**Deployment target:** {settings.DEPLOYMENT_TARGET}")
 
     st.info(
-        "Phase 1 - Project Foundation and Environment. This page is the "
-        "application entry point; functional pages are introduced "
-        "progressively in later phases."
+        "Phase 3 is in progress. The Topology Editor is available from the "
+        "sidebar; remaining pages are introduced with their engineering "
+        "modules."
     )
+
+
+def render_placeholder(page: str) -> None:
+    """Render the coming-soon state for a planned page."""
+    st.title(page)
+    st.info(f"{page} will be implemented in a later phase.")
+
+
+def main() -> None:
+    """Render the selected application page."""
+    st.set_page_config(
+        page_title="NetArchitect AI",
+        page_icon=":material/hub:",
+        layout="wide",
+        menu_items={
+            "About": (
+                "NetArchitect AI - agentic network architecture, digital "
+                "twin, and multi-objective optimization platform."
+            ),
+        },
+    )
+
+    page = render_sidebar_navigation()
+
+    if page == "Dashboard":
+        render_dashboard()
+    elif page == "Topology Editor":
+        render_topology_editor()
+    else:
+        render_placeholder(page)
 
 
 if __name__ == "__main__":

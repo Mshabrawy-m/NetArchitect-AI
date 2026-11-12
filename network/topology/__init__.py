@@ -4,7 +4,15 @@ Import from ``network.topology`` rather than from the individual modules.
 """
 
 from .connectivity import ConnectedComponent, ConnectivityReport, analyze_connectivity
-from .generators import generate_mesh, generate_ring, generate_star, generate_tree
+from .generators import (
+    generate_hierarchical_campus,
+    generate_hybrid,
+    generate_mesh,
+    generate_ring,
+    generate_spine_leaf,
+    generate_star,
+    generate_tree,
+)
 from .graph import from_networkx, to_networkx, topology_directedness
 from .operations import (
     add_device,
@@ -26,8 +34,11 @@ __all__ = [
     "enforce_limits",
     "from_json",
     "from_networkx",
+    "generate_hierarchical_campus",
+    "generate_hybrid",
     "generate_mesh",
     "generate_ring",
+    "generate_spine_leaf",
     "generate_star",
     "generate_tree",
     "remove_device",

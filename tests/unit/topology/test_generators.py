@@ -8,12 +8,16 @@ from config.limits import MAX_EDGES, MAX_NODES
 from core.exceptions import LimitsExceededError
 from network.topology.connectivity import analyze_connectivity
 from network.topology.generators import (
+    generate_hierarchical_campus,
+    generate_hybrid,
     generate_mesh,
     generate_ring,
+    generate_spine_leaf,
     generate_star,
     generate_tree,
 )
 from network.topology.graph import topology_directedness
+from network.topology.serialization import from_json, to_json
 
 
 def _assert_well_formed(topology) -> None:
@@ -21,6 +25,10 @@ def _assert_well_formed(topology) -> None:
     assert analyze_connectivity(topology).is_connected is True
     assert len({device.id for device in topology.devices}) == len(topology.devices)
     assert len({link.id for link in topology.links}) == len(topology.links)
+
+
+def _assert_json_round_trip(topology) -> None:
+    assert from_json(to_json(topology)) == topology
 
 
 # Star -----------------------------------------------------------------------
@@ -172,3 +180,156 @@ def test_tree_rejects_oversized_request() -> None:
     # depth 8 with branching factor 2 needs 511 devices.
     with pytest.raises(LimitsExceededError, match=f"limit of {MAX_NODES}"):
         generate_tree(depth=8, branching_factor=2)
+
+
+# Hierarchical campus --------------------------------------------------------
+
+
+def test_hierarchical_campus_single_homed_counts() -> None:
+    topology = generate_hierarchical_campus(
+        distribution_count=3,
+        access_per_distribution=2,
+        redundant_uplinks=False,
+    )
+
+    assert len(topology.devices) == 1 + 3 + 3 * 2
+    assert len(topology.links) == 3 + 3 * 2
+    roles = [device.role.value for device in topology.devices]
+    assert roles.count("core") == 1
+    assert roles.count("distribution") == 3
+    assert roles.count("access") == 6
+    _assert_well_formed(topology)
+    _assert_json_round_trip(topology)
+
+
+def test_hierarchical_campus_dual_homed_counts_and_degrees() -> None:
+    topology = generate_hierarchical_campus(
+        distribution_count=3,
+        access_per_distribution=2,
+        redundant_uplinks=True,
+    )
+
+    assert len(topology.devices) == 2 + 3 + 3 * 2
+    assert len(topology.links) == 2 * 3 + 2 * 3 * 2
+    degrees = {device.id: 0 for device in topology.devices}
+    for link in topology.links:
+        for endpoint in link.endpoints:
+            degrees[endpoint] += 1
+    # Each distribution switch: two core uplinks + 2 access switches x 2 links.
+    assert degrees["campus-dist-01"] == 2 + 2 * 2
+    # Each access switch: dual-homed to two distribution switches.
+    assert degrees["campus-acc-01-01"] == 2
+    _assert_well_formed(topology)
+    _assert_json_round_trip(topology)
+
+
+def test_hierarchical_campus_is_deterministic() -> None:
+    first = generate_hierarchical_campus(distribution_count=2, access_per_distribution=3)
+    second = generate_hierarchical_campus(
+        distribution_count=2, access_per_distribution=3
+    )
+    assert first == second
+
+
+def test_hierarchical_campus_rejects_invalid_parameters() -> None:
+    with pytest.raises(ValueError, match="distribution_count"):
+        generate_hierarchical_campus(distribution_count=0)
+    with pytest.raises(ValueError, match="access_per_distribution"):
+        generate_hierarchical_campus(access_per_distribution=0)
+    with pytest.raises(ValueError, match="redundant_uplinks"):
+        generate_hierarchical_campus(
+            distribution_count=1, redundant_uplinks=True
+        )
+
+
+def test_hierarchical_campus_rejects_oversized_request() -> None:
+    with pytest.raises(LimitsExceededError, match=f"limit is {MAX_NODES}"):
+        generate_hierarchical_campus(
+            distribution_count=100, access_per_distribution=10
+        )
+
+
+# Spine-leaf ----------------------------------------------------------------
+
+
+def test_spine_leaf_full_mesh_counts_and_degrees() -> None:
+    topology = generate_spine_leaf(spines=2, leaves=4, full_mesh=True)
+
+    assert len(topology.devices) == 6
+    assert len(topology.links) == 2 * 4
+    degrees = {device.id: 0 for device in topology.devices}
+    for link in topology.links:
+        for endpoint in link.endpoints:
+            degrees[endpoint] += 1
+    assert degrees["fabric-spine-01"] == 4
+    assert degrees["fabric-leaf-01"] == 2
+    _assert_well_formed(topology)
+    _assert_json_round_trip(topology)
+
+
+def test_spine_leaf_partial_mesh_counts() -> None:
+    topology = generate_spine_leaf(spines=2, leaves=5, full_mesh=False)
+
+    assert len(topology.devices) == 7
+    assert len(topology.links) == 5 * 2
+    _assert_well_formed(topology)
+    _assert_json_round_trip(topology)
+
+
+def test_spine_leaf_is_deterministic() -> None:
+    assert generate_spine_leaf(spines=3, leaves=4) == generate_spine_leaf(
+        spines=3, leaves=4
+    )
+
+
+def test_spine_leaf_rejects_invalid_parameters() -> None:
+    with pytest.raises(ValueError, match="spines"):
+        generate_spine_leaf(spines=0)
+    with pytest.raises(ValueError, match="leaves"):
+        generate_spine_leaf(leaves=0)
+
+
+def test_spine_leaf_rejects_oversized_node_request() -> None:
+    with pytest.raises(LimitsExceededError, match=f"limit is {MAX_NODES}"):
+        generate_spine_leaf(spines=250, leaves=251)
+
+
+def test_spine_leaf_rejects_oversized_edge_request() -> None:
+    # 50 spines x 41 leaves = 2050 links with only 91 devices.
+    with pytest.raises(LimitsExceededError, match=f"limit is {MAX_EDGES}"):
+        generate_spine_leaf(spines=50, leaves=41)
+
+
+# Hybrid --------------------------------------------------------------------
+
+
+def test_hybrid_composes_ring_and_stars() -> None:
+    topology = generate_hybrid(core_nodes=4, access_per_core=3)
+
+    assert len(topology.devices) == 4 * (2 + 3)
+    assert len(topology.links) == 4 * (3 + 2)
+    roles = [device.role.value for device in topology.devices]
+    assert roles.count("core") == 4
+    assert roles.count("distribution") == 4
+    assert roles.count("access") == 12
+    assert any(link.id == "hybrid-link-uplink-01" for link in topology.links)
+    _assert_well_formed(topology)
+    _assert_json_round_trip(topology)
+
+
+def test_hybrid_is_deterministic() -> None:
+    assert generate_hybrid(core_nodes=5, access_per_core=2) == generate_hybrid(
+        core_nodes=5, access_per_core=2
+    )
+
+
+def test_hybrid_rejects_invalid_parameters() -> None:
+    with pytest.raises(ValueError, match="core_nodes"):
+        generate_hybrid(core_nodes=2)
+    with pytest.raises(ValueError, match="access_per_core"):
+        generate_hybrid(access_per_core=0)
+
+
+def test_hybrid_rejects_oversized_request() -> None:
+    with pytest.raises(LimitsExceededError, match=f"limit is {MAX_NODES}"):
+        generate_hybrid(core_nodes=100, access_per_core=10)
