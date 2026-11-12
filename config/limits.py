@@ -20,6 +20,10 @@ MAX_SUBNETS: int = 256
 # than loop iterations.
 MAX_HOSTS_PER_SUBNET: int = 1_000_000
 
+# Maximum number of alternative simple paths returned for one source/destination
+# pair. Keeps k-shortest-path enumeration bounded on the deployment target.
+MAX_ALTERNATIVE_PATHS: int = 10
+
 # Maximum number of what-if scenarios retained for comparison.
 MAX_SCENARIOS: int = 50
 
