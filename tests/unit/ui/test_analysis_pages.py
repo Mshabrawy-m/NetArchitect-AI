@@ -7,6 +7,7 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 from network.topology import generate_ring, generate_spine_leaf
+from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 
@@ -26,6 +27,7 @@ def test_routing_page_renders_paths_tables_and_failures() -> None:
     at.session_state["topology"] = generate_ring(node_count=4)
     at.selectbox(key="page_nav").select("Routing Analysis").run()
     assert not at.exception
+    assert state.TWIN_KEY in at.session_state
 
     at.selectbox(key="routing_destination").select("ring-node-02").run()
     assert not at.exception

@@ -9,6 +9,7 @@ from streamlit.testing.v1 import AppTest
 from core.schemas.validation import ValidationReport
 from network.addressing import SubnetInfo, VlsmResult
 from network.vlan import VlanPlanResult
+from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 
@@ -38,6 +39,15 @@ def test_ip_addressing_page_calculates_and_validates() -> None:
         "192.168.1.224/28",
         "192.168.1.240/29",
     ]
+    twin = at.session_state[state.TWIN_KEY]
+    assert twin.addressing is not None
+    assert [str(subnet.network) for subnet in twin.addressing.subnets] == [
+        "192.168.1.0/25",
+        "192.168.1.128/26",
+        "192.168.1.192/27",
+        "192.168.1.224/28",
+        "192.168.1.240/29",
+    ]
 
     at.button(key="subnet_check_run").click().run()
     assert not at.exception
@@ -60,10 +70,9 @@ def test_vlan_dhcp_page_builds_default_plan() -> None:
     at.button(key="vlan_build_plan").click().run()
     assert not at.exception
 
-    state = at.session_state["vlan_plan_result"]
-    assert isinstance(state, dict)
-    plan = state["plan"]
-    scopes = state["scopes"]
+    twin = at.session_state[state.TWIN_KEY]
+    plan = twin.vlan_plan
+    scopes = twin.dhcp_scopes
     assert isinstance(plan, VlanPlanResult)
     assert len(plan.assignments) == 5
     assert len(scopes) == 5
@@ -77,6 +86,14 @@ def test_vlan_dhcp_page_builds_default_plan() -> None:
     assert all(
         scope.gateway == scope.network.network_address + 1 for scope in scopes
     )
+    assert twin.addressing is not None
+    assert [vlan.vlan_id for vlan in twin.addressing.vlan_plans] == [
+        10,
+        11,
+        12,
+        13,
+        14,
+    ]
     assert not at.exception
     assert at.get("dataframe")
     assert at.get("download_button")
@@ -92,4 +109,4 @@ def test_vlan_dhcp_page_reports_invalid_parent() -> None:
 
     assert not at.exception
     assert at.error
-    assert "vlan_plan_result" not in at.session_state
+    assert state.TWIN_KEY not in at.session_state

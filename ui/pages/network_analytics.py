@@ -2,8 +2,8 @@
 
 Presentation only: centrality, connectivity, critical entities, single points
 of failure, and redundancy are delegated to :mod:`network.analysis`. The page
-reads the one topology stored in ``st.session_state["topology"]`` and keeps no
-second copy of graph state.
+reads the baseline digital twin through :mod:`ui.state`; entities modeled as
+down in the twin are excluded from every metric.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 
 from core.exceptions import NetArchitectError
-from core.schemas.network import Topology
+from digital_twin import DigitalTwin, analysis_arguments, failed_entities
 from network.analysis import (
     METRIC_DEFINITIONS,
     AnalysisReport,
@@ -26,19 +26,13 @@ from network.analysis import (
     redundancy_rows,
     spof_rows,
 )
+from ui import state
 from ui.components import (
     csv_bytes,
     findings_frame,
     format_error,
     render_findings,
 )
-
-TOPOLOGY_KEY = "topology"
-
-
-def _current_topology() -> Topology | None:
-    topology = st.session_state.get(TOPOLOGY_KEY)
-    return topology if isinstance(topology, Topology) else None
 
 
 def _render_empty_state() -> None:
@@ -59,8 +53,8 @@ def _select(
     key: str,
     default_index: int = 0,
 ) -> str:
-    if key not in st.session_state or st.session_state[key] not in options:
-        st.session_state[key] = options[default_index]
+    if not state.session_has(key) or state.session_get(key) not in options:
+        state.session_set(key, options[default_index])
     return st.selectbox(label, options=options, key=key)
 
 
@@ -202,13 +196,14 @@ def _render_spof(report: AnalysisReport) -> None:
         )
 
 
-def _render_redundancy(topology: Topology) -> None:
+def _render_redundancy(twin: DigitalTwin) -> None:
     st.subheader("Path redundancy")
     st.caption(
         METRIC_DEFINITIONS["node_disjoint_paths"]
         + " "
         + METRIC_DEFINITIONS["edge_disjoint_paths"]
     )
+    topology = twin.topology
     device_ids = sorted(device.id for device in topology.devices)
     if not device_ids:
         st.info("The topology has no devices.")
@@ -230,7 +225,11 @@ def _render_redundancy(topology: Topology) -> None:
         )
 
     try:
-        result = redundancy(topology, source, destination)
+        result = redundancy(
+            source=source,
+            destination=destination,
+            **analysis_arguments(twin),
+        )
     except (NetArchitectError, ValueError) as error:
         st.error(format_error(error), title="Redundancy analysis failed")
         return
@@ -268,13 +267,16 @@ def _render_definitions() -> None:
 
 def render() -> None:
     """Render the network analytics page."""
-    topology = _current_topology()
-    if topology is None or not topology.devices:
+    twin = state.get_twin()
+    if twin is None or not twin.topology.devices:
         _render_empty_state()
         return
 
+    topology = twin.topology
+    baseline_failures = failed_entities(twin)
+
     try:
-        report = analyze_topology(topology)
+        report = analyze_topology(**analysis_arguments(twin))
     except (NetArchitectError, ValueError) as error:
         st.title("Network Analytics")
         st.error(format_error(error), title="Analysis failed")
@@ -286,6 +288,20 @@ def render() -> None:
         "design position and connectivity, not measured traffic or hardware "
         "performance."
     )
+    if baseline_failures.has_failures:
+        st.info(
+            "The digital twin currently models "
+            f"{len(baseline_failures.devices)} failed device(s) and "
+            f"{len(baseline_failures.links)} failed link(s). They are excluded "
+            "from every metric on this page."
+        )
+    if baseline_failures.stale_devices or baseline_failures.stale_links:
+        st.warning(
+            "The twin holds operational state for entities that are no longer "
+            "in the topology. That stale state is ignored here; review it on the "
+            "Digital Twin page.",
+            title="Stale twin state",
+        )
 
     columns = st.columns(5)
     columns[0].metric("Devices", len(topology.devices))
@@ -303,5 +319,5 @@ def render() -> None:
     _render_connectivity(report)
     _render_critical_entities(report)
     _render_spof(report)
-    _render_redundancy(topology)
+    _render_redundancy(twin)
     _render_definitions()

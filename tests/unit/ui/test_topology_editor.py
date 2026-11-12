@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 
 from core.schemas.network import Topology
 from network.topology.connectivity import analyze_connectivity
+from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 
@@ -22,10 +23,13 @@ def test_topology_editor_loads_and_generates_star() -> None:
     at.button(key="generate_topology").click().run()
     assert not at.exception
 
-    topology = at.session_state["topology"]
+    twin = at.session_state[state.TWIN_KEY]
+    topology = twin.topology
     assert isinstance(topology, Topology)
     assert topology.name == "Star topology"
     assert len(topology.devices) == 7
     assert len(topology.links) == 6
     assert analyze_connectivity(topology).is_connected is True
     assert at.get("plotly_chart")
+    # The legacy bare-topology key is migrated away, never kept in parallel.
+    assert state.LEGACY_TOPOLOGY_KEY not in at.session_state

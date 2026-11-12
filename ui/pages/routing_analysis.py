@@ -2,8 +2,9 @@
 
 Presentation only: path search, alternatives, routing tables, reachability,
 and failure handling are delegated to :mod:`network.routing`. The page reads
-the one topology stored in ``st.session_state["topology"]`` and never keeps a
-second copy of graph state.
+the baseline digital twin through :mod:`ui.state`; modeled device and link
+failures come from the twin, and the failure scenario adds further failures to
+a derived graph without modifying the twin.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import streamlit as st
 from config.limits import MAX_ALTERNATIVE_PATHS
 from core.exceptions import NetArchitectError
 from core.schemas.network import Topology
+from digital_twin import failed_entities, routing_arguments
 from network.routing import (
     AlternativePaths,
     ReachabilityMatrix,
@@ -31,9 +33,8 @@ from network.routing import (
     shortest_path,
 )
 from network.topology import to_networkx
+from ui import state
 from ui.components import csv_bytes, format_error
-
-TOPOLOGY_KEY = "topology"
 
 ROLE_COLORS = {
     "core": "#1f3a5f",
@@ -45,11 +46,6 @@ ROLE_COLORS = {
     "wan": "#6b4c3b",
     "dmz": "#8a6d3b",
 }
-
-
-def _current_topology() -> Topology | None:
-    topology = st.session_state.get(TOPOLOGY_KEY)
-    return topology if isinstance(topology, Topology) else None
 
 
 def _render_empty_state() -> None:
@@ -70,8 +66,8 @@ def _select(
     key: str,
     default_index: int = 0,
 ) -> str:
-    if key not in st.session_state or st.session_state[key] not in options:
-        st.session_state[key] = options[default_index]
+    if not state.session_has(key) or state.session_get(key) not in options:
+        state.session_set(key, options[default_index])
     return st.selectbox(label, options=options, key=key)
 
 
@@ -81,10 +77,10 @@ def _multi_select(
     key: str,
     help_text: str,
 ) -> list[str]:
-    current = st.session_state.get(key, [])
+    current = state.session_get(key, [])
     valid = [value for value in current if value in options]
     if valid != current:
-        st.session_state[key] = valid
+        state.session_set(key, valid)
     return st.multiselect(label, options=options, key=key, help=help_text)
 
 
@@ -107,7 +103,7 @@ def _comparison_frame(
                 "removed_devices": len(baseline.excluded_device_ids),
             },
             {
-                "scenario": "After selected failures",
+                "scenario": "After failures",
                 "devices": len(after.device_ids),
                 "reachable_ordered_pairs": _reachable_pairs(after),
                 "unreachable_ordered_pairs": after.unreachable_pairs,
@@ -382,7 +378,7 @@ def _render_path(
                 and baseline_path.device_ids != after_path.device_ids
             ):
                 st.info(
-                    "The selected failures change the forwarding path; the "
+                    "The modeled failures change the forwarding path; the "
                     "previous path is shown dashed in the topology view."
                 )
             frame = pd.DataFrame(path_rows(after_path))
@@ -422,7 +418,7 @@ def _render_alternatives(
         f"{MAX_ALTERNATIVE_PATHS}."
     )
     if failures_active:
-        st.caption("Alternatives are recomputed with the selected failures applied.")
+        st.caption("Alternatives are recomputed with the modeled failures applied.")
     if not alternatives.paths:
         st.info(alternatives.reason or "No alternative path is available.")
         return
@@ -448,7 +444,7 @@ def _render_routing_table(
         st.warning(after.reason)
     if failures_active:
         st.caption(
-            "Next hop and total cost before and after the selected failures. "
+            "Next hop and total cost before and after the modeled failures. "
             "Blank next hops mean the destination is no longer reachable."
         )
         frame = _routing_comparison(baseline, after)
@@ -512,7 +508,7 @@ def _render_reachability(
         width="stretch",
     )
     if failures_active:
-        after_tab, baseline_tab = st.tabs(["After selected failures", "Baseline"])
+        after_tab, baseline_tab = st.tabs(["After failures", "Baseline"])
         with after_tab:
             _render_matrix(after, label="After-failure", key="after")
         with baseline_tab:
@@ -525,11 +521,13 @@ def _render_reachability(
 
 def render() -> None:
     """Render the routing analysis page."""
-    topology = _current_topology()
-    if topology is None or not topology.devices:
+    twin = state.get_twin()
+    if twin is None or not twin.topology.devices:
         _render_empty_state()
         return
 
+    topology = twin.topology
+    baseline_failures = failed_entities(twin)
     device_ids = sorted(device.id for device in topology.devices)
     link_ids = sorted(link.id for link in topology.links)
 
@@ -567,56 +565,73 @@ def render() -> None:
     with st.expander("Failure scenario", expanded=False):
         profile_columns = st.columns(2)
         with profile_columns[0]:
-            failed_devices = _multi_select(
+            scenario_failed_devices = _multi_select(
                 "Failed devices",
                 device_ids,
                 "routing_failed_devices",
-                "Select devices to remove from the derived routing graph.",
+                "Select additional devices to remove from the derived routing graph.",
             )
         with profile_columns[1]:
-            failed_links = _multi_select(
+            scenario_failed_links = _multi_select(
                 "Failed links",
                 link_ids,
                 "routing_failed_links",
-                "Select links to remove from the derived routing graph.",
+                "Select additional links to remove from the derived routing graph.",
             )
         st.caption(
-            "Failures are applied to a derived graph only. The stored topology "
-            "is never modified."
+            "Failures are applied to a derived graph only. The stored twin is "
+            "never modified. Devices and links modeled as down in the digital "
+            "twin are always excluded and are added to any selection here."
         )
 
+    failed_devices = sorted(
+        set(baseline_failures.devices) | set(scenario_failed_devices)
+    )
+    failed_links = sorted(set(baseline_failures.links) | set(scenario_failed_links))
     failures_active = bool(failed_devices or failed_links)
 
+    if baseline_failures.has_failures:
+        st.info(
+            "The digital twin currently models "
+            f"{len(baseline_failures.devices)} failed device(s) and "
+            f"{len(baseline_failures.links)} failed link(s). Those are applied "
+            "to the baseline and to every scenario below."
+        )
+    if baseline_failures.stale_devices or baseline_failures.stale_links:
+        st.warning(
+            "The twin holds operational state for entities that are no longer "
+            "in the topology. That stale state is ignored here; review it on the "
+            "Digital Twin page.",
+            title="Stale twin state",
+        )
+
     try:
-        baseline_path = shortest_path(topology, source, destination)
+        baseline_arguments = routing_arguments(twin)
+        after_arguments = {
+            **baseline_arguments,
+            "failed_devices": tuple(failed_devices),
+            "failed_links": tuple(failed_links),
+        }
+        baseline_path = shortest_path(
+            source=source,
+            destination=destination,
+            **baseline_arguments,
+        )
         after_path = shortest_path(
-            topology,
-            source,
-            destination,
-            failed_devices=failed_devices,
-            failed_links=failed_links,
+            source=source,
+            destination=destination,
+            **after_arguments,
         )
         alternatives = alternative_paths(
-            topology,
-            source,
-            destination,
+            source=source,
+            destination=destination,
             k=k,
-            failed_devices=failed_devices,
-            failed_links=failed_links,
+            **after_arguments,
         )
-        baseline_table = routing_table(topology, source)
-        after_table = routing_table(
-            topology,
-            source,
-            failed_devices=failed_devices,
-            failed_links=failed_links,
-        )
-        baseline_matrix = reachability_matrix(topology)
-        after_matrix = reachability_matrix(
-            topology,
-            failed_devices=failed_devices,
-            failed_links=failed_links,
-        )
+        baseline_table = routing_table(source=source, **baseline_arguments)
+        after_table = routing_table(source=source, **after_arguments)
+        baseline_matrix = reachability_matrix(**baseline_arguments)
+        after_matrix = reachability_matrix(**after_arguments)
     except (NetArchitectError, ValueError) as error:
         st.error(format_error(error), title="Routing analysis failed")
         return

@@ -13,7 +13,7 @@ import streamlit as st
 from pydantic import ValidationError
 
 from core.exceptions import NetArchitectError
-from core.schemas.addressing import DhcpScope, Subnet
+from core.schemas.addressing import AddressingPlan, DhcpScope, Subnet, VlanPlan
 from core.schemas.organization import Organization
 from network.addressing import VlsmRequirement, allocate_vlsm, validate_addressing
 from network.vlan import (
@@ -26,14 +26,13 @@ from network.vlan import (
     validate_dhcp_scope,
     vlan_rows,
 )
+from ui import state
 from ui.components import (
     csv_bytes,
     findings_frame,
     format_error,
     render_findings,
 )
-
-PLAN_KEY = "vlan_plan_result"
 
 DEFAULT_DEPARTMENTS = pd.DataFrame(
     [
@@ -67,7 +66,7 @@ def _whole_number(value: object, label: str) -> int:
 
 
 def _default_departments() -> pd.DataFrame:
-    organization = st.session_state.get("organization")
+    organization = state.session_get("organization")
     if not isinstance(organization, Organization):
         return DEFAULT_DEPARTMENTS
     rows: list[dict[str, object]] = []
@@ -148,17 +147,37 @@ def _build_plan(
     return plan, scopes
 
 
+def _addressing_from_plan(plan: VlanPlanResult) -> AddressingPlan:
+    """Build an addressing plan with one VLAN plan per department assignment."""
+    return AddressingPlan(
+        vlan_plans=[
+            VlanPlan(
+                vlan_id=assignment.vlan_id,
+                name=assignment.vlan_name,
+                subnets=[
+                    Subnet(
+                        name=assignment.subnet_name,
+                        network=assignment.network,
+                    )
+                ],
+                purpose=assignment.purpose,
+            )
+            for assignment in plan.assignments
+        ],
+        subnets=[],
+    )
+
+
 def _render_results() -> None:
-    state = st.session_state.get(PLAN_KEY)
-    if not isinstance(state, dict) or "plan" not in state or "scopes" not in state:
+    plan = state.get_vlan_plan()
+    scopes = state.get_dhcp_scopes()
+    if plan is None or not scopes:
         st.info(
             "No VLAN plan yet. Define departments and build a plan to see VLAN, "
             "subnet, and DHCP assignments."
         )
         return
 
-    plan = state["plan"]
-    scopes = state["scopes"]
     vlan_frame = pd.DataFrame(vlan_rows(plan))
     dhcp_frame = pd.DataFrame(dhcp_scope_rows(scopes))
 
@@ -297,7 +316,11 @@ def render() -> None:
         except (NetArchitectError, ValidationError, ValueError) as error:
             st.error(format_error(error), title="Planning failed")
         else:
-            st.session_state[PLAN_KEY] = {"plan": plan, "scopes": scopes}
+            state.set_planning(
+                addressing=_addressing_from_plan(plan),
+                vlan_plan=plan,
+                dhcp_scopes=tuple(scopes),
+            )
             st.success(
                 f"Planned {len(plan.assignments)} VLANs and "
                 f"{len(scopes)} DHCP scopes."

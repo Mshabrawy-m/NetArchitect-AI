@@ -1,9 +1,10 @@
 """Topology editor page.
 
 Presentation only: every topology change is delegated to the deterministic
-services in :mod:`network.topology`. The page stores exactly one topology in
-``st.session_state["topology"]``; tables and figures are derived from it on
-each rerun and never kept as a second copy.
+services in :mod:`network.topology`. The page reads and writes the baseline
+topology through :mod:`ui.state`, which keeps it inside the one digital-twin
+session object. Tables and figures are derived on each rerun and never kept as
+a second copy.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from pydantic import ValidationError
 from config.limits import MAX_NODES
 from core.exceptions import NetArchitectError
 from core.schemas.network import Device, DeviceRole, DeviceType, Link, Topology
+from digital_twin import validate_twin
 from network.topology import (
     add_device,
     add_link,
@@ -39,9 +41,8 @@ from network.topology import (
     update_device,
     update_link,
 )
-
-TOPOLOGY_KEY = "topology"
-FLASH_KEY = "topology_editor_flash"
+from ui import state
+from ui.components import findings_frame
 
 DEVICE_COLUMNS = ("id", "type", "site", "role")
 LINK_COLUMNS = ("id", "endpoint_a", "endpoint_b", "capacity_mbps", "cost", "directed")
@@ -75,11 +76,12 @@ LINK_STYLES = (
 
 def _flash(level: str, message: str) -> None:
     """Queue a one-shot message to display after the next rerun."""
-    st.session_state.setdefault(FLASH_KEY, []).append((level, message))
+    messages = state.session_get(state.FLASH_KEY, [])
+    state.session_set(state.FLASH_KEY, [*messages, (level, message)])
 
 
 def _render_flash() -> None:
-    for level, message in st.session_state.pop(FLASH_KEY, []):
+    for level, message in state.session_pop(state.FLASH_KEY, []):
         getattr(st, level)(message)
 
 
@@ -94,8 +96,7 @@ def _format_error(error: Exception) -> str:
 
 
 def _current_topology() -> Topology | None:
-    topology = st.session_state.get(TOPOLOGY_KEY)
-    return topology if isinstance(topology, Topology) else None
+    return state.get_topology()
 
 
 def _text(value: object) -> str:
@@ -120,10 +121,10 @@ def _number(value: object, label: str, entity: str) -> float:
 
 def _id_was_edited(editor_key: str, original_count: int) -> bool:
     """Detect an id edit on a row that already existed when the table opened."""
-    state = st.session_state.get(editor_key)
-    if not isinstance(state, Mapping):
+    editor_state = st.session_state.get(editor_key)
+    if not isinstance(editor_state, Mapping):
         return False
-    for row, changes in state.get("edited_rows", {}).items():
+    for row, changes in editor_state.get("edited_rows", {}).items():
         try:
             row_index = int(row)
         except (TypeError, ValueError):
@@ -305,7 +306,7 @@ def _render_generator() -> None:
             except (NetArchitectError, ValidationError, ValueError) as error:
                 st.error(_format_error(error), title="Generation failed")
             else:
-                st.session_state[TOPOLOGY_KEY] = topology
+                state.replace_topology(topology)
                 _flash(
                     "success",
                     f"Generated {topology.name}: {len(topology.devices)} devices, "
@@ -409,7 +410,7 @@ def _apply_device_edits(topology: Topology, edited: pd.DataFrame) -> int:
             changes += 1
 
     if changes:
-        st.session_state[TOPOLOGY_KEY] = updated
+        state.replace_topology(updated)
     return changes
 
 
@@ -483,7 +484,7 @@ def _apply_link_edits(topology: Topology, edited: pd.DataFrame) -> int:
             changes += 1
 
     if changes:
-        st.session_state[TOPOLOGY_KEY] = updated
+        state.replace_topology(updated)
     return changes
 
 
@@ -705,6 +706,39 @@ def _render_connectivity(topology: Topology) -> None:
         st.caption(f"Isolated devices: {listed}{suffix}")
 
 
+def _render_twin_consistency() -> None:
+    """Show dependent-plan findings after a topology change.
+
+    The twin keeps addressing, VLAN, DHCP, demand, and state data when the
+    topology changes. Stale references are reported here instead of being
+    pruned silently. The topology-only connectivity finding is omitted because
+    the connectivity panel above already reports it.
+    """
+    twin = state.get_twin()
+    if twin is None:
+        return
+    findings = [
+        finding
+        for finding in validate_twin(twin).findings
+        if finding.code != "twin_topology_disconnected"
+    ]
+    with st.container(border=True):
+        st.subheader("Digital twin consistency")
+        if not findings:
+            st.success(
+                "Addressing, VLAN, DHCP, demands, and operational state all "
+                "reference current topology entities.",
+                title="Consistent",
+            )
+            return
+        st.warning(
+            "Dependent parts reference entities that are no longer current. "
+            "Review the findings before relying on this twin.",
+            title="Needs review",
+        )
+        st.dataframe(findings_frame(findings), hide_index=True, width="stretch")
+
+
 def _render_diagram(topology: Topology) -> None:
     with st.container(border=True):
         st.subheader("Diagram")
@@ -759,7 +793,7 @@ def _render_json(topology: Topology | None) -> None:
                 except (NetArchitectError, ValidationError, ValueError) as error:
                     st.error(_format_error(error), title="Import failed")
                 else:
-                    st.session_state[TOPOLOGY_KEY] = imported
+                    state.replace_topology(imported)
                     _flash(
                         "success",
                         f"Imported {imported.name}: {len(imported.devices)} devices, "
@@ -789,6 +823,7 @@ def render() -> None:
 
     st.subheader(topology.name)
     _render_connectivity(topology)
+    _render_twin_consistency()
     _render_diagram(topology)
     _render_tables(topology)
     _render_json(topology)

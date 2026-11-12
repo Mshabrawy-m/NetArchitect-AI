@@ -11,7 +11,7 @@ import streamlit as st
 from pydantic import ValidationError
 
 from core.exceptions import NetArchitectError
-from core.schemas.addressing import Subnet
+from core.schemas.addressing import AddressingPlan, Subnet
 from network.addressing import (
     UtilizationEntry,
     VlsmRequirement,
@@ -23,11 +23,8 @@ from network.addressing import (
     cidr_rows,
     validate_addressing,
 )
+from ui import state
 from ui.components import csv_bytes, findings_frame, format_error, render_findings
-
-CIDR_KEY = "ip_cidr_result"
-VLSM_KEY = "addressing_result"
-CHECK_KEY = "addressing_check_report"
 
 DEFAULT_REQUIREMENTS = pd.DataFrame(
     [
@@ -104,11 +101,11 @@ def _render_cidr() -> None:
     )
     if st.button("Calculate prefix", key="ip_cidr_calculate", type="primary"):
         try:
-            st.session_state[CIDR_KEY] = calculate_subnet(network)
+            state.session_set(state.CIDR_KEY, calculate_subnet(network))
         except ValueError as error:
             st.error(f"Invalid prefix: {error}", title="Calculation failed")
 
-    info = st.session_state.get(CIDR_KEY)
+    info = state.session_get(state.CIDR_KEY)
     if info is None:
         st.info("Enter a prefix and calculate to see its properties.")
         return
@@ -224,20 +221,58 @@ def _render_vlsm() -> None:
     if submitted:
         try:
             requirements = _to_requirements(frame)
-            st.session_state[VLSM_KEY] = allocate_vlsm(
+            result = allocate_vlsm(
                 parent,
                 requirements,
                 reserved_addresses=int(reserved),
             )
+            state.session_set(state.VLSM_KEY, result)
         except (NetArchitectError, ValidationError, ValueError) as error:
             st.error(format_error(error), title="Allocation failed")
+        else:
+            _store_vlsm_subnets(result)
 
-    result = st.session_state.get(VLSM_KEY)
+    result = state.session_get(state.VLSM_KEY)
     if not isinstance(result, VlsmResult):
         st.info("No VLSM plan yet. Set a parent block and allocate the requirements.")
         return
     st.caption(f"Last allocation: {len(result.allocations)} subnets in {result.parent}.")
     _render_vlsm_result(result)
+
+
+def _store_vlsm_subnets(result: VlsmResult) -> None:
+    """Write the VLSM allocations into the twin's standalone subnets.
+
+    Existing VLAN-tagged subnets are preserved. If the new subnets would
+    overlap an existing VLAN subnet (or reuse a name), the twin is left
+    unchanged and the user is told why instead of losing the existing plan.
+    """
+    existing = state.get_addressing()
+    subnets = [
+        Subnet(
+            name=allocation.name,
+            network=allocation.network,
+            description=(
+                f"VLSM allocation: {allocation.required_hosts} required hosts, "
+                f"gateway {allocation.gateway}."
+            ),
+        )
+        for allocation in result.allocations
+    ]
+    try:
+        plan = AddressingPlan(
+            vlan_plans=list(existing.vlan_plans) if existing is not None else [],
+            subnets=subnets,
+        )
+    except ValidationError as error:
+        st.warning(
+            "The VLSM plan was calculated but was not stored in the digital "
+            f"twin because it conflicts with the existing addressing plan: "
+            f"{format_error(error)}",
+            title="Not stored in twin",
+        )
+        return
+    state.set_addressing(plan)
 
 
 def _to_subnets(frame: pd.DataFrame) -> list[Subnet]:
@@ -281,11 +316,11 @@ def _render_check() -> None:
     if submitted:
         try:
             subnets = _to_subnets(frame)
-            st.session_state[CHECK_KEY] = validate_addressing(subnets)
+            state.session_set(state.CHECK_KEY, validate_addressing(subnets))
         except (ValidationError, ValueError) as error:
             st.error(format_error(error), title="Check failed")
 
-    report = st.session_state.get(CHECK_KEY)
+    report = state.session_get(state.CHECK_KEY)
     if report is None:
         st.info("No subnet check yet.")
         return
