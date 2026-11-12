@@ -35,6 +35,14 @@ class MissingEndpointError(SchemaError):
     """A link references an endpoint that does not exist."""
 
 
+class DeviceNotFoundError(SchemaError):
+    """A referenced device id does not exist in the topology."""
+
+
+class LinkNotFoundError(SchemaError):
+    """A referenced link id does not exist in the topology."""
+
+
 class OverlappingSubnetError(SchemaError):
     """Two subnets overlap and cannot coexist in the same plan."""
 
