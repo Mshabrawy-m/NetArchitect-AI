@@ -1,8 +1,8 @@
 """NetArchitect AI - Streamlit entry point.
 
-Phase 3 introduces functional page routing. The Topology Editor is the first
-working engineering page; the remaining planned pages stay as placeholders and
-are added phase by phase.
+Phase 4 adds functional IP addressing and VLAN/DHCP pages. The Topology
+Editor, IP Addressing, and VLAN & DHCP Planner are working engineering pages;
+the remaining planned pages stay as placeholders and are added phase by phase.
 """
 
 from __future__ import annotations
@@ -10,7 +10,9 @@ from __future__ import annotations
 import streamlit as st
 
 from config.settings import get_settings
+from ui.pages.ip_addressing import render as render_ip_addressing
 from ui.pages.topology_editor import render as render_topology_editor
+from ui.pages.vlan_dhcp import render as render_vlan_dhcp
 
 # The 14 planned application pages from the blueprint (section 7).
 PAGES: tuple[str, ...] = (
@@ -30,7 +32,14 @@ PAGES: tuple[str, ...] = (
     "Settings",
 )
 
-READY_PAGES: frozenset[str] = frozenset({"Dashboard", "Topology Editor"})
+READY_PAGES: frozenset[str] = frozenset(
+    {
+        "Dashboard",
+        "Topology Editor",
+        "IP Addressing & Subnetting",
+        "VLAN & DHCP Planner",
+    }
+)
 
 
 def render_sidebar_navigation() -> str:
@@ -39,7 +48,10 @@ def render_sidebar_navigation() -> str:
         st.markdown("## Navigation")
         page = st.selectbox("Page", PAGES, index=0, key="page_nav")
         if page in READY_PAGES:
-            st.caption("Available now: Dashboard and Topology Editor.")
+            st.caption(
+                "Available now: Dashboard, Topology Editor, IP Addressing, "
+                "and VLAN & DHCP Planner."
+            )
         else:
             st.caption("This page arrives in a later phase.")
         st.divider()
@@ -65,9 +77,9 @@ def render_dashboard() -> None:
     st.write(f"**Deployment target:** {settings.DEPLOYMENT_TARGET}")
 
     st.info(
-        "Phase 3 is in progress. The Topology Editor is available from the "
-        "sidebar; remaining pages are introduced with their engineering "
-        "modules."
+        "Phase 4 is in progress. The Topology Editor, IP Addressing, and "
+        "VLAN & DHCP Planner are available from the sidebar; remaining pages "
+        "are introduced with their engineering modules."
     )
 
 
@@ -97,6 +109,10 @@ def main() -> None:
         render_dashboard()
     elif page == "Topology Editor":
         render_topology_editor()
+    elif page == "IP Addressing & Subnetting":
+        render_ip_addressing()
+    elif page == "VLAN & DHCP Planner":
+        render_vlan_dhcp()
     else:
         render_placeholder(page)
 

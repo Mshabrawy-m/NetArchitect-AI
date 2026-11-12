@@ -2,6 +2,60 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-12 - Phase 4c: IP addressing and VLAN/DHCP pages
+
+### Added
+- `ui/pages/ip_addressing.py`: CIDR calculator with IPv4/IPv6 special-prefix
+  handling, VLSM planner with an editable requirement table, allocation and
+  utilization output, overlap checker, and CSV downloads.
+- `ui/pages/vlan_dhcp.py`: department requirement table (prefilled from an
+  organization in session state when available), VLAN mapping, DHCP scope
+  table, validation findings, and CSV downloads.
+- `ui/components.py`: shared error formatting, CSV serialization, and findings
+  table rendering.
+- `tests/unit/ui/test_planning_pages.py`: AppTest smoke tests for both pages,
+  including a rejected parent block.
+
+### Changed
+- `app.py` now routes `IP Addressing & Subnetting` and `VLAN & DHCP Planner`;
+  sidebar and dashboard availability text updated.
+- `CURRENT_STATUS.md` records Phase 4 as complete.
+
+## 2026-11-12 - Phase 4b: VLAN planning and DHCP scopes
+
+### Added
+- `network/vlan/plan.py`: deterministic department-to-VLAN-to-subnet planning
+  with 1-4094 validation, reserved IDs `{1, 1002-1005}`, unique explicit and
+  automatic assignment, duplicate checks, and overlap rejection.
+- `network/vlan/dhcp.py`: DHCP scope planning and validation covering
+  network/anycast, gateway, IPv4 broadcast, exclusions, pool boundaries, lease
+  time, and a first-free-pool default. Findings use the shared `Finding`
+  schema.
+- `network/vlan/tables.py`: UI-agnostic VLAN and DHCP row dictionaries.
+- 36 unit tests under `tests/unit/vlan/`.
+
+## 2026-11-12 - Phase 4a: addressing engine
+
+### Added
+- `network/addressing/cidr.py`: `calculate_subnet` with IPv4/IPv6 netmask,
+  broadcast, usable range/count, and documented `/31`, `/32`, `/127`, `/128`
+  behaviour.
+- `network/addressing/vlsm.py`: deterministic largest-first VLSM allocation
+  with configurable reserved addresses, smallest fitting prefix, no overlaps,
+  and `InsufficientAddressSpaceError` listing every unallocated requirement.
+- `network/addressing/validation.py`: overlap and duplicate-IP detection using
+  the existing `Finding`/`ValidationReport` schema.
+- `network/addressing/utilization.py`: per-subnet and parent utilization from
+  prefix arithmetic only.
+- `network/addressing/tables.py`: UI-agnostic row helpers.
+- `config/limits.py`: `MAX_SUBNETS` and `MAX_HOSTS_PER_SUBNET`.
+- `core.exceptions.InsufficientAddressSpaceError`.
+- 39 unit tests under `tests/unit/addressing/`.
+
+### Changed
+- No public domain schemas were changed; the engine reuses `Subnet`,
+  `VlanPlan`, `DhcpScope`, `Finding`, and `ValidationReport`.
+
 ## 2026-11-12 - Phase 3b: remaining generators and Topology Editor
 
 ### Added
