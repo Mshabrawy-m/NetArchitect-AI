@@ -27,6 +27,16 @@ MAX_ALTERNATIVE_PATHS: int = 10
 # Maximum number of what-if scenarios retained for comparison.
 MAX_SCENARIOS: int = 50
 
+# Maximum number of snapshots retained for one digital twin.
+MAX_SNAPSHOTS: int = 20
+
+# Maximum number of traffic demands stored in one digital twin.
+MAX_DEMANDS: int = 100
+
+# Maximum total serialized bytes of all snapshots retained for one digital
+# twin. Bounds session memory on the Streamlit Community Cloud free tier.
+MAX_TWIN_SNAPSHOT_BYTES: int = 2_000_000
+
 # Maximum iterations for any single optimization run.
 MAX_OPTIMIZATION_ITERATIONS: int = 1000
 

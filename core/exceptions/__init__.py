@@ -59,6 +59,14 @@ class InsufficientAddressSpaceError(SchemaError):
     """
 
 
+class TwinSchemaVersionError(SchemaError):
+    """A digital-twin JSON payload uses an unknown or unsupported schema version.
+
+    Raised before model validation so callers get an actionable message instead
+    of a generic field error when a payload was produced by a newer build.
+    """
+
+
 class ConstraintViolationError(NetArchitectError):
     """An optimization constraint (hard or soft) was violated."""
 
