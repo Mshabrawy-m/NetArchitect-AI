@@ -12,6 +12,14 @@ MAX_NODES: int = 500
 # Maximum number of links (edges) modeled in a single topology.
 MAX_EDGES: int = 2000
 
+# Maximum number of subnets in one addressing plan or VLSM allocation.
+MAX_SUBNETS: int = 256
+
+# Maximum number of host addresses requested or assigned for one subnet.
+# Address arithmetic never enumerates hosts, so this caps user requests rather
+# than loop iterations.
+MAX_HOSTS_PER_SUBNET: int = 1_000_000
+
 # Maximum number of what-if scenarios retained for comparison.
 MAX_SCENARIOS: int = 50
 

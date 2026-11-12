@@ -51,6 +51,14 @@ class InvalidVlanIdError(SchemaError):
     """A VLAN id is outside the valid 1-4094 range."""
 
 
+class InsufficientAddressSpaceError(SchemaError):
+    """A set of subnet requirements cannot fit inside the parent block.
+
+    The message lists every requirement that could not be allocated; the
+    allocator never truncates a request silently.
+    """
+
+
 class ConstraintViolationError(NetArchitectError):
     """An optimization constraint (hard or soft) was violated."""
 
