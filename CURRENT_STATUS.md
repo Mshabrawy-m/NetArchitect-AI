@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 5 - Routing and Graph Analysis Engine (complete)
-- Current task: Phase 5c - routing and analytics pages (complete)
+- Current phase: Phase 6 - Network Digital Twin (complete)
+- Current task: Phase 6c - Digital Twin page (complete)
 - Overall status: In progress
 - Last updated: 2026-11-12
-- Branch: `feature/phase5-routing` (based on merged `main` commit `3a88c48`)
+- Branch: `feature/phase6-digital-twin` (based on merged `main` commit `7f00975`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -13,7 +13,7 @@
 - [x] Phase 3: Network Topology Engine
 - [x] Phase 4: IP Addressing and VLAN Engine
 - [x] Phase 5: Routing and Graph Analysis Engine
-- [ ] Phase 6: Network Digital Twin
+- [x] Phase 6: Network Digital Twin
 - [ ] Phase 7: Network Simulation Engine
 - [ ] Phase 8: Multi-Objective Optimization Engine
 - [ ] Phase 9: Agentic AI Framework
@@ -287,6 +287,94 @@ measurements of traffic, latency, utilization, or availability.
   updates the sidebar/dashboard availability text; no other placeholder page
   is changed.
 
+## Phase 6a delivered - digital twin model
+Location: `digital_twin/` (pure Python; no Streamlit, no LLM, no new
+dependencies). The twin is a *software model* of a network design, not a live
+copy of real equipment.
+
+- `models.py`
+  - Frozen `DigitalTwin` holding metadata (`name`, caller-supplied
+    `created_at`, `schema_version`), `Topology`, optional `AddressingPlan`,
+    optional VlanPlanResult, DHCP scopes, traffic demands, per-device and
+    per-link operational state, and scenario assumptions.
+  - Units documented on every field: link capacity and demand bandwidth in
+    Mbps, cost is a unitless routing metric, DHCP lease in minutes.
+  - Canonical state is `up`/`down`; a missing entry means `up`.
+- `validation.py`
+  - `validate_twin` returns the existing `ValidationReport`/`Finding` contract.
+  - Reuses `validate_addressing`, `validate_dhcp_scope`, and
+    `analyze_connectivity`; adds only cross-part checks (stale/duplicate state,
+    demand endpoints and names, VLAN subnet presence, DHCP scope networks,
+    schema version, demand limit).
+  - Stale references are reported, never pruned, so a topology change cannot
+    silently leave dependent plans inconsistent.
+- `operations.py`
+  - Immutable-style `set_topology`, `set_device_state`, `set_link_state`,
+    `set_operational_states`, `apply_failure`, `restore_entities`,
+    `set_link_capacity`, `set_link_cost`, `add_demand`, `remove_demand`,
+    `set_demands`, plan setters, and assumption setters.
+  - Every operation returns a new twin; the input is never mutated.
+- `snapshots.py`
+  - Frozen `Snapshot` containing a deep copy of the twin.
+  - `SnapshotStore` enforces `MAX_SNAPSHOTS` and
+    `MAX_TWIN_SNAPSHOT_BYTES`; `diff_twins` reports devices, links, state,
+    capacity, cost, demands, and plan/assumption changes.
+- `serialization.py`: `to_json`/`from_json` with exact round-trip and a
+  `TwinSchemaVersionError` for missing/unknown/newer schema versions.
+- `adapters.py`: `failed_entities`, `routing_arguments`, and
+  `analysis_arguments` feed the existing engines without rewriting them; stale
+  state is kept out of engine arguments.
+- `config/limits.py`: `MAX_SNAPSHOTS = 20`, `MAX_DEMANDS = 100`,
+  `MAX_TWIN_SNAPSHOT_BYTES = 2_000_000`.
+- `core/exceptions/__init__.py`: `TwinSchemaVersionError(SchemaError)`.
+
+## Phase 6b delivered - single session accessor and page migration
+- `ui/state.py` is the only module that reads or writes the baseline twin. It
+  owns `TWIN_KEY = "digital_twin"`, `SNAPSHOTS_KEY`, derived-result keys, and
+  session helpers.
+- A legacy bare `Topology` under `st.session_state["topology"]` is migrated
+  once into a twin and the legacy key is deleted, so the model never exists
+  twice.
+- Migrated pages:
+  - `topology_editor.py` writes through `replace_topology` and shows a
+    "Digital twin consistency" panel with dependent-plan findings after a
+    topology change.
+  - `ip_addressing.py` keeps CIDR/VLSM/check results in the accessor and writes
+    VLSM allocations into the twin's standalone subnets; a conflicting plan is
+    reported and left unchanged.
+  - `vlan_dhcp.py` stores the VLAN plan, DHCP scopes, and a matching
+    `AddressingPlan` in the twin.
+  - `routing_analysis.py` reads the twin, applies twin failures to the
+    baseline, unions them with the scenario selection, and warns about stale
+    state.
+  - `network_analytics.py` analyzes the twin with twin failures excluded and
+    warns about stale state.
+- AppTest assertions moved from raw `"topology"` / `"vlan_plan_result"` keys to
+  `ui.state.TWIN_KEY`; existing widget keys are unchanged.
+
+## Phase 6c delivered - Digital Twin page
+- `ui/pages/digital_twin.py` shows the twin summary, a devices/links state
+  table with an explicit Apply action, validation findings, snapshot
+  creation/list/download/delete, and a before/after comparison with CSV
+  download.
+- `app.py` routes `Digital Twin`; sidebar and dashboard availability text
+  updated. No other placeholder page is changed.
+
+## Test evidence (Phase 6)
+- `tests/unit/digital_twin/` (53 tests): frozen models and effective state,
+  stale/duplicate validation, addressing/DHCP validator reuse, immutable
+  operations, baseline equality after failures and scenarios, deep-copied
+  snapshots, diffs, store bounds, exact JSON round-trip, schema-version errors,
+  and the engine adapters.
+- `tests/unit/ui/test_digital_twin_page.py` (3 tests): empty state, summary +
+  snapshot creation/comparison, and twin failures reaching the routing page.
+- Existing AppTest suites now assert `ui.state.TWIN_KEY` instead of the removed
+  raw topology/VLAN keys; all widget keys are unchanged.
+- Commands and results:
+  - `& ".venv\Scripts\python.exe" -m pytest -q`: `433 passed in 4.33s`
+  - `& ".venv\Scripts\python.exe" -m ruff check .`: `All checks passed!`
+- Public domain schemas were not changed in Phase 6.
+
 ## Test evidence (Phase 5)
 - Unit tests:
   - `tests/unit/routing/` (50 tests): hand-computed weighted triangle (a-b-c
@@ -419,6 +507,20 @@ measurements of traffic, latency, utilization, or availability.
 - Betweenness centrality uses `Link.cost`, while degree and diameter are
   hop-based. The definitions expander states this, but mixed-weight topologies
   can make centrality rankings differ from hop-count intuition.
+- The digital twin is a software model only. It is never connected to real
+  equipment, so operational state is user-modeled and can drift from reality.
+- Twin snapshots live in Streamlit session state, bounded by `MAX_SNAPSHOTS`
+  and `MAX_TWIN_SNAPSHOT_BYTES`; they are not persisted across sessions.
+- A topology change preserves addressing/VLAN/DHCP/demand/state references.
+  Stale references are surfaced as findings (Topology Editor and Digital Twin
+  pages), not pruned automatically; routing and analytics ignore stale state
+  but warn about it.
+- VLSM allocations are stored as standalone subnets in the twin only when they
+  do not overlap existing VLAN subnets; a conflict is reported and the existing
+  plan is left unchanged.
+- The Digital Twin page was verified through AppTest only; the state data
+  editors, snapshot selectors, and comparison tables were not inspected in a
+  real browser.
 
 ## Next task
-- Phase 6: Network Digital Twin. Not started.
+- Phase 7: Network Simulation Engine. Not started.

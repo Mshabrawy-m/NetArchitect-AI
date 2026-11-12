@@ -2,6 +2,65 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-12 - Phase 6c: Digital Twin page
+
+### Added
+- `ui/pages/digital_twin.py`: twin summary, editable device/link operational
+  state table, validation findings, bounded snapshot creation/list/download/
+  delete, and a before/after revision comparison with CSV download.
+- `tests/unit/ui/test_digital_twin_page.py`: empty state, snapshot lifecycle,
+  and twin-failure propagation to the routing page.
+- `app.py` routes `Digital Twin`.
+
+### Changed
+- Sidebar and dashboard availability text now include the Digital Twin.
+- `tests/unit/ui` assertions read `ui.state.TWIN_KEY` instead of removed raw
+  topology/VLAN session keys; widget keys are unchanged.
+
+## 2026-11-12 - Phase 6b: digital-twin session integration
+
+### Added
+- `ui/state.py`: the single session accessor for the baseline twin, snapshots,
+  derived result keys, and session helpers. Migrates a legacy bare `Topology`
+  once and deletes the legacy key.
+
+### Changed
+- `topology_editor.py`, `ip_addressing.py`, `vlan_dhcp.py`,
+  `routing_analysis.py`, and `network_analytics.py` now read/write the twin
+  through `ui.state`; no page keeps a second topology copy.
+- VLSM allocations, VLAN plans, and DHCP scopes are written into the twin;
+  conflicts are reported without discarding the existing plan.
+- Routing and analytics apply twin failures, union them with scenario
+  selections, and warn about stale state.
+- A topology change shows dependent-plan findings in the Topology Editor
+  instead of silently leaving stale references.
+
+## 2026-11-12 - Phase 6a: digital twin model
+
+### Added
+- `digital_twin/models.py`: frozen `DigitalTwin` with topology, optional
+  addressing/VLAN plans, DHCP scopes, demands, per-entity operational state,
+  assumptions, and versioned metadata. The twin is documented as a software
+  model, not a live copy of real equipment.
+- `digital_twin/validation.py`: `validate_twin` reusing topology, addressing,
+  and DHCP validators plus cross-part checks; stale references are reported and
+  never pruned.
+- `digital_twin/operations.py`: immutable-style topology, state, capacity,
+  cost, demand, plan, and assumption operations returning new twins.
+- `digital_twin/snapshots.py`: frozen deep-copied snapshots, bounded
+  `SnapshotStore`, and structured `diff_twins`.
+- `digital_twin/serialization.py`: exact JSON round-trip with
+  `TwinSchemaVersionError` for unsupported versions.
+- `digital_twin/adapters.py`: thin adapters feeding the existing routing and
+  analysis engines.
+- `config/limits.py`: `MAX_SNAPSHOTS`, `MAX_DEMANDS`,
+  `MAX_TWIN_SNAPSHOT_BYTES`; `core/exceptions` adds
+  `TwinSchemaVersionError`.
+- 53 unit tests under `tests/unit/digital_twin/`.
+
+### Changed
+- No public domain schemas were changed in Phase 6a.
+
 ## 2026-11-12 - Phase 5c: routing and analytics pages
 
 ### Added

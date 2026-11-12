@@ -1,9 +1,11 @@
 """NetArchitect AI - Streamlit entry point.
 
-Phase 5 adds routing analysis and structural network analytics. The Topology
-Editor, IP Addressing, VLAN & DHCP Planner, Routing Analysis, and Network
-Analytics are working engineering pages; the remaining planned pages stay as
-placeholders and are added phase by phase.
+Phase 6 adds the digital twin: one session model that is the single source of
+truth for the topology, planning results, traffic demands, and modeled
+operational state. The Topology Editor, IP Addressing, VLAN & DHCP Planner,
+Routing Analysis, Network Analytics, and Digital Twin are working engineering
+pages; the remaining planned pages stay as placeholders and are added phase by
+phase.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import streamlit as st
 
 from config.settings import get_settings
+from ui.pages.digital_twin import render as render_digital_twin
 from ui.pages.ip_addressing import render as render_ip_addressing
 from ui.pages.network_analytics import render as render_network_analytics
 from ui.pages.routing_analysis import render as render_routing_analysis
@@ -43,6 +46,7 @@ READY_PAGES: frozenset[str] = frozenset(
         "VLAN & DHCP Planner",
         "Routing Analysis",
         "Network Analytics",
+        "Digital Twin",
     }
 )
 
@@ -55,7 +59,8 @@ def render_sidebar_navigation() -> str:
         if page in READY_PAGES:
             st.caption(
                 "Available now: Dashboard, Topology Editor, IP Addressing, "
-                "VLAN & DHCP Planner, Routing Analysis, and Network Analytics."
+                "VLAN & DHCP Planner, Routing Analysis, Network Analytics, and "
+                "Digital Twin."
             )
         else:
             st.caption("This page arrives in a later phase.")
@@ -82,10 +87,10 @@ def render_dashboard() -> None:
     st.write(f"**Deployment target:** {settings.DEPLOYMENT_TARGET}")
 
     st.info(
-        "Phase 5 is in progress. The Topology Editor, IP Addressing, VLAN & "
-        "DHCP Planner, Routing Analysis, and Network Analytics are available "
-        "from the sidebar; remaining pages are introduced with their "
-        "engineering modules."
+        "Phase 6 is in progress. The Topology Editor, IP Addressing, VLAN & "
+        "DHCP Planner, Routing Analysis, Network Analytics, and Digital Twin "
+        "are available from the sidebar; remaining pages are introduced with "
+        "their engineering modules."
     )
 
 
@@ -123,6 +128,8 @@ def main() -> None:
         render_routing_analysis()
     elif page == "Network Analytics":
         render_network_analytics()
+    elif page == "Digital Twin":
+        render_digital_twin()
     else:
         render_placeholder(page)
 
