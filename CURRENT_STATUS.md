@@ -1,18 +1,18 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 4 - IP Addressing and VLAN Engine (complete)
-- Current task: Phase 4c - addressing and VLAN/DHCP pages (complete)
+- Current phase: Phase 5 - Routing and Graph Analysis Engine (complete)
+- Current task: Phase 5c - routing and analytics pages (complete)
 - Overall status: In progress
 - Last updated: 2026-11-12
-- Branch: `feature/phase4-ip-vlan` (based on `main` commit `df4c7bb`)
+- Branch: `feature/phase5-routing` (based on merged `main` commit `3a88c48`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
 - [x] Phase 2: Requirements and Domain Modeling
 - [x] Phase 3: Network Topology Engine
 - [x] Phase 4: IP Addressing and VLAN Engine
-- [ ] Phase 5: Routing and Graph Analysis Engine
+- [x] Phase 5: Routing and Graph Analysis Engine
 - [ ] Phase 6: Network Digital Twin
 - [ ] Phase 7: Network Simulation Engine
 - [ ] Phase 8: Multi-Objective Optimization Engine
@@ -201,6 +201,126 @@ Location: `network/vlan/` (plain dict rows, UI-agnostic).
   `addressing_result`, `addressing_check_report`, and `vlan_plan_result`.
   Topology and organization state are read, never duplicated.
 
+## Phase 5a delivered - routing engine
+Location: `network/routing/` (pure Python plus NetworkX, no Streamlit, no LLM,
+no new dependencies). Every function is stateless: it takes a `Topology` and
+optional failed device/link ids and returns new typed Pydantic results. The
+input topology is never modified.
+
+- Link semantics (documented in `graph.py`):
+  - `Link.directed=True` adds one directed arc from `endpoints[0]` to
+    `endpoints[1]`; an undirected link adds reciprocal arcs.
+  - `Link.cost` is the edge weight; `capacity_mbps` is metadata only and never
+    participates in path selection.
+  - Parallel links between the same ordered pair collapse to the lowest
+    `(cost, link_id)` tuple, so the chosen physical link is deterministic.
+- `paths.py`
+  - `shortest_path` returns a typed `RoutePath` (`device_ids`, `hops`,
+    `total_cost`, `hop_count`, `reachable`, `reason`). Unreachable pairs return
+    `reachable=False` instead of raising; unknown devices raise
+    `DeviceNotFoundError`, unknown failure ids raise `LinkNotFoundError` /
+    `DeviceNotFoundError`.
+  - Equal-cost paths break ties by the lexicographically smallest device-id
+    sequence. Source = destination is reachable with an empty path, cost 0,
+    and 0 hops.
+  - `alternative_paths` enumerates simple paths (Yen) over distinct device
+    sequences, ordered by total cost then device sequence, bounded by
+    `MAX_ALTERNATIVE_PATHS`.
+  - `routing_table` returns one deterministic next-hop entry per reachable
+    destination, excluding the source.
+  - `reachability_matrix` returns a directed boolean matrix with per-ordered-
+    pair counts; `component_summary` reports weak/strong components and
+    isolated devices.
+- `tables.py` exposes UI-agnostic `path_rows`, `alternative_rows`,
+  `routing_table_rows`, and `reachability_rows`.
+- `config/limits.py` adds `MAX_ALTERNATIVE_PATHS = 10`; `MAX_NODES` bounds the
+  graph size and the documented complexity (Dijkstra per source).
+
+## Phase 5b delivered - structural analysis engine
+Location: `network/analysis/` (pure Python plus NetworkX, no Streamlit, no LLM,
+no new dependencies). All metrics are design-time structural indicators, not
+measurements of traffic, latency, utilization, or availability.
+
+- Analysis basis (documented in `graph.py`): a simple undirected projection
+  where a link contributes one edge regardless of `directed`, and parallel
+  links collapse into one edge that keeps all link ids and the lowest cost.
+- `metrics.py`
+  - Degree centrality (parallel links count once) and betweenness centrality
+    (weighted by `Link.cost`).
+  - Connected components and isolated devices; hop-based diameter reported per
+    component with `overall_diameter=None` when disconnected.
+  - Articulation points and bridges, each with the component count and any
+    newly isolated devices after removal. A pair joined by parallel links is
+    never reported as a single-link failure.
+  - `METRIC_DEFINITIONS` exports the exact wording used by the UI.
+- `spof.py`: `SpofReport` combining critical devices and critical links with
+  the baseline component count.
+- `findings.py`: `Finding` results with stable codes `spof_device` and
+  `spof_link` (critical), plus `topology_disconnected` and `isolated_device`
+  warnings.
+- `redundancy.py`: node-disjoint paths on the direction-aware routing graph;
+  edge-disjoint paths via a unit-capacity physical-link gadget so parallel
+  links count separately and an undirected link carries at most one path.
+- `report.py`: `analyze_topology` computes the full `AnalysisReport` in one
+  pass; `tables.py` provides UI-agnostic rows.
+
+## Phase 5c delivered - routing and analytics pages
+- `ui/pages/routing_analysis.py`:
+  - Source/destination selectors, k-alternative slider, failure selector for
+    devices and links, shortest path with cost and hop count, ranked
+    alternatives, routing table, and a directed reachability matrix.
+  - With failures active, the page shows before/after reachability and a
+    next-hop/cost comparison with `unchanged` / `rerouted` / `new` /
+    `unreachable` status.
+  - Plotly topology view highlights the current path, keeps the baseline path
+    dashed when it changes, and marks failed entities in red.
+  - Every table has a CSV download; the page derives results on each rerun and
+    stores no engine output in session state beyond widget keys.
+- `ui/pages/network_analytics.py`:
+  - Summary metrics, degree and weighted-betweenness bar charts with tables,
+    connected components, per-component diameters, critical devices/links,
+    SPOF summary and findings, and per-pair path redundancy.
+  - An expandable "Metric definitions" section renders `METRIC_DEFINITIONS`
+    verbatim and states that values are structural, not measured.
+  - CSV downloads for every table.
+- `app.py` wires `Routing Analysis` and `Network Analytics` into navigation and
+  updates the sidebar/dashboard availability text; no other placeholder page
+  is changed.
+
+## Test evidence (Phase 5)
+- Unit tests:
+  - `tests/unit/routing/` (50 tests): hand-computed weighted triangle (a-b-c
+    costs 3 vs direct 4), equal-cost diamond tie-break (`a-b-d` before
+    `a-c-d`), line, ring, star, disconnected, and directed-asymmetry cases;
+    failure cases; generated star/ring/campus/spine-leaf topologies; every
+    returned path re-walked against the graph so cost equals the summed link
+    costs; limit enforcement.
+  - `tests/unit/analysis/` (41 tests): hand-computed degree/betweenness on a
+    line, cost-weighted betweenness on the triangle, component and diameter
+    behaviour including disconnected topologies, articulation points,
+    bridges, parallel-link handling, node-/edge-disjoint counts (including a
+    directed asymmetry and parallel-link edge redundancy), SPOF findings, and
+    the `MAX_NODES` bound.
+  - `tests/unit/ui/test_analysis_pages.py` (4 tests): AppTest smoke tests for
+    both pages, including the empty state and a failure scenario on the
+    routing page.
+- Commands and results:
+  - `& ".venv\Scripts\python.exe" -m pytest -q`: `377 passed in 3.54s`
+  - `& ".venv\Scripts\python.exe" -m ruff check .`: `All checks passed!`
+- Public domain schemas were not changed in Phase 5.
+- Headless app verification (port 8554, `--server.address 127.0.0.1`,
+  `--server.enableAgentApi true`):
+  - `/_stcore/health`: HTTP 200 (`ok`); root page: HTTP 200.
+  - Generated a star in the Topology Editor (Devices 7, Links 6, Components 1,
+    Isolated devices 0), then opened Routing Analysis: Cost 1.00, Hops 1,
+    Baseline cost 1.00, Status reachable, with path table, alternatives,
+    routing table, reachability matrix, downloads, and a Plotly chart.
+  - Failed `star-hub` with destination `star-spoke-01`: Cost `unreachable`,
+    Hops `-`, Baseline cost 1.00, Status `unreachable`, no app exception.
+  - Network Analytics: Devices 7, Links 6, Components 1, Diameter (hops) 2,
+    SPOF entities 7, Node-disjoint paths 1, Edge-disjoint paths 1; centrality
+    bar charts, tables, findings, and downloads rendered without exception.
+
 ## Test evidence (Phase 4)
 - Unit tests: `tests/unit/addressing/` (39 tests) and `tests/unit/vlan/`
   (36 tests) cover known-answer CIDR cases (`/24`, `/26`, `/30`, `/31`,
@@ -286,6 +406,19 @@ Location: `network/vlan/` (plain dict rows, UI-agnostic).
 - DHCP planning requires at least one assignable address after reserved
   addresses, so `/32` (IPv4) and `/128` (IPv6) subnets raise a clear error
   instead of producing an empty scope.
+- Phase 5 routing and analytics pages were verified through AppTest, the
+  Streamlit agent API, and HTTP status checks only. A real-browser pass
+  (Plotly path highlighting, horizontal bar-chart rendering, table sizing,
+  CSV download behaviour) was not performed; no screenshots were taken.
+- Structural analysis ignores link direction and collapses parallel links by
+  design. Directed reachability questions belong to the routing page; the
+  analytics page intentionally reports physical connectivity.
+- Edge-disjoint path counts model each physical link as one capacity unit, so
+  they indicate path-count redundancy, not available bandwidth or failure
+  independence beyond single-link removal.
+- Betweenness centrality uses `Link.cost`, while degree and diameter are
+  hop-based. The definitions expander states this, but mixed-weight topologies
+  can make centrality rankings differ from hop-count intuition.
 
 ## Next task
-- Phase 5: Routing and Graph Analysis Engine. Not started.
+- Phase 6: Network Digital Twin. Not started.

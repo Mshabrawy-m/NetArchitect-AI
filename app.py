@@ -1,8 +1,9 @@
 """NetArchitect AI - Streamlit entry point.
 
-Phase 4 adds functional IP addressing and VLAN/DHCP pages. The Topology
-Editor, IP Addressing, and VLAN & DHCP Planner are working engineering pages;
-the remaining planned pages stay as placeholders and are added phase by phase.
+Phase 5 adds routing analysis and structural network analytics. The Topology
+Editor, IP Addressing, VLAN & DHCP Planner, Routing Analysis, and Network
+Analytics are working engineering pages; the remaining planned pages stay as
+placeholders and are added phase by phase.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ import streamlit as st
 
 from config.settings import get_settings
 from ui.pages.ip_addressing import render as render_ip_addressing
+from ui.pages.network_analytics import render as render_network_analytics
+from ui.pages.routing_analysis import render as render_routing_analysis
 from ui.pages.topology_editor import render as render_topology_editor
 from ui.pages.vlan_dhcp import render as render_vlan_dhcp
 
@@ -38,6 +41,8 @@ READY_PAGES: frozenset[str] = frozenset(
         "Topology Editor",
         "IP Addressing & Subnetting",
         "VLAN & DHCP Planner",
+        "Routing Analysis",
+        "Network Analytics",
     }
 )
 
@@ -50,7 +55,7 @@ def render_sidebar_navigation() -> str:
         if page in READY_PAGES:
             st.caption(
                 "Available now: Dashboard, Topology Editor, IP Addressing, "
-                "and VLAN & DHCP Planner."
+                "VLAN & DHCP Planner, Routing Analysis, and Network Analytics."
             )
         else:
             st.caption("This page arrives in a later phase.")
@@ -77,9 +82,10 @@ def render_dashboard() -> None:
     st.write(f"**Deployment target:** {settings.DEPLOYMENT_TARGET}")
 
     st.info(
-        "Phase 4 is in progress. The Topology Editor, IP Addressing, and "
-        "VLAN & DHCP Planner are available from the sidebar; remaining pages "
-        "are introduced with their engineering modules."
+        "Phase 5 is in progress. The Topology Editor, IP Addressing, VLAN & "
+        "DHCP Planner, Routing Analysis, and Network Analytics are available "
+        "from the sidebar; remaining pages are introduced with their "
+        "engineering modules."
     )
 
 
@@ -113,6 +119,10 @@ def main() -> None:
         render_ip_addressing()
     elif page == "VLAN & DHCP Planner":
         render_vlan_dhcp()
+    elif page == "Routing Analysis":
+        render_routing_analysis()
+    elif page == "Network Analytics":
+        render_network_analytics()
     else:
         render_placeholder(page)
 

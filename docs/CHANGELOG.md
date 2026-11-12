@@ -2,6 +2,64 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-12 - Phase 5c: routing and analytics pages
+
+### Added
+- `ui/pages/routing_analysis.py`: source/destination selection, k-alternative
+  paths, failure scenario for devices and links, shortest path metrics,
+  routing table, directed reachability matrix, before/after comparison when
+  failures are active, Plotly path highlighting, and CSV downloads.
+- `ui/pages/network_analytics.py`: centrality bar charts and tables, connected
+  components, per-component diameters, critical devices/links, SPOF summary
+  and findings, per-pair node-/edge-disjoint path counts, CSV downloads, and
+  an expandable metric-definition section.
+- `tests/unit/ui/test_analysis_pages.py`: AppTest smoke tests for both pages,
+  including the no-topology empty state and a routing failure scenario.
+
+### Changed
+- `app.py` routes `Routing Analysis` and `Network Analytics`; sidebar and
+  dashboard availability text updated. Other planned pages remain
+  placeholders.
+- `CURRENT_STATUS.md` records Phase 5 as complete.
+
+## 2026-11-12 - Phase 5b: structural analysis engine
+
+### Added
+- `network/analysis/graph.py`: deterministic simple undirected projection
+  with direction ignored, parallel links collapsed, and failures applied
+  without mutating the input.
+- `network/analysis/metrics.py`: degree and cost-weighted betweenness
+  centrality, connected components, per-component hop diameter, articulation
+  points, bridges, and exported `METRIC_DEFINITIONS`.
+- `network/analysis/spof.py`: `SpofReport` over critical devices and links.
+- `network/analysis/findings.py`: critical `spof_device`/`spof_link` findings
+  plus `topology_disconnected` and `isolated_device` warnings.
+- `network/analysis/redundancy.py`: direction-aware node-disjoint counts and
+  physical-link edge-disjoint counts via a unit-capacity flow gadget.
+- `network/analysis/report.py` and `tables.py`: aggregate `AnalysisReport`
+  and UI-agnostic row helpers.
+- 41 unit tests under `tests/unit/analysis/`.
+
+### Changed
+- No public domain schemas were changed; findings reuse `Finding`/`Severity`.
+
+## 2026-11-12 - Phase 5a: routing engine
+
+### Added
+- `network/routing/graph.py`: routing graph construction honoring
+  `Link.directed`, using `Link.cost` as the only weight, ignoring capacity,
+  collapsing parallel links deterministically, and validating failure ids.
+- `network/routing/paths.py`: typed shortest paths with unreachable results,
+  deterministic lexicographic tie-breaking, bounded k-alternative simple
+  paths, routing tables, directed reachability matrices, and weak/strong
+  component summaries.
+- `network/routing/tables.py`: UI-agnostic row helpers.
+- `config/limits.py`: `MAX_ALTERNATIVE_PATHS = 10`.
+- 50 unit tests under `tests/unit/routing/`.
+
+### Changed
+- No public domain schemas were changed and no dependencies were added.
+
 ## 2026-11-12 - Phase 4c: IP addressing and VLAN/DHCP pages
 
 ### Added
