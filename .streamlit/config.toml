@@ -1,0 +1,15 @@
+# Streamlit configuration for NetArchitect AI.
+# Clean, professional light theme with a muted engineering blue accent.
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#2c5f8d"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6f8"
+textColor = "#1f2933"

@@ -1,0 +1,1 @@
+{"_sample_data": true, "description": "Sample scenario for NetArchitect AI demos (not real customer data): simulates a single core link failure to test failover.", "id": "scen-link-fail-01", "name": "Core Link Failure", "type": "single_link_failure", "affected_links": ["lnk-core-dist"], "affected_nodes": [], "parameters": {"failover_required": true}}
