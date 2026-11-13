@@ -8,13 +8,20 @@ from simulation import (
     demand_rows,
     evaluate,
     format_path,
+    link_comparison_rows,
     link_rows,
     metric_rows,
     path_change_rows,
     unserved_rows,
 )
 
-from .helpers import line_twin, make_demand, make_twin
+from .helpers import (
+    line_twin,
+    make_demand,
+    make_link,
+    make_topology,
+    make_twin,
+)
 
 
 def test_link_rows_follow_topology_order_and_report_levels() -> None:
@@ -64,6 +71,21 @@ def test_metric_rows_show_baseline_scenario_and_delta() -> None:
     assert rows["Max utilization (%)"]["Baseline"] == pytest.approx(20.0)
     assert rows["Max utilization (%)"]["Scenario"] == pytest.approx(50.0)
     assert rows["Max utilization (%)"]["Delta"] == "+30.00%"
+
+
+def test_link_comparison_rows_mark_removed_links_without_mixed_types() -> None:
+    baseline = evaluate(line_twin())
+    reduced = make_topology(
+        ["a", "b", "c"],
+        [make_link("ab", "a", "b")],
+    )
+    scenario = evaluate(make_twin(reduced))
+
+    rows = {row["Link"]: row for row in link_comparison_rows(baseline, scenario)}
+
+    assert rows["ab"]["Change"] == "unchanged"
+    assert rows["bc"]["Change"] == "removed"
+    assert rows["bc"]["Scenario utilization (%)"] is None
 
 
 def test_path_change_rows_compare_by_demand_name() -> None:

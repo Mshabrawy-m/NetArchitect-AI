@@ -2,8 +2,9 @@
 
 Phase 6 adds the digital twin: one session model that is the single source of
 truth for the topology, planning results, traffic demands, and modeled
-operational state. The Topology Editor, IP Addressing, VLAN & DHCP Planner,
-Routing Analysis, Network Analytics, and Digital Twin are working engineering
+operational state. Phase 7 adds deterministic what-if simulation over that twin.
+The Topology Editor, IP Addressing, VLAN & DHCP Planner, Routing Analysis,
+Network Analytics, Digital Twin, and Simulation Lab are working engineering
 pages; the remaining planned pages stay as placeholders and are added phase by
 phase.
 """
@@ -17,6 +18,7 @@ from ui.pages.digital_twin import render as render_digital_twin
 from ui.pages.ip_addressing import render as render_ip_addressing
 from ui.pages.network_analytics import render as render_network_analytics
 from ui.pages.routing_analysis import render as render_routing_analysis
+from ui.pages.simulation_lab import render as render_simulation_lab
 from ui.pages.topology_editor import render as render_topology_editor
 from ui.pages.vlan_dhcp import render as render_vlan_dhcp
 
@@ -47,6 +49,7 @@ READY_PAGES: frozenset[str] = frozenset(
         "Routing Analysis",
         "Network Analytics",
         "Digital Twin",
+        "Simulation Lab",
     }
 )
 
@@ -59,8 +62,8 @@ def render_sidebar_navigation() -> str:
         if page in READY_PAGES:
             st.caption(
                 "Available now: Dashboard, Topology Editor, IP Addressing, "
-                "VLAN & DHCP Planner, Routing Analysis, Network Analytics, and "
-                "Digital Twin."
+                "VLAN & DHCP Planner, Routing Analysis, Network Analytics, "
+                "Digital Twin, and Simulation Lab."
             )
         else:
             st.caption("This page arrives in a later phase.")
@@ -87,10 +90,10 @@ def render_dashboard() -> None:
     st.write(f"**Deployment target:** {settings.DEPLOYMENT_TARGET}")
 
     st.info(
-        "Phase 6 is in progress. The Topology Editor, IP Addressing, VLAN & "
-        "DHCP Planner, Routing Analysis, Network Analytics, and Digital Twin "
-        "are available from the sidebar; remaining pages are introduced with "
-        "their engineering modules."
+        "Phase 7 is in progress. The Topology Editor, IP Addressing, VLAN & "
+        "DHCP Planner, Routing Analysis, Network Analytics, Digital Twin, and "
+        "Simulation Lab are available from the sidebar; remaining pages are "
+        "introduced with their engineering modules."
     )
 
 
@@ -130,6 +133,8 @@ def main() -> None:
         render_network_analytics()
     elif page == "Digital Twin":
         render_digital_twin()
+    elif page == "Simulation Lab":
+        render_simulation_lab()
     else:
         render_placeholder(page)
 

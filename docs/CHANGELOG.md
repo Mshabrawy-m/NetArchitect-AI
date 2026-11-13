@@ -2,6 +2,24 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-13 - Phase 7c: Simulation Lab page
+
+### Added
+- `ui/pages/simulation_lab.py`: baseline demand editor, scenario builder for all
+  scenario types, valid/invalid scenario feedback, configurable thresholds and
+  delay assumptions, before/after metrics, colored link comparison, utilization
+  bar chart, path-change and unserved tables, deterministic Plotly topology with
+  failed/congested highlights, bounded session history, two-result comparison,
+  and JSON/CSV exports.
+- `tests/unit/ui/test_simulation_lab_page.py`: empty state, demand editing,
+  validation failure, and retained-run comparison/export smoke tests.
+- `app.py` routes the Simulation Lab and advertises it in the sidebar/dashboard.
+
+### Changed
+- `simulation/tables.py`: absent before/after utilization values are `None`
+  instead of `"not present"` so the table remains Arrow-compatible.
+- No public domain schemas were changed.
+
 ## 2026-11-13 - Phase 7b: scenario engine, history, and exports
 
 ### Added

@@ -2,7 +2,7 @@
 
 ## Overall
 - Current phase: Phase 7 - Network Simulation Engine (in progress)
-- Current task: Phase 7b - scenario engine (complete)
+- Current task: Phase 7c - Simulation Lab page (complete)
 - Overall status: In progress
 - Last updated: 2026-11-13
 - Branch: `feature/phase7-simulation` (based on merged `main` commit `aed9277`)
@@ -14,7 +14,7 @@
 - [x] Phase 4: IP Addressing and VLAN Engine
 - [x] Phase 5: Routing and Graph Analysis Engine
 - [x] Phase 6: Network Digital Twin
-- [ ] Phase 7: Network Simulation Engine (7a-7b complete)
+- [x] Phase 7: Network Simulation Engine
 - [ ] Phase 8: Multi-Objective Optimization Engine
 - [ ] Phase 9: Agentic AI Framework
 - [ ] Phase 10: Specialized AI Agents
@@ -459,6 +459,46 @@ packet-level or hardware-accurate measurements.
   - `& ".venv\Scripts\python.exe" -m ruff check .`: `All checks passed!`
 - Public domain schemas were not changed.
 
+## Phase 7c delivered - Simulation Lab page
+- `ui/pages/simulation_lab.py` provides:
+  - A baseline traffic-demand editor that writes through `ui.state.set_demands`
+    and rejects unknown endpoints, duplicate names, and invalid numbers.
+  - Scenario fields for every `ScenarioType`, including link/device selectors,
+    bandwidth-reduction mode, traffic factor and optional demand names,
+    routing-cost mode, and an expansion JSON editor using the existing
+    `parameters["expansion"]` contract.
+  - Configurable warning/critical/overload thresholds and explicit per-link
+    delay assumptions, validated into `SimulationAssumptions`.
+  - Separate Validate and Run actions. Validation errors and typed engine
+    errors are displayed inline; nothing is applied to the twin.
+  - Before/after metric tiles, a colored link comparison table, a grouped
+    utilization bar chart with threshold lines, changed-path and unserved-demand
+    tables, and the full `metric_rows` table.
+  - A deterministic Plotly topology (seed 42) that highlights failed devices,
+    failed/unavailable links, and warning/critical/overloaded links with a
+    legend.
+  - The mandatory model-scope note at the top of the page and beside results.
+  - Bounded session history with load, delete, and clear actions; a two-result
+    comparison; and JSON, metrics CSV, link CSV, path CSV, unserved CSV, and
+    comparison CSV downloads.
+- `app.py` routes and advertises only the `Simulation Lab` page in addition to
+  the existing pages; every other placeholder is unchanged.
+- `simulation/tables.py`: absent utilization values in `link_comparison_rows`
+  are now `None` rather than the string `"not present"`, keeping the numeric
+  column Arrow-compatible. This is a presentation helper change, not a public
+  schema change.
+- 4 AppTest smoke tests in `tests/unit/ui/test_simulation_lab_page.py`:
+  empty state, demand editing, scenario validation failure, and two retained
+  runs with comparison and export controls.
+- `tests/unit/simulation/test_tables.py` covers removed-link comparison rows
+  and the `None` utilization value used by the page.
+
+## Test evidence (Phase 7c)
+- Commands and results:
+  - `& ".venv\Scripts\python.exe" -m pytest -q`: `491 passed in 4.63s`
+  - `& ".venv\Scripts\python.exe" -m ruff check .`: `All checks passed!`
+- Public domain schemas were not changed.
+
 ## Test evidence (Phase 6)
 - `tests/unit/digital_twin/` (53 tests): frozen models and effective state,
   stale/duplicate validation, addressing/DHCP validator reuse, immutable
@@ -624,6 +664,13 @@ packet-level or hardware-accurate measurements.
   no ECMP, no queueing, and no packet-level effects. Capacity affects reported
   utilization but never path selection, so overloaded links stay selected.
   Latency exists only as an explicit per-link delay assumption.
+- The Simulation Lab page was verified through AppTest only. The Plotly
+  topology, colored link table, threshold lines, and browser download behavior
+  were not inspected in a real browser; no screenshots were taken.
+- Scenario history is session-only, bounded by `MAX_SCENARIOS`, and deliberately
+  stores no timestamp or elapsed time. Clearing the session loses the history.
+- Expansion scenarios are entered as validated JSON rather than a guided table;
+  malformed or oversized expansion data is rejected by the scenario engine.
 
 ## Next task
-- Phase 7c: Simulation Lab page (scenario editor, comparison, history, exports).
+- Phase 8: Multi-Objective Optimization Engine (not started; Phase 7 is complete).

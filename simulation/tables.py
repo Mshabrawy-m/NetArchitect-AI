@@ -104,12 +104,12 @@ def link_comparison_rows(
                 "Baseline utilization (%)": (
                     round(baseline.utilization_percent, 2)
                     if baseline is not None
-                    else "not present"
+                    else None
                 ),
                 "Scenario utilization (%)": (
                     round(scenario.utilization_percent, 2)
                     if scenario is not None
-                    else "not present"
+                    else None
                 ),
                 "Baseline congestion": (
                     baseline.level.value if baseline is not None else "not present"
