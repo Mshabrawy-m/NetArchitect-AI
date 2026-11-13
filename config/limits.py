@@ -47,6 +47,18 @@ MAX_OPTIMIZATION_ITERATIONS: int = 1000
 # Maximum population size for population-based optimization algorithms.
 MAX_POPULATION: int = 200
 
+# Maximum number of candidate evaluations for one optimization run. Every
+# candidate is a full modeled evaluation, so this bounds CPU and memory.
+MAX_EVALUATIONS: int = 20_000
+
+# Maximum wall-clock seconds for the search phase of one optimization run.
+# Baseline evaluation is performed first and is not counted against this
+# search budget.
+MAX_OPTIMIZATION_RUNTIME_SECONDS: int = 60
+
+# Maximum number of optimization runs retained in one session history.
+MAX_OPTIMIZATION_RUNS: int = 20
+
 # Maximum wall-clock seconds for a single simulation run.
 MAX_SIMULATION_RUNTIME_SECONDS: int = 30
 

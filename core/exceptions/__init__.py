@@ -87,5 +87,17 @@ class ScenarioValidationError(SimulationError):
     """A scenario is malformed or references entities outside the baseline twin."""
 
 
+class OptimizationError(NetArchitectError):
+    """Base class for optimization-engine failures."""
+
+
+class OptimizationValidationError(OptimizationError):
+    """An optimization candidate or setting is structurally invalid."""
+
+
+class OptimizationRuntimeExceeded(OptimizationError):
+    """An optimization run exceeded its configured wall-clock search budget."""
+
+
 class ConfigError(NetArchitectError):
     """Application configuration is missing or invalid."""
