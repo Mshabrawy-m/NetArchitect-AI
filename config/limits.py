@@ -67,3 +67,31 @@ MAX_AGENT_RETRIES: int = 3
 
 # Maximum number of steps in a single agent workflow before it must stop.
 MAX_WORKFLOW_STEPS: int = 50
+
+# Maximum wall-clock seconds for one complete agent workflow.
+MAX_AGENT_RUNTIME_SECONDS: int = 120
+
+# Maximum number of LLM requests allowed in one browser session. The budget
+# covers every request, including structured-output repair attempts.
+MAX_LLM_CALLS_PER_SESSION: int = 20
+
+# Maximum total tokens (prompt plus completion) allowed in one browser session.
+MAX_LLM_TOKENS_PER_SESSION: int = 60_000
+
+# Maximum repair attempts after a schema-invalid structured LLM response.
+MAX_LLM_REPAIR_RETRIES: int = 2
+
+# Maximum additional attempts after an HTTP 429 rate-limit response.
+MAX_LLM_RATE_LIMIT_RETRIES: int = 2
+
+# Base exponential-backoff delay, in seconds, for retried LLM requests.
+LLM_RETRY_BASE_SECONDS: float = 1.0
+
+# Upper bound, in seconds, on a single backoff wait, including Retry-After.
+MAX_LLM_RETRY_AFTER_SECONDS: int = 30
+
+# Maximum wall-clock seconds for one LLM HTTP request.
+MAX_LLM_TIMEOUT_SECONDS: int = 30
+
+# Maximum completion tokens requested from the LLM provider.
+MAX_LLM_RESPONSE_TOKENS: int = 4_096

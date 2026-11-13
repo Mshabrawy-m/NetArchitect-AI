@@ -2,6 +2,30 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-13 - Phase 9a: optional Groq provider layer
+
+### Added
+- `services/llm/`: provider-independent `LLMProvider.complete` interface,
+  typed frozen request/response models, and a `GroqProvider` that uses
+  `urllib.request` against the OpenAI-compatible Groq endpoint.
+- Typed LLM failures for missing key, authentication, timeout, rate limit
+  (HTTP 429 with bounded `Retry-After`/backoff), provider outage, malformed
+  response, schema failure after bounded repairs, and budget exhaustion.
+- Structured output: JSON extraction without code execution, Pydantic
+  validation, and at most `MAX_LLM_REPAIR_RETRIES` repair attempts.
+- `services/llm/budget.py`: per-session request and token budget.
+- `services/llm/testing.py`: scripted `FakeProvider` test double (not a demo
+  mode and not used by the application).
+- `config/settings.py`: configurable `GROQ_MODEL` and `GROQ_BASE_URL`; the key
+  continues to come from environment variables or Streamlit secrets only.
+- `config/limits.py`: LLM call, token, repair, retry, backoff, timeout, and
+  response-token limits.
+- 15 provider tests, including a secret scan over logs, errors, status, and
+  serialized output. No test contacts the network.
+
+### Changed
+- `core.exceptions`: typed `LLMError` hierarchy. No public domain schema changed.
+
 ## 2026-11-13 - Phase 8c: Optimization Center page, history, and exports
 
 ### Added

@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 8 - Multi-Objective Optimization Engine (complete)
-- Current task: Phase 8c - Optimization Center page (complete)
-- Overall status: Phase 8 complete; Phase 9 not started
+- Current phase: Phase 9 - Agentic AI Framework (in progress)
+- Current task: Phase 9a - LLM provider layer (complete)
+- Overall status: Phase 9 in progress; Phase 10 not started
 - Last updated: 2026-11-13
-- Branch: `feature/phase8-optimization` (based on merged `main` commit `f7023ee`)
+- Branch: `feature/phase9-agent-framework` (based on merged `main` commit `42bddfc`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -628,6 +628,42 @@ search over a stated design space, never a global-optimum claim.
 - `app.py` routes and advertises only the Optimization Center in addition to the
   existing pages; no other placeholder is changed.
 - 7 unit tests for history/export and 6 AppTest smoke tests for the page.
+
+## Phase 9a delivered - optional Groq provider layer
+Location: `services/llm/` (pure Python; no Streamlit import and no new
+dependency). Core deterministic engineering never imports this package.
+
+- `services/llm/models.py`: frozen `LLMMessage`, `LLMUsage`, `LLMResponse`, and
+  `ProviderStatus`. `LLMResponse.structured` exists only when a schema was
+  supplied and holds the validated model dump.
+- `services/llm/provider.py`: the provider-independent `LLMProvider.complete`
+  interface with an optional Pydantic schema.
+- `services/llm/groq.py`: `GroqProvider` calls the OpenAI-compatible Groq
+  `/chat/completions` endpoint with `urllib.request` and maps every failure to a
+  typed error: missing key, authentication, timeout, rate limit (429 with
+  bounded `Retry-After`/backoff, capped), provider outage, malformed envelope,
+  schema failure, and budget exhaustion. Model and base URL come from
+  `config.settings` (`GROQ_MODEL`, `GROQ_BASE_URL`); the documented default model
+  is configurable because providers retire models.
+- Structured output requests `response_format=json_object`, extracts the first
+  JSON value without evaluating code, validates it with the caller's Pydantic
+  model, and repairs schema-invalid output at most
+  `MAX_LLM_REPAIR_RETRIES` times before raising `LLMSchemaError`.
+- `services/llm/budget.py`: `RequestBudget` counts every request (including
+  retries and repairs) and provider-reported tokens against
+  `MAX_LLM_CALLS_PER_SESSION` and `MAX_LLM_TOKENS_PER_SESSION`.
+- `services/llm/testing.py`: clearly named `FakeProvider` test double with
+  scripted text, malformed output, timeouts, and typed failures. It is not a
+  user-facing demo mode.
+- `config/settings.py`: `GROQ_MODEL` and `GROQ_BASE_URL` are configurable via
+  environment variables or Streamlit secrets; the API key already follows that
+  path.
+- `config/limits.py`: LLM call, token, repair, rate-limit retry, backoff,
+  timeout, and response-token limits.
+- `core.exceptions`: typed LLM failures. Keys are never logged, traced,
+  serialized, or placed in error messages; a test scans logs, errors, status,
+  and JSON output for the secret.
+- 15 unit tests; no test performs a real network request.
 
 ## Test evidence (Phase 8)
 - Commands and results:

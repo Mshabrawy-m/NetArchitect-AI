@@ -23,6 +23,8 @@ _SETTING_KEYS: tuple[str, ...] = (
     "APP_VERSION",
     "DEPLOYMENT_TARGET",
     "GROQ_API_KEY",
+    "GROQ_BASE_URL",
+    "GROQ_MODEL",
 )
 
 
@@ -38,6 +40,13 @@ class Settings(BaseModel):
     DEPLOYMENT_TARGET: str = "Streamlit Community Cloud Free"
     # Optional. Core deterministic features work without any API key.
     GROQ_API_KEY: str = ""
+    # OpenAI-compatible Groq endpoint. Kept configurable so a deployment can
+    # point at a compatible gateway without code changes.
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    # Documented default only. Groq retires models, so deployments override
+    # this with GROQ_MODEL (environment variable or Streamlit secret) rather
+    # than relying on a hardcoded model name.
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
 
 def _read_streamlit_secrets() -> dict[str, str]:

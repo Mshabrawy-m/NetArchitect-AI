@@ -101,3 +101,79 @@ class OptimizationRuntimeExceeded(OptimizationError):
 
 class ConfigError(NetArchitectError):
     """Application configuration is missing or invalid."""
+
+
+class LLMError(NetArchitectError):
+    """Base class for language-model provider failures."""
+
+
+class LLMMissingKeyError(LLMError):
+    """No API key is configured for the requested provider."""
+
+
+class LLMAuthenticationError(LLMError):
+    """The provider rejected the configured API key."""
+
+
+class LLMTimeoutError(LLMError):
+    """A provider request exceeded its wall-clock timeout."""
+
+
+class LLMRateLimitError(LLMError):
+    """The provider kept returning HTTP 429 after bounded retries."""
+
+
+class LLMProviderError(LLMError):
+    """The provider is unavailable or returned an unusable HTTP response."""
+
+
+class LLMMalformedResponseError(LLMError):
+    """The provider response envelope or JSON payload could not be parsed."""
+
+
+class LLMSchemaError(LLMError):
+    """Structured output failed schema validation after bounded repairs."""
+
+
+class LLMBudgetExceededError(LLMError):
+    """The per-session LLM call or token budget is exhausted."""
+
+
+class AgentError(NetArchitectError):
+    """Base class for agent-framework failures."""
+
+
+class AgentValidationError(AgentError):
+    """An agent contract, plan, or workflow state is structurally invalid."""
+
+
+class ToolError(AgentError):
+    """Base class for tool-registry failures."""
+
+
+class ToolNotFoundError(ToolError):
+    """A requested tool is not registered."""
+
+
+class ToolNotAllowedError(ToolError):
+    """A tool exists but is outside the calling agent's allowlist."""
+
+
+class ToolInputError(ToolError):
+    """A tool input failed validation before execution."""
+
+
+class ToolOutputError(ToolError):
+    """A tool output failed validation after execution."""
+
+
+class WorkflowError(AgentError):
+    """Base class for orchestrator and workflow failures."""
+
+
+class WorkflowCycleError(WorkflowError):
+    """A workflow plan contains a dependency cycle."""
+
+
+class WorkflowLimitError(WorkflowError):
+    """A workflow hit a structural or resource limit."""
