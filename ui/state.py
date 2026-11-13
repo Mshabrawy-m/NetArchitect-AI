@@ -40,9 +40,11 @@ from digital_twin import (
     set_vlan_plan as twin_set_vlan_plan,
 )
 from network.vlan.plan import VlanPlanResult
+from simulation import ScenarioHistory, ScenarioRun
 
 TWIN_KEY = "digital_twin"
 SNAPSHOTS_KEY = "digital_twin_snapshots"
+SIMULATION_HISTORY_KEY = "simulation_history"
 LEGACY_TOPOLOGY_KEY = "topology"
 FLASH_KEY = "topology_editor_flash"
 
@@ -245,3 +247,33 @@ def delete_snapshot(index: int) -> Snapshot:
 def clear_snapshots() -> None:
     """Remove every retained snapshot."""
     get_snapshot_store().clear()
+
+
+def get_simulation_history() -> ScenarioHistory:
+    """Return the session scenario history, creating it when needed."""
+    history = st.session_state.get(SIMULATION_HISTORY_KEY)
+    if not isinstance(history, ScenarioHistory):
+        history = ScenarioHistory()
+        st.session_state[SIMULATION_HISTORY_KEY] = history
+    return history
+
+
+def get_simulation_runs() -> tuple[ScenarioRun, ...]:
+    """Return retained scenario runs in creation order."""
+    return get_simulation_history().runs
+
+
+def add_simulation_run(run: ScenarioRun) -> ScenarioRun:
+    """Append a scenario run to the bounded session history."""
+    get_simulation_history().add(run)
+    return run
+
+
+def remove_simulation_run(index: int) -> ScenarioRun:
+    """Remove one retained scenario run by index."""
+    return get_simulation_history().remove(index)
+
+
+def clear_simulation_history() -> None:
+    """Remove every retained scenario run."""
+    get_simulation_history().clear()

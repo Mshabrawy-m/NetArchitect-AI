@@ -2,7 +2,7 @@
 
 ## Overall
 - Current phase: Phase 7 - Network Simulation Engine (in progress)
-- Current task: Phase 7a - abstract flow evaluator (complete)
+- Current task: Phase 7b - scenario engine (complete)
 - Overall status: In progress
 - Last updated: 2026-11-13
 - Branch: `feature/phase7-simulation` (based on merged `main` commit `aed9277`)
@@ -14,7 +14,7 @@
 - [x] Phase 4: IP Addressing and VLAN Engine
 - [x] Phase 5: Routing and Graph Analysis Engine
 - [x] Phase 6: Network Digital Twin
-- [ ] Phase 7: Network Simulation Engine (7a complete)
+- [ ] Phase 7: Network Simulation Engine (7a-7b complete)
 - [ ] Phase 8: Multi-Objective Optimization Engine
 - [ ] Phase 9: Agentic AI Framework
 - [ ] Phase 10: Specialized AI Agents
@@ -416,6 +416,49 @@ packet-level or hardware-accurate measurements.
 - Public domain schemas were not changed. The core `ScenarioResult` model is
   untouched; the simulation layer has its own richer result models.
 
+## Phase 7b delivered - scenario engine, history, and exports
+- `simulation/scenarios.py`
+  - `validate_scenario` translates a `Scenario` into an explicit `ScenarioPlan`
+    and raises `ScenarioValidationError` with every accumulated issue. Nothing is
+    applied until validation succeeds, and the baseline twin is never mutated.
+  - Supports single/multiple link failure, node failure, bandwidth reduction,
+    increased traffic demand, new department/network expansion, routing-cost
+    change, and redundancy/recovery tests. Type-specific inputs live in the
+    existing `Scenario.parameters` dict; the public `Scenario` schema is
+    unchanged.
+  - Rejects unknown or duplicate affected ids, unknown demand/link keys, and
+    fields that do not apply to the selected type instead of ignoring them.
+    Element counts are bounded by `MAX_SCENARIO_ELEMENTS`; expansion is also
+    bounded by `MAX_NODES`, `MAX_EDGES`, and `MAX_DEMANDS`.
+  - `run_scenario(baseline_twin, scenario, assumptions)` returns `ScenarioRun`
+    with the validated inputs, assumptions, thresholds, baseline and scenario
+    twin references (name, version, SHA-256 fingerprint), both `NetworkState`
+    values, a deterministic `ScenarioComparison`, and non-fatal warnings.
+    Both evaluations share one `MAX_SIMULATION_RUNTIME_SECONDS` budget.
+  - No timestamp or elapsed time is stored; identical inputs produce identical
+    results. `compare_runs(left, right)` compares the scenario states of two
+    retained results with the right-hand run as the "after" side.
+  - `recovery_available` means every demand served at baseline is still served;
+    `recovery_note` either confirms that or names the newly unserved demands.
+- `simulation/history.py`: `ScenarioHistory`, a bounded ordered store that
+  raises `LimitsExceededError` at `MAX_SCENARIOS` instead of silently dropping
+  results; supports `add`, `remove`, and `clear`.
+- `simulation/export.py`: `run_to_json`, `run_to_json_bytes`, and `run_to_csv`.
+  JSON uses sorted keys and CSV uses the standard library writer with `\n`;
+  exporting the same run always produces identical bytes.
+- `simulation/tables.py`: `link_comparison_rows` adds before/after utilization,
+  congestion, and change labels for every link in either state.
+- `ui/state.py`: `SIMULATION_HISTORY_KEY` is the single session key, with
+  `get_simulation_history`, `get_simulation_runs`, `add_simulation_run`,
+  `remove_simulation_run`, and `clear_simulation_history` as the only accessors.
+- 33 new unit tests in `tests/unit/simulation/test_scenarios.py`.
+
+## Test evidence (Phase 7b)
+- Commands and results:
+  - `& ".venv\Scripts\python.exe" -m pytest -q`: `486 passed in 4.03s`
+  - `& ".venv\Scripts\python.exe" -m ruff check .`: `All checks passed!`
+- Public domain schemas were not changed.
+
 ## Test evidence (Phase 6)
 - `tests/unit/digital_twin/` (53 tests): frozen models and effective state,
   stale/duplicate validation, addressing/DHCP validator reuse, immutable
@@ -583,4 +626,4 @@ packet-level or hardware-accurate measurements.
   Latency exists only as an explicit per-link delay assumption.
 
 ## Next task
-- Phase 7b: scenario engine, validation, bounded history, and comparison.
+- Phase 7c: Simulation Lab page (scenario editor, comparison, history, exports).

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from core.schemas.network import Device, DeviceRole, DeviceType, Link, Topology
 from core.schemas.routing import TrafficDemand
+from core.schemas.scenario import Scenario, ScenarioType
 from digital_twin import DeviceState, DigitalTwin, LinkState, TwinMetadata
 
 
@@ -113,3 +114,22 @@ def diamond_twin(
         ],
     )
     return make_twin(topology, demands)
+
+
+def make_scenario(
+    scenario_type: ScenarioType,
+    *,
+    scenario_id: str = "scenario-1",
+    name: str = "Test scenario",
+    affected_links: list[str] | None = None,
+    affected_nodes: list[str] | None = None,
+    parameters: dict[str, object] | None = None,
+) -> Scenario:
+    return Scenario(
+        id=scenario_id,
+        name=name,
+        type=scenario_type,
+        affected_links=affected_links or [],
+        affected_nodes=affected_nodes or [],
+        parameters=parameters or {},
+    )

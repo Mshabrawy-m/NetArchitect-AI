@@ -2,6 +2,27 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-13 - Phase 7b: scenario engine, history, and exports
+
+### Added
+- `simulation/scenarios.py`: explicit `ScenarioPlan` validation for link/node
+  failures, bandwidth reduction, traffic increase, expansion, routing-cost
+  change, and redundancy/recovery tests; `ScenarioRun`, `ScenarioComparison`,
+  `PathChange`, and `LinkChange`; deterministic `run_scenario` and
+  `compare_runs` with twin fingerprints, assumptions, thresholds, and no
+  timestamps.
+- `simulation/history.py`: bounded `ScenarioHistory` that honors
+  `MAX_SCENARIOS` and raises instead of silently dropping runs.
+- `simulation/export.py`: deterministic sorted-key JSON and standard-library
+  CSV exports; `simulation/tables.py` adds `link_comparison_rows`.
+- `ui/state.py`: `SIMULATION_HISTORY_KEY` and the sole session accessors for
+  the scenario history.
+- 33 unit tests under `tests/unit/simulation/test_scenarios.py`.
+
+### Changed
+- No public domain schemas were changed; scenario-specific inputs use the
+  existing `Scenario.parameters` dict.
+
 ## 2026-11-13 - Phase 7a: abstract flow evaluator
 
 ### Added

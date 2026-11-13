@@ -75,6 +75,54 @@ def unserved_rows(state: NetworkState) -> list[dict[str, object]]:
     ]
 
 
+def link_comparison_rows(
+    before: NetworkState,
+    after: NetworkState,
+) -> list[dict[str, object]]:
+    """Return one row per link in either state, with before/after values."""
+    before_links = {link.link_id: link for link in before.links}
+    after_links = {link.link_id: link for link in after.links}
+    ordered_ids = [
+        *(link.link_id for link in after.links),
+        *(link.link_id for link in before.links if link.link_id not in after_links),
+    ]
+    rows: list[dict[str, object]] = []
+    for link_id in ordered_ids:
+        baseline = before_links.get(link_id)
+        scenario = after_links.get(link_id)
+        if baseline is None:
+            change = "added"
+        elif scenario is None:
+            change = "removed"
+        elif baseline.level is not scenario.level:
+            change = "level changed"
+        else:
+            change = "unchanged"
+        rows.append(
+            {
+                "Link": link_id,
+                "Baseline utilization (%)": (
+                    round(baseline.utilization_percent, 2)
+                    if baseline is not None
+                    else "not present"
+                ),
+                "Scenario utilization (%)": (
+                    round(scenario.utilization_percent, 2)
+                    if scenario is not None
+                    else "not present"
+                ),
+                "Baseline congestion": (
+                    baseline.level.value if baseline is not None else "not present"
+                ),
+                "Scenario congestion": (
+                    scenario.level.value if scenario is not None else "not present"
+                ),
+                "Change": change,
+            }
+        )
+    return rows
+
+
 def metric_rows(before: NetworkState, after: NetworkState) -> list[dict[str, object]]:
     """Return before/after headline metrics with a numeric delta."""
     metrics: list[tuple[str, float, float, str]] = [
@@ -191,6 +239,7 @@ def path_change_rows(
 __all__ = [
     "demand_rows",
     "format_path",
+    "link_comparison_rows",
     "link_rows",
     "metric_rows",
     "path_change_rows",
