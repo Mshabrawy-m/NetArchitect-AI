@@ -27,6 +27,10 @@ MAX_ALTERNATIVE_PATHS: int = 10
 # Maximum number of what-if scenarios retained for comparison.
 MAX_SCENARIOS: int = 50
 
+# Maximum number of entities (links, devices, demands, or expansion records) a
+# single what-if scenario may name or add.
+MAX_SCENARIO_ELEMENTS: int = 50
+
 # Maximum number of snapshots retained for one digital twin.
 MAX_SNAPSHOTS: int = 20
 

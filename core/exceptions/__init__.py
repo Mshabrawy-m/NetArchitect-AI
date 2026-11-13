@@ -75,5 +75,17 @@ class LimitsExceededError(NetArchitectError):
     """A bounded resource limit was exceeded."""
 
 
+class SimulationError(NetArchitectError):
+    """Base class for simulation-engine failures."""
+
+
+class SimulationRuntimeExceeded(SimulationError):
+    """A simulation run exceeded its configured wall-clock budget."""
+
+
+class ScenarioValidationError(SimulationError):
+    """A scenario is malformed or references entities outside the baseline twin."""
+
+
 class ConfigError(NetArchitectError):
     """Application configuration is missing or invalid."""

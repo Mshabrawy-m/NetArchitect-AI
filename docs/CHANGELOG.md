@@ -2,6 +2,28 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-13 - Phase 7a: abstract flow evaluator
+
+### Added
+- `simulation/models.py`: frozen `NetworkState`, `DemandEvaluation`,
+  `UnservedDemand`, `LinkLoad`, `SimulationAssumptions`,
+  `CongestionThresholds`, and `TwinReference`, plus the mandatory `MODEL_NOTE`.
+- `simulation/evaluator.py`: deterministic single-path flow evaluation over an
+  unmodified digital twin, shared undirected link capacity, directed-link
+  asymmetry, unclamped utilization, configurable congestion bands, explicit
+  unserved reasons, connectivity summary, optional latency from per-link delay
+  assumptions, twin fingerprinting, and a typed runtime guard.
+- `simulation/tables.py`: UI-agnostic link, demand, unserved, metric, and path-
+  change rows.
+- `config/limits.py`: `MAX_SCENARIO_ELEMENTS = 50`; `core.exceptions` adds
+  `SimulationError`, `SimulationRuntimeExceeded`, and
+  `ScenarioValidationError`.
+- 20 unit tests under `tests/unit/simulation/`.
+
+### Changed
+- No public domain schemas were changed; the core `ScenarioResult` model is
+  unchanged. The simulation layer defines its own richer result types.
+
 ## 2026-11-12 - Phase 6c: Digital Twin page
 
 ### Added

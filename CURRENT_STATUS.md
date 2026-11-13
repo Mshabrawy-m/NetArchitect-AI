@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 6 - Network Digital Twin (complete)
-- Current task: Phase 6c - Digital Twin page (complete)
+- Current phase: Phase 7 - Network Simulation Engine (in progress)
+- Current task: Phase 7a - abstract flow evaluator (complete)
 - Overall status: In progress
-- Last updated: 2026-11-12
-- Branch: `feature/phase6-digital-twin` (based on merged `main` commit `7f00975`)
+- Last updated: 2026-11-13
+- Branch: `feature/phase7-simulation` (based on merged `main` commit `aed9277`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -14,7 +14,7 @@
 - [x] Phase 4: IP Addressing and VLAN Engine
 - [x] Phase 5: Routing and Graph Analysis Engine
 - [x] Phase 6: Network Digital Twin
-- [ ] Phase 7: Network Simulation Engine
+- [ ] Phase 7: Network Simulation Engine (7a complete)
 - [ ] Phase 8: Multi-Objective Optimization Engine
 - [ ] Phase 9: Agentic AI Framework
 - [ ] Phase 10: Specialized AI Agents
@@ -360,6 +360,62 @@ copy of real equipment.
 - `app.py` routes `Digital Twin`; sidebar and dashboard availability text
   updated. No other placeholder page is changed.
 
+## Phase 7a delivered - abstract flow evaluator
+Location: `simulation/` (pure Python; no Streamlit, no LLM, no new
+dependencies). Every function is stateless and the baseline twin is never
+mutated. All values are modeled estimates from stated assumptions, not
+packet-level or hardware-accurate measurements.
+
+- `simulation/models.py`
+  - Frozen `NetworkState`, `DemandEvaluation`, `UnservedDemand`, `LinkLoad`,
+    `SimulationAssumptions`, `CongestionThresholds`, and `TwinReference`.
+  - `MODEL_NOTE` is stored on every result: "Modeled estimates from stated
+    assumptions; not packet-level or hardware-accurate."
+  - Default bands: warning at or above 70 percent, critical at or above
+    90 percent, overloaded strictly above 100 percent. Thresholds are
+    configurable and must satisfy `0 < warning < critical < overload`.
+  - Optional `link_delay_ms` map (milliseconds). Latency is estimated only when
+    every hop has an assumption; a partial map produces `latency_ms=None` and a
+    note naming the missing links instead of treating them as zero.
+- `simulation/evaluator.py`
+  - `evaluate(twin, assumptions=None, *, max_runtime_seconds=None)` routes each
+    demand on the single lowest-cost path from the existing routing engine
+    (deterministic lexicographic tie-break; no ECMP, no flow splitting).
+  - Parallel links use the routing engine's chosen physical link, so only that
+    link receives load.
+  - An undirected link shares one capacity across both directions; the report
+    keeps forward and reverse components separate but utilization uses their
+    sum. A directed link records only its permitted direction.
+  - Utilization is `load / capacity * 100` and is never clamped; values above
+    100 percent are reported as overloaded.
+  - Failed devices, links, and links attached to failed devices are excluded.
+    Stale twin state is ignored and reported in `warnings`.
+  - Unroutable demands are returned as unserved with the routing reason; a
+    missing demand endpoint is also unserved with an explicit reason rather
+    than crashing the evaluation.
+  - Connectivity reports weak components, isolated devices, and devices outside
+    the largest component. Largest-component ties resolve by the
+    lexicographically first device id.
+  - `twin_fingerprint` hashes canonical sorted-key JSON (SHA-256);
+    `twin_reference` records the twin name, creation time, schema version, and
+    fingerprint on every state.
+  - Runtime is bounded by `MAX_SIMULATION_RUNTIME_SECONDS`. A smaller caller
+    budget is accepted; a larger one raises `LimitsExceededError`; exceeding
+    the budget raises `SimulationRuntimeExceeded`.
+- `simulation/tables.py`: UI-agnostic rows for links, demands, unserved
+  demands, before/after metrics, and path changes.
+- `config/limits.py`: `MAX_SCENARIO_ELEMENTS = 50`.
+- `core/exceptions`: `SimulationError`, `SimulationRuntimeExceeded`, and
+  `ScenarioValidationError`.
+- 20 unit tests in `tests/unit/simulation/`.
+
+## Test evidence (Phase 7a)
+- Commands and results:
+  - `& ".venv\Scripts\python.exe" -m pytest -q`: `453 passed in 4.08s`
+  - `& ".venv\Scripts\python.exe" -m ruff check .`: `All checks passed!`
+- Public domain schemas were not changed. The core `ScenarioResult` model is
+  untouched; the simulation layer has its own richer result models.
+
 ## Test evidence (Phase 6)
 - `tests/unit/digital_twin/` (53 tests): frozen models and effective state,
   stale/duplicate validation, addressing/DHCP validator reuse, immutable
@@ -521,6 +577,10 @@ copy of real equipment.
 - The Digital Twin page was verified through AppTest only; the state data
   editors, snapshot selectors, and comparison tables were not inspected in a
   real browser.
+- Simulation v1 is an abstract flow model: single lowest-cost path per demand,
+  no ECMP, no queueing, and no packet-level effects. Capacity affects reported
+  utilization but never path selection, so overloaded links stay selected.
+  Latency exists only as an explicit per-link delay assumption.
 
 ## Next task
-- Phase 7: Network Simulation Engine. Not started.
+- Phase 7b: scenario engine, validation, bounded history, and comparison.
