@@ -2,6 +2,92 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-13 - Phase 8c: Optimization Center page, history, and exports
+
+### Added
+- `optimization/history.py`: bounded `OptimizationHistory` that honors
+  `MAX_OPTIMIZATION_RUNS` and raises `LimitsExceededError` instead of silently
+  dropping runs.
+- `optimization/export.py`: deterministic sorted-key JSON and standard-library
+  CSV exports that include the seed, every setting, limits, stop reason, the
+  baseline, and every evaluated candidate.
+- `ui/state.py`: `OPTIMIZATION_HISTORY_KEY` and the sole session accessors for
+  the optimization history, plus `save_twin_snapshot` for derived designs.
+- `ui/pages/optimization_center.py`: candidate-link pool, capacity tiers and
+  proxy costs, optional routing-cost multipliers, objective/weight/bound
+  selection, every hard constraint, algorithm/seed/population/iterations and
+  evaluation/runtime caps, progress status, baseline-versus-optimized deltas,
+  trade-off warnings, a two-objective Pareto scatter with the baseline marked,
+  candidate feasibility and violations, a bounded inspector with the changes
+  from the baseline, explicit snapshot/baseline actions, bounded history, and
+  algorithm comparison with stated weights.
+- `tests/unit/optimization/test_history_export.py` and
+  `tests/unit/ui/test_optimization_center_page.py`.
+- `app.py` routes and advertises the Optimization Center.
+
+### Changed
+- `optimization/__init__.py` exports the history and export helpers.
+- No public domain schemas were changed; optimization inputs and results stay in
+  `optimization/models.py`.
+
+## 2026-11-13 - Phase 8b: seeded GA, NSGA-II, and comparison
+
+### Added
+- `optimization/algorithms/`: canonical integer genome, random generation,
+  uniform crossover, bounded mutation, tournament selection, constrained
+  domination, non-dominated sorting, crowding distance, and exhaustive
+  enumeration for tiny spaces.
+- Seeded Genetic Algorithm with elitism and explicit constrained feasibility
+  handling, and seeded NSGA-II whose selection uses no weights and whose
+  reported front is the true rank-0 feasible front over every evaluated
+  candidate.
+- `optimization/algorithms/budget.py`: baseline evaluation precedes the search
+  clock; search stops cleanly at `max_evaluations` or the runtime limit with a
+  typed `StopReason`.
+- `optimization/algorithms/dispatch.py`: one result shape for greedy, genetic,
+  and NSGA-II. Particle Swarm Optimization is intentionally omitted because a
+  continuous velocity has no sound mapping onto discrete link-presence, tier,
+  and multiplier decisions.
+- `optimization/compare.py`: baseline-versus-algorithm comparison with
+  per-objective change, trade-offs, Pareto sets, and weights stated alongside
+  any weighted recommendation.
+- Tests for brute-force Pareto equality, dominance and crowding arithmetic,
+  reproducibility, limit stop reasons, and baseline immutability.
+
+### Changed
+- No public domain schemas were changed.
+
+## 2026-11-13 - Phase 8a: bounded design space, objectives, constraints, and greedy
+
+### Added
+- `optimization/models.py`: deterministic serializable `Candidate` (pool links,
+  one capacity tier per link, optional routing-cost multipliers), objective
+  definitions, weighted objective specs with fixed normalization bounds,
+  `OptimizationSettings`, every `HardConstraints` field, candidate evaluations,
+  and a complete `OptimizationRun` with algorithm, seed, settings, limits,
+  typed stop reason, baseline, candidates, and notes.
+- `optimization/space.py`: `build_candidate_twin` applies decisions through
+  `digital_twin` without mutating the baseline; `candidate_changes` reports
+  deterministic human-readable changes.
+- `optimization/objectives.py`: min-max normalization with stated bounds and
+  documented proxy infrastructure cost arithmetic.
+- `optimization/constraints.py`: every hard constraint is checked separately
+  from objectives; infeasible candidates are recorded but never recommended.
+- `optimization/evaluator.py`: `evaluate_candidate` reuses the existing
+  simulation evaluator, caches by candidate hash per run, and counts
+  evaluations and cache hits separately.
+- `optimization/greedy.py`: deterministic hill-climb baseline that accepts only
+  strictly improving feasible one-change moves.
+- `config/limits.py`: `MAX_EVALUATIONS`, `MAX_OPTIMIZATION_RUNTIME_SECONDS`,
+  `MAX_OPTIMIZATION_RUNS`, `MAX_POPULATION`, and `MAX_OPTIMIZATION_ITERATIONS`.
+- 44 tests under `tests/unit/optimization/`.
+
+### Changed
+- `core.exceptions` adds `OptimizationError`, `OptimizationValidationError`, and
+  `OptimizationRuntimeExceeded`.
+- No public domain schemas were changed; the optimization-specific inputs and
+  results are local to `optimization/models.py`.
+
 ## 2026-11-13 - Phase 7c: Simulation Lab page
 
 ### Added

@@ -41,7 +41,9 @@ from .evaluator import (
     evaluate_candidate,
     resolve_deadline,
 )
+from .export import run_to_csv, run_to_json, run_to_json_bytes
 from .greedy import run_greedy
+from .history import OptimizationHistory
 from .models import (
     COST_NOTE,
     DEFAULT_TIERS,
@@ -100,6 +102,7 @@ __all__ = [
     "ObjectiveKind",
     "ObjectiveSpec",
     "ObjectiveValue",
+    "OptimizationHistory",
     "OptimizationLimits",
     "OptimizationRun",
     "OptimizationSettings",
@@ -133,6 +136,9 @@ __all__ = [
     "run_greedy",
     "run_nsga2",
     "run_optimization",
+    "run_to_csv",
+    "run_to_json",
+    "run_to_json_bytes",
     "trade_off_messages",
     "weighted_score",
 ]

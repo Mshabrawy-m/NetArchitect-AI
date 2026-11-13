@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 7 - Network Simulation Engine (in progress)
-- Current task: Phase 7c - Simulation Lab page (complete)
-- Overall status: In progress
+- Current phase: Phase 8 - Multi-Objective Optimization Engine (complete)
+- Current task: Phase 8c - Optimization Center page (complete)
+- Overall status: Phase 8 complete; Phase 9 not started
 - Last updated: 2026-11-13
-- Branch: `feature/phase7-simulation` (based on merged `main` commit `aed9277`)
+- Branch: `feature/phase8-optimization` (based on merged `main` commit `f7023ee`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -15,7 +15,7 @@
 - [x] Phase 5: Routing and Graph Analysis Engine
 - [x] Phase 6: Network Digital Twin
 - [x] Phase 7: Network Simulation Engine
-- [ ] Phase 8: Multi-Objective Optimization Engine
+- [x] Phase 8: Multi-Objective Optimization Engine
 - [ ] Phase 9: Agentic AI Framework
 - [ ] Phase 10: Specialized AI Agents
 - [ ] Phase 11: Predictive Capacity Planning
@@ -498,6 +498,154 @@ packet-level or hardware-accurate measurements.
   - `& ".venv\Scripts\python.exe" -m pytest -q`: `491 passed in 4.63s`
   - `& ".venv\Scripts\python.exe" -m ruff check .`: `All checks passed!`
 - Public domain schemas were not changed.
+
+## Phase 8a delivered - bounded design space, objectives, constraints, and greedy
+Location: `optimization/` (pure Python plus NumPy; no Streamlit, no LLM, no new
+dependency). Every value is a modeled estimate and every run is a heuristic
+search over a stated design space, never a global-optimum claim.
+
+- `optimization/models.py`
+  - `Candidate` is a deterministic, serializable decision set over the baseline
+    twin: selected links from the user's candidate pool, one capacity tier per
+    link, and optional positive routing-cost multipliers. Its before-validator
+    canonicalizes and de-duplicates decisions, and `candidate_hash` is a stable
+    SHA-256 over canonical JSON.
+  - `ObjectiveKind` covers infrastructure cost proxy, maximum utilization, mean
+    path cost, SPOF count, minimum edge-disjoint paths, and link count.
+    `OBJECTIVE_DEFINITIONS` stores each label, unit, direction, and definition.
+  - `ObjectiveSpec` states fixed lower/upper normalization bounds and a weight;
+    `OptimizationSettings` rejects non-finite values, duplicate objectives,
+    weights that do not sum to 1 (tolerance `1e-9`), duplicate pool ids, and
+    non-positive multiplier options.
+  - `HardConstraints` covers connectivity, minimum served-demand ratio, maximum
+    utilization, budget proxy, `MAX_NODES`/`MAX_EDGES`, and an optional
+    minimum edge-disjoint path count.
+  - `CandidateEvaluation` records metrics, raw/normalized objective values,
+    weighted score, every constraint result (including skipped ones), a
+    feasibility flag, and the violated-constraint names.
+  - `OptimizationRun` records the algorithm, seed, full settings, explicit
+    limits, evaluation/cache counts, typed `StopReason`, baseline, candidate
+    records, Pareto front, best feasible record, and the model/cost/search
+    notes.
+  - Cost scope is documented as a proxy: selected links are charged their tier
+    cost, baseline upgrades only their positive tier delta, and optional
+    per-device cost is charged once per device. Routing cost is a path metric,
+    not money.
+- `optimization/space.py`: `build_candidate_twin` applies baseline tier
+  upgrades, pool-link additions, and cost multipliers through
+  `digital_twin` helpers. The baseline is never mutated.
+  `candidate_changes` returns deterministic human-readable changes.
+- `optimization/objectives.py`: min-max normalization clamps to the stated
+  bounds and inverts maximize objectives; `infrastructure_cost_proxy` and
+  `weighted_score` implement the documented arithmetic.
+- `optimization/constraints.py`: every hard constraint is checked separately
+  from objectives; infeasible candidates are recorded but never recommended.
+- `optimization/evaluator.py`: `evaluate_candidate` builds a derived twin,
+  reuses the existing simulation evaluator, caches by candidate hash per run,
+  counts full evaluations separately from cache hits, and converts a simulation
+  runtime stop into a typed optimization stop.
+- `optimization/greedy.py`: deterministic hill-climb baseline over one-change
+  neighbors (add a pool link, change a tier, adjust a multiplier) that accepts
+  only strictly improving feasible moves.
+- `config/limits.py`: `MAX_EVALUATIONS = 20_000`,
+  `MAX_OPTIMIZATION_RUNTIME_SECONDS = 60`, `MAX_OPTIMIZATION_RUNS = 20`,
+  `MAX_POPULATION = 200`, and `MAX_OPTIMIZATION_ITERATIONS = 1_000`.
+- 44 unit tests in `tests/unit/optimization/`.
+
+## Phase 8b delivered - seeded GA, NSGA-II, and comparison
+- `optimization/algorithms/common.py`: canonical integer genome, random
+  generation, crossover, bounded mutation, tournament selection, constrained
+  domination, non-dominated sorting, crowding distance, and a brute-force
+  enumerator for tiny spaces.
+  - Presence genes are per pool link; tier genes are per pool and baseline link;
+    multiplier genes are per link. Baseline tier genes encode "unchanged" when a
+    tier matches the baseline capacity, and identity multipliers are omitted, so
+    equivalent decisions share one hash.
+  - `Non-dominated` comparison treats feasible candidates as dominating
+    infeasible ones, then fewer violations, then objective Pareto dominance.
+- `optimization/algorithms/genetic.py`: seeded Genetic Algorithm with tournament
+  selection, uniform crossover, bounded mutation, and elitism. Feasibility is
+  never folded into a numeric penalty; elitism/tournament order is by
+  constrained domination and then weighted score. The recommendation is the
+  best feasible weighted candidate or `None`.
+- `optimization/algorithms/nsga2.py`: seeded NSGA-II with constrained
+  non-dominated sorting, crowding distance, binary tournament on rank/crowding,
+  and combined parent/offspring survival. Selection does not use weights. The
+  reported front is the true rank-0 feasible front over every evaluated
+  candidate (not only the final population), verified against exhaustive
+  enumeration on a 12-candidate tiny space.
+- `optimization/algorithms/budget.py`: baseline evaluation happens before the
+  search clock starts; the search stops cleanly at `max_evaluations` or the
+  runtime limit with a typed `StopReason`.
+- `optimization/algorithms/dispatch.py`: one result shape for greedy, genetic,
+  and NSGA-II. Particle Swarm Optimization is intentionally omitted: a
+  continuous velocity has no sound mapping onto link-presence bits, per-link
+  tier choices, and optional multipliers without an undocumented hybrid scheme.
+- `optimization/compare.py`: `compare_runs` rejects runs with different settings
+  or baselines, reports each algorithm's best feasible candidate, per-objective
+  raw/relative change, trade-offs, and its Pareto set, and names a weighted best
+  only together with the weights. It never claims a global optimum.
+- Reproducibility: identical settings including `seed` produce identical
+  `OptimizationRun` dumps. Tests cover brute-force Pareto equality, greedy
+  feasibility, weighted recommendations, every hard constraint, limit stop
+  reasons, baseline immutability, and dominance/crowding arithmetic.
+- Performance spot check on a diamond twin, pool of 3 links, 2 objectives,
+  population 50 / 100 iterations / 2,000 max evaluations: GA 719 evaluations in
+  about 1.6 s and NSGA-II 592 evaluations in about 4.4 s, both stopping at
+  `max_iterations`.
+
+## Phase 8c delivered - Optimization Center page and exports
+- `optimization/history.py`: bounded `OptimizationHistory` at
+  `MAX_OPTIMIZATION_RUNS`; raises `LimitsExceededError` instead of silently
+  dropping runs.
+- `optimization/export.py`: deterministic sorted-key JSON and standard-library
+  CSV exports. Both include seed, settings, limits, stop reason, baseline, and
+  every evaluated candidate; exporting the same run produces identical bytes.
+- `ui/state.py`: `OPTIMIZATION_HISTORY_KEY` is the only session key for run
+  history, with `get_optimization_history`, `get_optimization_runs`,
+  `add_optimization_run`, `remove_optimization_run`, and
+  `clear_optimization_history`. `save_twin_snapshot(twin, label)` captures a
+  derived design without replacing the baseline.
+- `ui/pages/optimization_center.py` provides:
+  - Twin/demand guards and the mandatory note: "Heuristic search over a modeled
+    design space; no global optimum is claimed. Costs are proxies from stated
+    assumptions."
+  - Editable candidate-link pool, capacity tiers and proxy costs, optional
+    routing-cost multipliers, per-objective selection with weights and fixed
+    bounds, every hard constraint, algorithm, seed, population, iterations,
+    evaluation cap, and runtime cap.
+  - A status/progress indicator while the search runs.
+  - Baseline-versus-optimized objective deltas, headline metrics, explicit
+    trade-off warnings when an objective worsens, and a two-objective Plotly
+    Pareto scatter with the baseline marked.
+  - Candidate feasibility counts, a bounded candidate table with violations,
+    a bounded inspector for objectives/constraint checks/changes, and explicit
+    "save as snapshot" and "replace baseline" actions. Nothing is applied
+    automatically.
+  - Bounded session history with load/delete/clear, algorithm comparison with
+    stated weights and per-objective trade-offs, and deterministic JSON/CSV
+    downloads.
+- `app.py` routes and advertises only the Optimization Center in addition to the
+  existing pages; no other placeholder is changed.
+- 7 unit tests for history/export and 6 AppTest smoke tests for the page.
+
+## Test evidence (Phase 8)
+- Commands and results:
+  - `& ".venv\Scripts\python.exe" -m pytest -q`: `588 passed in 7.81s`
+  - `& ".venv\Scripts\python.exe" -m ruff check .`: `All checks passed!`
+- `tests/unit/optimization/` covers cost arithmetic, normalization and weights,
+  every hard constraint, infeasible-candidate exclusion, greedy feasibility,
+  deterministic JSON/CSV exports, bounded history, dominance and crowding
+  units, reproducibility, limit stop reasons, baseline immutability, and the
+  brute-force Pareto front versus NSGA-II on a tiny topology.
+- `tests/unit/ui/test_optimization_center_page.py` covers the no-twin and
+  no-demand guards, a full greedy run with results and downloads, candidate-pool
+  parsing, the no-feasible-candidate warning, and explicit snapshot creation.
+- Public domain schemas were not changed. Optimization-specific inputs and
+  results live in `optimization/models.py`.
+- Phase 8 deliberately omits PSO: a continuous velocity has no sound mapping
+  onto discrete link-presence/tier/multiplier decisions without an undocumented
+  hybrid scheme.
 
 ## Test evidence (Phase 6)
 - `tests/unit/digital_twin/` (53 tests): frozen models and effective state,

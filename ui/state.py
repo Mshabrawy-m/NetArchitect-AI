@@ -40,11 +40,13 @@ from digital_twin import (
     set_vlan_plan as twin_set_vlan_plan,
 )
 from network.vlan.plan import VlanPlanResult
+from optimization import OptimizationHistory, OptimizationRun
 from simulation import ScenarioHistory, ScenarioRun
 
 TWIN_KEY = "digital_twin"
 SNAPSHOTS_KEY = "digital_twin_snapshots"
 SIMULATION_HISTORY_KEY = "simulation_history"
+OPTIMIZATION_HISTORY_KEY = "optimization_history"
 LEGACY_TOPOLOGY_KEY = "topology"
 FLASH_KEY = "topology_editor_flash"
 
@@ -239,6 +241,17 @@ def create_twin_snapshot(label: str) -> Snapshot:
     return snapshot
 
 
+def save_twin_snapshot(twin: DigitalTwin, label: str) -> Snapshot:
+    """Capture ``twin`` into the bounded snapshot store without replacing it.
+
+    Optimization results use this to save a derived design as a snapshot while
+    leaving the baseline twin untouched.
+    """
+    snapshot = create_snapshot(twin, label)
+    get_snapshot_store().add(snapshot)
+    return snapshot
+
+
 def delete_snapshot(index: int) -> Snapshot:
     """Remove one retained snapshot by index."""
     return get_snapshot_store().remove(index)
@@ -277,3 +290,33 @@ def remove_simulation_run(index: int) -> ScenarioRun:
 def clear_simulation_history() -> None:
     """Remove every retained scenario run."""
     get_simulation_history().clear()
+
+
+def get_optimization_history() -> OptimizationHistory:
+    """Return the session optimization history, creating it when needed."""
+    history = st.session_state.get(OPTIMIZATION_HISTORY_KEY)
+    if not isinstance(history, OptimizationHistory):
+        history = OptimizationHistory()
+        st.session_state[OPTIMIZATION_HISTORY_KEY] = history
+    return history
+
+
+def get_optimization_runs() -> tuple[OptimizationRun, ...]:
+    """Return retained optimization runs in creation order."""
+    return get_optimization_history().runs
+
+
+def add_optimization_run(run: OptimizationRun) -> OptimizationRun:
+    """Append an optimization run to the bounded session history."""
+    get_optimization_history().add(run)
+    return run
+
+
+def remove_optimization_run(index: int) -> OptimizationRun:
+    """Remove one retained optimization run by index."""
+    return get_optimization_history().remove(index)
+
+
+def clear_optimization_history() -> None:
+    """Remove every retained optimization run."""
+    get_optimization_history().clear()
