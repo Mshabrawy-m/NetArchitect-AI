@@ -77,6 +77,7 @@ def settings(
     constraints: HardConstraints | None = None,
     pool: tuple[Link, ...] | None = None,
     cost_model: CostModel | None = None,
+    cost_multiplier_options: tuple[float, ...] = (),
     max_iterations: int = 10,
     max_evaluations: int = 200,
     max_runtime_seconds: float = 30.0,
@@ -95,6 +96,7 @@ def settings(
         max_iterations=max_iterations,
         max_evaluations=max_evaluations,
         max_runtime_seconds=max_runtime_seconds,
+        cost_multiplier_options=cost_multiplier_options,
     )
 
 
