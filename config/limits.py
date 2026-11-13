@@ -62,7 +62,8 @@ MAX_OPTIMIZATION_RUNS: int = 20
 # Maximum wall-clock seconds for a single simulation run.
 MAX_SIMULATION_RUNTIME_SECONDS: int = 30
 
-# Maximum retries an agent may attempt on a recoverable tool failure.
+# Maximum attempts an agent may make on a recoverable tool failure, including
+# the first attempt. Must be at least 1.
 MAX_AGENT_RETRIES: int = 3
 
 # Maximum number of steps in a single agent workflow before it must stop.
@@ -70,6 +71,10 @@ MAX_WORKFLOW_STEPS: int = 50
 
 # Maximum wall-clock seconds for one complete agent workflow.
 MAX_AGENT_RUNTIME_SECONDS: int = 120
+
+# Maximum number of selective re-plans (re-running the responsible task and its
+# dependents) allowed in one workflow. Prevents a validation/re-plan loop.
+MAX_AGENT_REPLANS: int = 2
 
 # Maximum number of LLM requests allowed in one browser session. The budget
 # covers every request, including structured-output repair attempts.

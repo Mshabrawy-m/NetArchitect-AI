@@ -2,6 +2,33 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-13 - Phase 9b: bounded agent core and deterministic workflow
+
+### Added
+- `agents/`: typed `WorkflowTask`/`WorkflowPlan`/`WorkflowState` models, an
+  ordered `ExecutionTrace` with an injectable clock, and typed
+  `WorkflowStopReason` values for completion, failure, step, runtime, and
+  re-plan limits.
+- `ToolRegistry` with typed input/output models, a per-agent allowlist, typed
+  unknown/disallowed/input/output failures, and wrappers for topology, VLSM,
+  VLAN, addressing, routing, analysis/SPOF, twin validation, simulation, and
+  optimization engines.
+- `BaseAgent`, `AgentContext`, and nine standard deterministic agents.
+- `Orchestrator` with cycle and plan validation, dependency-ordered execution,
+  bounded attempts, step/runtime caps, failed-task dependent skipping, and
+  selective re-planning bounded by `MAX_AGENT_REPLANS`.
+- `build_standard_plan`/`run_structured_design`: requirements -> topology ->
+  IP/VLAN -> routing -> validation -> simulation -> optimization ->
+  re-validation -> report without any LLM call.
+- 26 agent-framework tests covering registry contracts, engine parity,
+  orchestration bounds, selective re-planning, trace redaction, baseline
+  immutability, and the no-LLM deterministic plan.
+- `config/limits.py`: `MAX_AGENT_REPLANS`.
+
+### Changed
+- `MAX_AGENT_RETRIES` is documented as total attempts including the first.
+- No public domain schema changed and no dependency was added.
+
 ## 2026-11-13 - Phase 9a: optional Groq provider layer
 
 ### Added

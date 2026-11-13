@@ -2,7 +2,7 @@
 
 ## Overall
 - Current phase: Phase 9 - Agentic AI Framework (in progress)
-- Current task: Phase 9a - LLM provider layer (complete)
+- Current task: Phase 9b - agent core and deterministic orchestration (complete)
 - Overall status: Phase 9 in progress; Phase 10 not started
 - Last updated: 2026-11-13
 - Branch: `feature/phase9-agent-framework` (based on merged `main` commit `42bddfc`)
@@ -665,6 +665,63 @@ dependency). Core deterministic engineering never imports this package.
   and JSON output for the secret.
 - 15 unit tests; no test performs a real network request.
 
+## Phase 9b delivered - bounded agent core and deterministic workflow
+Location: `agents/` (pure Python; no Streamlit import, no LLM import, no new
+dependency). The package never imports `services.llm`, so the deterministic
+structured-form workflow works with no API key.
+
+- `agents/models.py`: typed `WorkflowTask`, `WorkflowPlan`, `TaskState`,
+  `TaskStatus`, `WorkflowStopReason` (`completed`, `failed`, `step_limit`,
+  `runtime_limit`, `replan_limit`), and `ExecutionTrace` with an injectable
+  `Clock`. Trace entries are ordered, serializable, and redact values under
+  credential-looking keys. `WorkflowState` stores the plan, per-task status and
+  attempts, results, and a derived working twin; the baseline twin is read
+  through an injected accessor and never copied.
+- `agents/tools.py`: `Tool` and `ToolRegistry` with a typed input model, typed
+  output model, and pure implementation per tool. Built-ins wrap topology
+  generation/connectivity, VLSM, VLAN, addressing validation/overlap, routing
+  path/table, structural analysis, SPOF, twin validation, simulation,
+  optimization, demand planning, and working-twin construction. Unknown,
+  disallowed, invalid-input, invalid-output, and implementation failures raise
+  typed `ToolError` subclasses. No tool runs a shell, `eval`, or `exec`.
+- `agents/base.py`: `BaseAgent` with a name, responsibility, typed input/output
+  models, and a frozen tool allowlist, plus `AgentContext` that resolves only
+  allowed tools and traces both sides of every call.
+- `agents/network_agents.py`: nine standard agents (requirements, topology,
+  IP/VLAN, routing, validation, simulation, optimization, re-validation,
+  report) returning typed result models. Validation combines addressing checks
+  with complete-twin validation.
+- `agents/planning.py`: the documented deterministic design policy (topology
+  family thresholds, base network `10.0.0.0/16`, VLAN start 10, modeled demand
+  at ten percent of reported users bounded to 1-1000 Mbps) and conversion of
+  requirements into a derived working twin using the existing engines.
+- `agents/orchestrator.py`: plan validation (duplicate ids, missing
+  dependencies, cycles, unknown agents, unregistered tools), deterministic
+  dependency order, bounded attempts (`MAX_AGENT_RETRIES`), workflow step and
+  runtime caps, typed stop reasons, transitive dependent skipping on failure,
+  selective re-planning bounded by `MAX_AGENT_REPLANS` (address conflicts reset
+  only the IP/VLAN task and its dependents), and
+  `build_standard_plan`/`run_structured_design` for the nine-step plan without
+  any provider.
+- `config/limits.py`: added `MAX_AGENT_REPLANS`; clarified that
+  `MAX_AGENT_RETRIES` counts total attempts including the first.
+
+## Test evidence (Phase 9b)
+- Commands and results:
+  - `.venv\Scripts\python.exe -m pytest -q`: `629 passed in 7.59s`
+  - `.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- `tests/unit/agents/` (26 tests) covers tool-registry unknown/disallowed/
+  malformed input and output, generator-parameter rejection, engine parity for
+  VLSM and topology generation, plan shape/cycle/missing-dependency/duplicate/
+  step-cap validation, dependency order, retry bounds, step and runtime stop
+  reasons, failed-task dependent skipping, a seeded IP-overlap that triggers one
+  selective re-plan (upstream tasks run once), the re-plan cap, end-to-end
+  determinism against the direct engines with no provider, baseline-twin
+  immutability through the accessor, trace ordering/serialization/redaction,
+  and a source scan proving the package has no shell/eval/Streamlit/provider
+  escape hatch.
+- No real Groq request was made in this task.
+
 ## Test evidence (Phase 8)
 - Commands and results:
   - `& ".venv\Scripts\python.exe" -m pytest -q`: `588 passed in 7.81s`
@@ -857,4 +914,4 @@ dependency). Core deterministic engineering never imports this package.
   malformed or oversized expansion data is rejected by the scenario engine.
 
 ## Next task
-- Phase 8: Multi-Objective Optimization Engine (not started; Phase 7 is complete).
+- Phase 9c: Settings page and structured requirements form (not started).
