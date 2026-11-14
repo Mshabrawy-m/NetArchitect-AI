@@ -67,10 +67,10 @@ ISSUE_TASK_POLICY: dict[str, str] = {
 def build_standard_plan(
     requirements: NetworkRequirements | None = None,
 ) -> WorkflowPlan:
-    """Return the deterministic nine-step structured-form plan.
+    """Return the deterministic ten-step structured-form plan.
 
     The order is requirements -> topology -> IP/VLAN -> routing -> validation
-    -> simulation -> optimization -> re-validation -> report. When
+    -> simulation -> optimization -> re-validation -> critic -> report. When
     ``requirements`` is supplied it is embedded in the tasks that need it, so
     :meth:`Orchestrator.run` can execute the plan without extra inputs.
     """
@@ -129,10 +129,20 @@ def build_standard_plan(
             dependencies=("optimization",),
         ),
         WorkflowTask(
+            id="critic",
+            agent="critic",
+            description=(
+                "Independently critique topology, addressing, routing, capacity, "
+                "and redundancy."
+            ),
+            dependencies=("revalidation",),
+            payload=base_payload,
+        ),
+        WorkflowTask(
             id="report",
             agent="report",
             description="Summarize the plan, assumptions, and results.",
-            dependencies=("revalidation",),
+            dependencies=("critic",),
         ),
     )
     return WorkflowPlan(name="Structured design plan", tasks=tasks)
@@ -303,12 +313,27 @@ class Orchestrator:
 
             output = state.result(task_id)
             target = self._replan_target(output)
+            critic_rejection = self._is_critic_rejection(output)
             if target is None:
+                if critic_rejection:
+                    self._stop(
+                        state,
+                        WorkflowStopReason.critic_rejected,
+                        error=(
+                            f"Critic rejected {task_id!r} with no mapped "
+                            "re-plan target."
+                        ),
+                    )
+                    break
                 continue
             if state.replans >= self.max_replans:
                 self._stop(
                     state,
-                    WorkflowStopReason.replan_limit,
+                    (
+                        WorkflowStopReason.critic_rejected
+                        if critic_rejection
+                        else WorkflowStopReason.replan_limit
+                    ),
                     error=(
                         f"Re-plan limit ({self.max_replans}) reached while "
                         f"resolving {task_id!r}."
@@ -322,6 +347,7 @@ class Orchestrator:
                 payloads=payloads,
                 queue=queue,
                 trace=trace,
+                critic_rejection=critic_rejection,
             )
             if new_input is False:
                 break
@@ -526,12 +552,20 @@ class Orchestrator:
     def _replan_target(self, output: object) -> str | None:
         if getattr(output, "is_valid", None) is not False:
             return None
+        explicit = getattr(output, "replan_target", None)
+        if explicit:
+            return str(explicit)
         codes = getattr(output, "issue_codes", None) or ()
         for code in codes:
             target = ISSUE_TASK_POLICY.get(str(code))
             if target is not None:
                 return target
         return None
+
+    @staticmethod
+    def _is_critic_rejection(output: object) -> bool:
+        verdict = getattr(output, "verdict", None)
+        return getattr(verdict, "value", verdict) == "REJECTED"
 
     def _apply_replan(
         self,
@@ -542,9 +576,15 @@ class Orchestrator:
         payloads: dict[str, BaseModel],
         queue: list[str],
         trace: ExecutionTrace,
+        critic_rejection: bool = False,
     ) -> bool | None:
+        unresolved = (
+            WorkflowStopReason.critic_rejected
+            if critic_rejection
+            else WorkflowStopReason.failed
+        )
         if target not in state.tasks:
-            state.stop_reason = WorkflowStopReason.failed
+            state.stop_reason = unresolved
             state.error = (
                 f"Re-plan target {target!r} is not part of this workflow."
             )
@@ -553,17 +593,17 @@ class Orchestrator:
         current = payloads.get(target)
         issue = ", ".join(str(code) for code in getattr(output, "issue_codes", ()))
         if current is None:
-            state.stop_reason = WorkflowStopReason.failed
+            state.stop_reason = unresolved
             state.error = f"Task {target!r} has no input to re-plan."
             return False
         try:
             new_input = agent.replan(current, issue)
         except Exception as error:  # noqa: BLE001 - re-plan boundary
-            state.stop_reason = WorkflowStopReason.failed
+            state.stop_reason = unresolved
             state.error = f"Re-plan for task {target!r} failed: {error}"
             return False
         if new_input is None:
-            state.stop_reason = WorkflowStopReason.failed
+            state.stop_reason = unresolved
             state.error = f"Agent {agent.name!r} declined to re-plan ({issue})."
             return False
 

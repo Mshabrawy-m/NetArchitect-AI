@@ -6,6 +6,16 @@ in this package imports Streamlit or executes generated code.
 """
 
 from .base import AgentContext, BaseAgent
+from .critic import (
+    CRITIC_SUMMARY_PROMPT,
+    RESPONSIBLE_STEPS,
+    CriticAgent,
+    CriticFinding,
+    CriticInput,
+    CriticOutput,
+    CriticVerdict,
+    responsible_step_for,
+)
 from .models import (
     Clock,
     ExecutionTrace,
@@ -84,12 +94,19 @@ from .requirements_agent import (
 from .tools import Tool, ToolRegistry, default_tools, registry_with_defaults
 
 __all__ = [
+    "CRITIC_SUMMARY_PROMPT",
     "EXTRACTION_SYSTEM_PROMPT",
     "ISSUE_TASK_POLICY",
+    "RESPONSIBLE_STEPS",
     "AgentContext",
     "BaseAgent",
     "ClarificationQuestion",
     "Clock",
+    "CriticAgent",
+    "CriticFinding",
+    "CriticInput",
+    "CriticOutput",
+    "CriticVerdict",
     "DemandPlan",
     "ExecutionTrace",
     "ExtractedAssumption",
@@ -151,6 +168,7 @@ __all__ = [
     "next_base_network",
     "redundancy_requested",
     "registry_with_defaults",
+    "responsible_step_for",
     "run_structured_design",
     "structured_inputs",
     "summarize",

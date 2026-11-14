@@ -39,6 +39,7 @@ class WorkflowStopReason(str, Enum):
     step_limit = "step_limit"
     runtime_limit = "runtime_limit"
     replan_limit = "replan_limit"
+    critic_rejected = "critic_rejected"
 
 
 class WorkflowTask(BaseModel):

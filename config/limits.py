@@ -86,6 +86,10 @@ MAX_REQUIREMENTS_LIST_ITEMS: int = 50
 # Maximum clarification questions returned by the requirements agent.
 MAX_CLARIFICATION_QUESTIONS: int = 20
 
+# Maximum characters accepted from the critic's optional model-written
+# summary. The deterministic verdict never depends on this text.
+MAX_CRITIC_SUMMARY_CHARS: int = 1_500
+
 # Maximum number of selective re-plans (re-running the responsible task and its
 # dependents) allowed in one workflow. Prevents a validation/re-plan loop.
 MAX_AGENT_REPLANS: int = 2

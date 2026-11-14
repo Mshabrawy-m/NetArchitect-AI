@@ -59,7 +59,8 @@ from network.topology import (
 from network.vlan import VlanPlanResult, VlanRequest, plan_vlans
 from optimization import Algorithm, OptimizationRun, OptimizationSettings
 from optimization import run_optimization as run_optimization_engine
-from simulation import ScenarioRun, SimulationAssumptions
+from simulation import NetworkState, ScenarioRun, SimulationAssumptions
+from simulation import evaluate as evaluate_network_state
 from simulation import run_scenario as run_scenario_engine
 
 from .planning import (
@@ -163,6 +164,11 @@ class SpofInput(BaseModel):
 
 class TwinValidateInput(BaseModel):
     twin: DigitalTwin
+
+
+class TwinLoadStateInput(BaseModel):
+    twin: DigitalTwin
+    assumptions: SimulationAssumptions | None = None
 
 
 class SimulationRunInput(BaseModel):
@@ -304,6 +310,10 @@ def _simulation(payload: SimulationRunInput) -> ScenarioRun:
     )
 
 
+def _twin_load_state(payload: TwinLoadStateInput) -> NetworkState:
+    return evaluate_network_state(payload.twin, payload.assumptions)
+
+
 def _optimization(payload: OptimizationRunInput) -> OptimizationRun:
     return run_optimization_engine(
         payload.twin,
@@ -422,6 +432,16 @@ def default_tools() -> tuple[Tool, ...]:
             input_model=TwinValidateInput,
             output_model=ValidationReport,
             implementation=lambda payload: validate_twin(payload.twin),
+        ),
+        Tool(
+            name="twin_load_state",
+            description=(
+                "Evaluate modeled link load, utilization, and unserved demands "
+                "on a digital twin."
+            ),
+            input_model=TwinLoadStateInput,
+            output_model=NetworkState,
+            implementation=_twin_load_state,
         ),
         Tool(
             name="simulation_run",
@@ -570,6 +590,7 @@ __all__ = [
     "TopologyConnectivityInput",
     "TopologyFromRequirementsInput",
     "TopologyGenerateInput",
+    "TwinLoadStateInput",
     "TwinValidateInput",
     "VlanPlanInput",
     "VlsmAllocateInput",

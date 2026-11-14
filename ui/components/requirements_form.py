@@ -2,7 +2,7 @@
 
 The form is intentionally small and explicit: no free-form natural language is
 interpreted here. It builds a typed :class:`~core.schemas.requirements.
-NetworkRequirements`, runs the deterministic nine-step agent plan with no LLM,
+NetworkRequirements`, runs the deterministic ten-step agent plan with no LLM,
 and shows the task statuses, execution trace, and report. Nothing is applied to
 the baseline twin automatically.
 """

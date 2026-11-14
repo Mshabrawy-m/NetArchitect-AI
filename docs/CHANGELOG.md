@@ -2,6 +2,40 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-14 - Phase 10b: Validation and Critic Agent
+
+### Added
+- `agents/critic.py`: independent critic that re-runs topology connectivity,
+  addressing validation, twin validation, routing reachability, modeled
+  load/unserved demands, and SPOF analysis with deterministic tools. It never
+  reads another agent's validity claim and never lets model text change the
+  verdict.
+- Deterministic verdict (`APPROVED`, `APPROVED_WITH_WARNINGS`, `REJECTED`),
+  deduplicated findings with severity, entities, explanation, remediation, a
+  responsible workflow step, and a blocking flag.
+- Optional non-authoritative model summary bounded by
+  `MAX_CRITIC_SUMMARY_CHARS`; provider failures and malformed notes are ignored.
+- `agents/tools.py`: `twin_load_state` tool exposing modeled link load,
+  utilization, and unserved demands to the critic.
+- `tests/unit/agents/test_critic.py`: 16 tests covering clean approval,
+  disconnected topology, overloaded links, requested-redundancy SPOFs, IP
+  overlap mapping, missing twin, LLM verdict immunity in both directions,
+  provider failure, prior validity claims, deduplication, tool allowlist, step
+  mapping, and a full workflow with a scripted provider.
+
+### Changed
+- `agents/orchestrator.py`: the standard plan now has ten tasks with `critic`
+  before `report`; critic-origin re-plans honour an explicit target, and an
+  unmapped, missing, declined, or over-limit critic re-plan stops with the typed
+  `WorkflowStopReason.critic_rejected`.
+- `agents/network_agents.py`: registered `CriticAgent` in `default_agents()` and
+  added a deterministic "Critic review" report section.
+- `agents/models.py`: added `WorkflowStopReason.critic_rejected`.
+- `config/limits.py`: added `MAX_CRITIC_SUMMARY_CHARS`.
+- `ui/components/requirements_form.py` and the settings-page test now reflect the
+  ten-step plan.
+- No public domain schema changed and no dependency was added.
+
 ## 2026-11-14 - Phase 10a: Requirements Understanding Agent
 
 ### Added

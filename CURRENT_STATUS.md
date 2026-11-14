@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: Phase 10 - Specialized AI Agents (in progress)
-- Current task: Phase 10a - Requirements Understanding Agent (complete)
-- Overall status: Phase 10 in progress; 10a complete, 10b-10d pending
+- Current task: Phase 10b - Validation and Critic Agent (complete)
+- Overall status: Phase 10 in progress; 10a-10b complete, 10c-10d pending
 - Last updated: 2026-11-14
 - Branch: `feature/phase10-agents` (based on merged `main` commit `8832961`)
 
@@ -803,6 +803,45 @@ structured-form workflow works with no API key.
 - No live provider request was made. All model paths use the scripted
   `FakeProvider`; the no-provider path uses no provider at all.
 - Public domain schemas were not changed by 10a.
+
+## Phase 10b delivered - Validation and Critic Agent
+- `agents/critic.py`: `CriticAgent` independently calls deterministic tools for
+  topology connectivity, addressing overlap/duplicates, twin validation, routing
+  reachability, modeled load/unserved demands, and SPOF analysis. It never reads
+  the validation or revalidation tasks and cannot be told a design is valid.
+- The verdict is computed deterministically: any error/critical finding is
+  `REJECTED`, warnings alone produce `APPROVED_WITH_WARNINGS`, and no findings
+  produce `APPROVED`. Findings are deduplicated by code and sorted entities.
+- Every blocking finding records the responsible workflow step. Mapping:
+  IP/VLAN issues -> `ip_vlan`; topology, routing, and redundancy issues ->
+  `topology`; overloaded/critical links -> `optimization`; unknown codes ->
+  `revalidation`. An explicit `replan_target` takes priority.
+- The optional model note is separate from the verdict, bounded by
+  `MAX_CRITIC_SUMMARY_CHARS`, and ignored on any provider failure.
+- `agents/tools.py`: added `twin_load_state`, backed by `simulation.evaluate`.
+- `agents/orchestrator.py`: standard plan is now ten tasks with `critic` before
+  `report`; critic-origin re-plans reset only the target and its dependents.
+  Missing/unmapped/declined/over-limit critic re-plans stop with the typed
+  `WorkflowStopReason.critic_rejected`.
+- `agents/network_agents.py`: registered `CriticAgent` and added a deterministic
+  "Critic review" report section.
+- `tests/unit/agents/test_critic.py` (16 tests): clean approval, disconnected
+  topology, overloaded link, missing redundancy, IP overlap, missing twin,
+  verdict immunity to model text in both directions, provider failure, ignored
+  prior validity, deduplication, tool allowlist, step mapping, and a full
+  workflow with a scripted provider.
+- Orchestrator tests cover a validation-free selective critic re-plan (only
+  `ip_vlan` and dependents re-run), a typed critic-rejected stop when the target
+  declines, and a critic re-plan-limit stop.
+
+## Test evidence (Phase 10b)
+- Commands and results:
+  - `.venv\Scripts\python.exe -m pytest -q tests/unit/agents`: `61 passed in 1.22s`
+  - `.venv\Scripts\python.exe -m pytest -q`: `672 passed in 11.91s`
+  - `.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- No live provider request was made. Model notes use the scripted
+  `FakeProvider`; the deterministic workflow runs without any provider.
+- Public domain schemas were not changed by 10b.
 
 ## Test evidence (Phase 8)
 - Commands and results:

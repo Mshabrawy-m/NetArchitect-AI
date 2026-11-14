@@ -538,6 +538,30 @@ class ReportAgent(BaseAgent):
                     status="ok" if revalidation.is_valid else "error",
                 )
             )
+        critic = context.result("critic")
+        if critic is not None and hasattr(critic, "verdict"):
+            blocking = [finding for finding in critic.findings if finding.blocking]
+            warnings = [
+                finding
+                for finding in critic.findings
+                if getattr(finding.severity, "value", finding.severity)
+                == "warning"
+            ]
+            details = "; ".join(
+                f"{finding.code} ({finding.responsible_step})"
+                for finding in critic.findings[:3]
+            )
+            sections.append(
+                ReportSection(
+                    title="Critic review",
+                    body=(
+                        f"verdict={critic.verdict.value}; "
+                        f"blocking={len(blocking)}, warnings={len(warnings)}"
+                        + (f"; {details}" if details else ".")
+                    ),
+                    status="ok" if critic.verdict.value != "REJECTED" else "error",
+                )
+            )
         headline = (
             "Structured design plan completed with no blocking validation issues."
             if all(section.status != "error" for section in sections)
@@ -548,6 +572,8 @@ class ReportAgent(BaseAgent):
 
 def default_agents() -> dict[str, BaseAgent]:
     """Return one instance of every standard agent, keyed by name."""
+    from .critic import CriticAgent
+
     agents: list[BaseAgent] = [
         RequirementsAgent(),
         TopologyAgent(),
@@ -557,6 +583,7 @@ def default_agents() -> dict[str, BaseAgent]:
         SimulationAgent(),
         OptimizationAgent(),
         RevalidationAgent(),
+        CriticAgent(),
         ReportAgent(),
     ]
     return {agent.name: agent for agent in agents}

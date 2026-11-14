@@ -9,6 +9,10 @@ import pytest
 
 from agents import (
     BaseAgent,
+    CriticFinding,
+    CriticInput,
+    CriticOutput,
+    CriticVerdict,
     IpVlanAgent,
     IpVlanOutput,
     Orchestrator,
@@ -29,6 +33,8 @@ from core.exceptions import (
     WorkflowCycleError,
     WorkflowLimitError,
 )
+from core.schemas.requirements import NetworkRequirements
+from core.schemas.validation import Severity
 from network.routing import shortest_path
 from tests.unit.agents.helpers import (
     MarkerInput,
@@ -72,6 +78,77 @@ class OverlapOnceIpVlanAgent(IpVlanAgent):
         return output
 
 
+class RejectingCritic(BaseAgent):
+    """Critic test double that rejects and points at the topology step."""
+
+    name = "critic"
+    input_model = CriticInput
+    output_model = CriticOutput
+    allowed_tools = frozenset()
+
+    def run(self, payload: CriticInput, context) -> CriticOutput:
+        return CriticOutput(
+            verdict=CriticVerdict.rejected,
+            is_valid=False,
+            findings=[
+                CriticFinding(
+                    code="missing_redundancy",
+                    severity=Severity.error,
+                    entities=["a"],
+                    explanation="Redundancy was requested but is missing.",
+                    remediation="Add independent paths.",
+                    responsible_step="topology",
+                    blocking=True,
+                )
+            ],
+            issue_codes=["missing_redundancy"],
+            replan_target="topology",
+            summary="1 blocking finding(s), 0 warning(s); verdict REJECTED.",
+        )
+
+
+def validation_free_plan(requirements: NetworkRequirements) -> WorkflowPlan:
+    """A plan that reaches the critic without a validation step."""
+    return WorkflowPlan(
+        name="Critic re-plan plan",
+        tasks=(
+            WorkflowTask(
+                id="requirements",
+                agent="requirements",
+                payload={"requirements": requirements},
+            ),
+            WorkflowTask(
+                id="topology",
+                agent="topology",
+                dependencies=("requirements",),
+                payload={"requirements": requirements},
+            ),
+            WorkflowTask(
+                id="ip_vlan",
+                agent="ip_vlan",
+                dependencies=("topology",),
+                payload={"requirements": requirements},
+            ),
+            WorkflowTask(
+                id="routing",
+                agent="routing",
+                dependencies=("ip_vlan",),
+            ),
+            WorkflowTask(
+                id="critic",
+                agent="critic",
+                dependencies=("routing",),
+                payload={"requirements": requirements},
+            ),
+            WorkflowTask(
+                id="report",
+                agent="report",
+                dependencies=("critic",),
+            ),
+        ),
+    )
+
+
 def _orchestrator_for(order: list[str], *names: str, **kwargs) -> Orchestrator:
     agents = marker_agents(order, *names)
     return Orchestrator(agents=agents, registry=ToolRegistry(tools=()), **kwargs)
@@ -88,9 +165,11 @@ def test_standard_plan_has_deterministic_shape() -> None:
         "simulation",
         "optimization",
         "revalidation",
+        "critic",
         "report",
     ]
-    assert plan.task("report").dependencies == ("revalidation",)
+    assert plan.task("critic").dependencies == ("revalidation",)
+    assert plan.task("report").dependencies == ("critic",)
     assert plan.task("requirements").dependencies == ()
     requirements = sample_requirements()
     inputs = structured_inputs(requirements)
@@ -260,13 +339,97 @@ def test_replan_limit_terminates_the_workflow() -> None:
     assert "Re-plan limit" in state.error
 
 
+def test_critic_issue_replans_only_the_responsible_step() -> None:
+    requirements = sample_requirements()
+    agent = OverlapOnceIpVlanAgent()
+
+    state = Orchestrator(
+        agents={**default_agents(), "ip_vlan": agent},
+    ).run(validation_free_plan(requirements))
+
+    assert state.stop_reason is WorkflowStopReason.completed
+    assert state.replans == 1
+    assert state.tasks["ip_vlan"].attempts == 2
+    assert state.tasks["ip_vlan"].replans == 1
+    assert state.tasks["requirements"].attempts == 1
+    assert state.tasks["topology"].attempts == 1
+    assert state.tasks["routing"].attempts == 2
+    assert state.tasks["critic"].attempts == 2
+    assert state.tasks["report"].attempts == 1
+    assert state.status("report").value == "succeeded"
+    critic = state.results["critic"]
+    assert critic.verdict is CriticVerdict.approved
+    assert state.results["ip_vlan"].plan.attempt == 2
+
+
+def test_critic_rejection_with_a_declining_target_stops_typed() -> None:
+    requirements = sample_requirements()
+    plan = WorkflowPlan(
+        name="Critic rejection plan",
+        tasks=(
+            WorkflowTask(
+                id="requirements",
+                agent="requirements",
+                payload={"requirements": requirements},
+            ),
+            WorkflowTask(
+                id="topology",
+                agent="topology",
+                dependencies=("requirements",),
+                payload={"requirements": requirements},
+            ),
+            WorkflowTask(
+                id="ip_vlan",
+                agent="ip_vlan",
+                dependencies=("topology",),
+                payload={"requirements": requirements},
+            ),
+            WorkflowTask(
+                id="critic",
+                agent="critic",
+                dependencies=("ip_vlan",),
+                payload={"requirements": requirements},
+            ),
+        ),
+    )
+
+    state = Orchestrator(
+        agents={**default_agents(), "critic": RejectingCritic()},
+    ).run(plan)
+
+    assert state.stop_reason is WorkflowStopReason.critic_rejected
+    assert state.replans == 0
+    assert state.tasks["critic"].attempts == 1
+    assert "declined to re-plan" in state.error
+
+
+def test_critic_replan_limit_stops_with_critic_rejected() -> None:
+    class AlwaysOverlap(IpVlanAgent):
+        def run(self, payload, context) -> IpVlanOutput:
+            output = super().run(payload, context)
+            plan = output.plan.model_copy(deep=True)
+            plan.subnets[1] = plan.subnets[1].model_copy(
+                update={"network": plan.subnets[0].network}
+            )
+            return output.model_copy(update={"plan": plan})
+
+    state = Orchestrator(
+        agents={**default_agents(), "ip_vlan": AlwaysOverlap()},
+        max_replans=1,
+    ).run(validation_free_plan(sample_requirements()))
+
+    assert state.stop_reason is WorkflowStopReason.critic_rejected
+    assert state.replans == 1
+    assert "Re-plan limit" in state.error
+
+
 def test_structured_plan_matches_direct_engines_without_a_provider() -> None:
     requirements = sample_requirements()
     state = run_structured_design(requirements)
 
     assert state.stop_reason is WorkflowStopReason.completed
     assert state.succeeded()
-    assert state.steps == 9
+    assert state.steps == 10
     assert state.replans == 0
 
     topology = state.results["topology"].topology
@@ -295,6 +458,7 @@ def test_structured_plan_matches_direct_engines_without_a_provider() -> None:
         "Simulation",
         "Optimization",
         "Re-validation",
+        "Critic review",
     ]
 
 
