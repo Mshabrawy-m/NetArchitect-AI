@@ -2,7 +2,7 @@
 
 ## Overall
 - Current phase: Phase 9 - Agentic AI Framework (in progress)
-- Current task: Phase 9b - agent core and deterministic orchestration (complete)
+- Current task: Phase 9c - Settings page and structured requirements form (complete)
 - Overall status: Phase 9 in progress; Phase 10 not started
 - Last updated: 2026-11-13
 - Branch: `feature/phase9-agent-framework` (based on merged `main` commit `42bddfc`)
@@ -722,6 +722,43 @@ structured-form workflow works with no API key.
   escape hatch.
 - No real Groq request was made in this task.
 
+## Phase 9c delivered - Settings page and structured design form
+- `ui/pages/settings.py`: optional AI configuration and a deterministic design
+  runner. Shows only whether a key is configured and where it came from (never
+  the key), the configured model, the session request/token budget and
+  remaining calls, and the read-only limits from `config/limits.py`. Explains
+  which features need a key and which never do. A bounded connection test makes
+  at most one request with a 15-second timeout, no rate-limit retries, and no
+  repair retries; the builder is a module-level function so tests inject a fake
+  provider and never contact the network. Includes secrets/environment
+  documentation and session-only key entry with save/clear actions.
+- `ui/components/requirements_form.py`: small structured form (organization,
+  site, bounded department list, design goals, constraints) that builds a typed
+  `NetworkRequirements`, runs `Orchestrator.run_structured` with no LLM, stores
+  the typed `WorkflowState` in session state, and shows task statuses, step and
+  re-plan counts, the report, and a downloadable execution trace. The baseline
+  twin is read through `ui.state.get_twin` and never replaced; the derived
+  working twin is reported separately.
+- `ui/components.py` became the `ui/components/` package; existing
+  `from ui.components import ...` imports are unchanged.
+- `ui/state.py`: session accessors for the optional LLM session key and the
+  per-session `RequestBudget`.
+- `app.py`: the Settings page is now ready and routed; only that placeholder
+  changed. Dashboard and sidebar copy updated to Phase 9 and the new page.
+- `tests/unit/ui/test_settings_page.py` (8 AppTest tests): no-key and
+  key-present states, the key never appearing in rendered output or other
+  session values, saving/clearing a session key, budget display/reset, a
+  provider-unavailable connection test that raises no exception, a successful
+  fake connection test, an end-to-end deterministic form run with an untouched
+  baseline twin, and a form validation error.
+
+## Test evidence (Phase 9c)
+- Commands and results:
+  - `.venv\Scripts\python.exe -m pytest -q`: `637 passed in 8.88s`
+  - `.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- No real Groq request was made in this task. The connection test was exercised
+  only with injected fake providers (success and typed-failure cases).
+
 ## Test evidence (Phase 8)
 - Commands and results:
   - `& ".venv\Scripts\python.exe" -m pytest -q`: `588 passed in 7.81s`
@@ -912,6 +949,20 @@ structured-form workflow works with no API key.
   stores no timestamp or elapsed time. Clearing the session loses the history.
 - Expansion scenarios are entered as validated JSON rather than a guided table;
   malformed or oversized expansion data is rejected by the scenario engine.
+- The Settings page and structured form were verified through AppTest only; the
+  page layout, password-field behaviour, progress bars, and trace download were
+  not inspected in a real browser.
+- No live Groq request has been made. The connection test is covered only with
+  injected fake providers, so real endpoint reachability, model availability,
+  and provider-reported token usage remain unverified against the live service.
+- A session-entered API key lives in Streamlit session state for the browser
+  tab. It is never persisted by the application, but it is visible to the
+  running Streamlit process and to browser session state; configure
+  environment variables or Streamlit secrets for shared deployments.
+- The structured form models one organization with one site and a bounded
+  department list. Multi-site entry, device/link requirements, and explicitly
+  requested topologies are not exposed by the form yet; the deterministic
+  policy derives those from the modeled assumptions.
 
 ## Next task
-- Phase 9c: Settings page and structured requirements form (not started).
+- Phase 10: Specialized AI Agents (not started).

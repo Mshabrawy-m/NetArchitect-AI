@@ -3,11 +3,13 @@
 Phase 6 adds the digital twin: one session model that is the single source of
 truth for the topology, planning results, traffic demands, and modeled
 operational state. Phase 7 adds deterministic what-if simulation over that twin.
-Phase 8 adds bounded, reproducible multi-objective optimization. The Topology
+Phase 8 adds bounded, reproducible multi-objective optimization. Phase 9 adds
+the optional Groq provider layer, the deterministic agent framework, and the
+Settings page with a structured design-plan runner. The Topology
 Editor, IP Addressing, VLAN & DHCP Planner, Routing Analysis, Network Analytics,
-Digital Twin, Simulation Lab, and Optimization Center are working engineering
-pages; the remaining planned pages stay as placeholders and are added phase by
-phase.
+Digital Twin, Simulation Lab, Optimization Center, and Settings are working
+engineering pages; the remaining planned pages stay as placeholders and are
+added phase by phase.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from ui.pages.ip_addressing import render as render_ip_addressing
 from ui.pages.network_analytics import render as render_network_analytics
 from ui.pages.optimization_center import render as render_optimization_center
 from ui.pages.routing_analysis import render as render_routing_analysis
+from ui.pages.settings import render as render_settings
 from ui.pages.simulation_lab import render as render_simulation_lab
 from ui.pages.topology_editor import render as render_topology_editor
 from ui.pages.vlan_dhcp import render as render_vlan_dhcp
@@ -53,6 +56,7 @@ READY_PAGES: frozenset[str] = frozenset(
         "Digital Twin",
         "Simulation Lab",
         "Optimization Center",
+        "Settings",
     }
 )
 
@@ -66,7 +70,7 @@ def render_sidebar_navigation() -> str:
             st.caption(
                 "Available now: Dashboard, Topology Editor, IP Addressing, "
                 "VLAN & DHCP Planner, Routing Analysis, Network Analytics, "
-                "Digital Twin, Simulation Lab, and Optimization Center."
+                "Digital Twin, Simulation Lab, Optimization Center, and Settings."
             )
         else:
             st.caption("This page arrives in a later phase.")
@@ -93,11 +97,12 @@ def render_dashboard() -> None:
     st.write(f"**Deployment target:** {settings.DEPLOYMENT_TARGET}")
 
     st.info(
-        "Phase 8 is in progress. The Topology Editor, IP Addressing, VLAN & "
+        "Phase 9 is in progress. The Topology Editor, IP Addressing, VLAN & "
         "DHCP Planner, Routing Analysis, Network Analytics, Digital Twin, "
-        "Simulation Lab, and Optimization Center are available from the "
-        "sidebar; remaining pages are introduced with their engineering "
-        "modules."
+        "Simulation Lab, Optimization Center, and Settings are available from "
+        "the sidebar; remaining pages are introduced with their engineering "
+        "modules. AI features are optional and need a Groq API key, while the "
+        "engineering engines and the deterministic structured plan do not."
     )
 
 
@@ -141,6 +146,8 @@ def main() -> None:
         render_simulation_lab()
     elif page == "Optimization Center":
         render_optimization_center()
+    elif page == "Settings":
+        render_settings()
     else:
         render_placeholder(page)
 

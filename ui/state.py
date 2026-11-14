@@ -41,6 +41,7 @@ from digital_twin import (
 )
 from network.vlan.plan import VlanPlanResult
 from optimization import OptimizationHistory, OptimizationRun
+from services.llm import RequestBudget
 from simulation import ScenarioHistory, ScenarioRun
 
 TWIN_KEY = "digital_twin"
@@ -49,6 +50,9 @@ SIMULATION_HISTORY_KEY = "simulation_history"
 OPTIMIZATION_HISTORY_KEY = "optimization_history"
 LEGACY_TOPOLOGY_KEY = "topology"
 FLASH_KEY = "topology_editor_flash"
+
+LLM_SESSION_KEY = "llm_session_api_key"
+LLM_BUDGET_KEY = "llm_request_budget"
 
 CIDR_KEY = "ip_cidr_result"
 VLSM_KEY = "addressing_result"
@@ -320,3 +324,43 @@ def remove_optimization_run(index: int) -> OptimizationRun:
 def clear_optimization_history() -> None:
     """Remove every retained optimization run."""
     get_optimization_history().clear()
+
+
+def get_llm_session_key() -> str:
+    """Return the session-only API key, or an empty string.
+
+    The key is held in Streamlit session state for this browser tab only. It is
+    never written to disk, logs, traces, URLs, or any rendered output.
+    """
+    value = st.session_state.get(LLM_SESSION_KEY, "")
+    return value.strip() if isinstance(value, str) else ""
+
+
+def set_llm_session_key(value: str) -> None:
+    """Set the session-only API key (trimmed); an empty value clears it."""
+    key = value.strip()
+    if key:
+        st.session_state[LLM_SESSION_KEY] = key
+    else:
+        session_delete(LLM_SESSION_KEY)
+
+
+def clear_llm_session_key() -> None:
+    """Remove the session-only API key."""
+    session_delete(LLM_SESSION_KEY)
+
+
+def get_llm_budget() -> RequestBudget:
+    """Return the session LLM request budget, creating it when needed."""
+    budget = st.session_state.get(LLM_BUDGET_KEY)
+    if not isinstance(budget, RequestBudget):
+        budget = RequestBudget()
+        st.session_state[LLM_BUDGET_KEY] = budget
+    return budget
+
+
+def reset_llm_budget() -> RequestBudget:
+    """Clear the session LLM counters and return the same budget object."""
+    budget = get_llm_budget()
+    budget.reset()
+    return budget

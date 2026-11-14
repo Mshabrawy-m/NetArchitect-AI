@@ -2,6 +2,30 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-14 - Phase 9c: Settings page and structured design form
+
+### Added
+- `ui/pages/settings.py`: optional AI configuration showing key presence and
+  source (never the key), model, session request/token budget, read-only limits,
+  a bounded one-request connection test, key-required feature explanation,
+  secrets/environment documentation, and session-only key save/clear.
+- `ui/components/requirements_form.py`: typed structured requirements form that
+  runs the deterministic nine-step agent plan without an LLM and displays task
+  statuses, the report, and a downloadable execution trace.
+- `ui/state.py`: session accessors for the optional LLM session key and the
+  per-session `RequestBudget`.
+- `tests/unit/ui/test_settings_page.py`: 8 AppTest tests covering key states,
+  absence of key leakage, budget display/reset, injected-provider connection
+  tests, an end-to-end form run with an untouched baseline twin, and validation
+  errors.
+
+### Changed
+- `ui/components.py` became the `ui/components/` package; existing imports are
+  unchanged.
+- `app.py`: Settings is now ready and routed. Dashboard and sidebar copy updated
+  to Phase 9. No other placeholder changed.
+- No public domain schema changed and no dependency was added.
+
 ## 2026-11-13 - Phase 9b: bounded agent core and deterministic workflow
 
 ### Added

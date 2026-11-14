@@ -1,4 +1,9 @@
-"""Small presentation helpers shared by the planning pages."""
+"""Small presentation helpers shared by the planning pages.
+
+This module is a package so page-specific components (for example the
+structured requirements form) can live beside the shared helpers without
+duplicating them.
+"""
 
 from __future__ import annotations
 
@@ -61,3 +66,12 @@ def render_findings(findings: Sequence[Finding], empty_message: str) -> None:
         hide_index=True,
         width="stretch",
     )
+
+
+__all__ = [
+    "SEVERITY_ORDER",
+    "csv_bytes",
+    "findings_frame",
+    "format_error",
+    "render_findings",
+]
