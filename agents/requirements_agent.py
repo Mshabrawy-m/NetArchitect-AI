@@ -980,6 +980,53 @@ class RequirementsUnderstandingAgent(BaseAgent):
         )
 
 
+def understand_requirements(
+    free_text: str = "",
+    *,
+    requirements: NetworkRequirements | None = None,
+    provider: LLMProvider | None = None,
+    max_repair_retries: int = MAX_LLM_REPAIR_RETRIES,
+) -> RequirementsAgentOutput:
+    """Run the requirements agent once in an isolated, single-task context.
+
+    This is the UI entry point. It assembles the same bounded
+    :class:`~agents.base.AgentContext` the orchestrator uses, so the agent can
+    call its allowed ``requirements_validate`` tool. No workflow state or
+    baseline twin is read or written.
+    """
+    from .models import (
+        Clock,
+        ExecutionTrace,
+        WorkflowPlan,
+        WorkflowState,
+        WorkflowTask,
+    )
+    from .tools import registry_with_defaults
+
+    agent = RequirementsUnderstandingAgent(
+        provider,
+        max_repair_retries=max_repair_retries,
+    )
+    plan = WorkflowPlan(
+        name="Requirements understanding",
+        tasks=(WorkflowTask(id="requirements", agent=agent.name),),
+    )
+    clock = Clock()
+    state = WorkflowState(plan, clock=clock)
+    trace = ExecutionTrace(clock)
+    context = AgentContext(
+        agent=agent,
+        state=state,
+        registry=registry_with_defaults(),
+        trace=trace,
+        clock=clock,
+    ).for_task("requirements")
+    payload = agent.validate_input(
+        RequirementsAgentInput(free_text=free_text, requirements=requirements)
+    )
+    return agent.run(payload, context)
+
+
 __all__ = [
     "EXTRACTION_SYSTEM_PROMPT",
     "ClarificationQuestion",
@@ -991,4 +1038,5 @@ __all__ = [
     "RequirementsExtraction",
     "RequirementsGap",
     "RequirementsUnderstandingAgent",
+    "understand_requirements",
 ]

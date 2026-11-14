@@ -2,6 +2,33 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-14 - Phase 10d: AI Network Designer and Agent Control Center
+
+### Added
+- `ui/pages/ai_designer.py`: optional free-text requirements next to the
+  structured form. Without an API key the page shows the form only with a note;
+  the form runs the complete deterministic workflow.
+- Fact/assumption separation, missing and contradictory items, and clarification
+  questions are displayed from the requirements agent. Results show the summary,
+  critic verdict and findings, documentation preview, assumptions, limitations,
+  labelled optional AI text, and report JSON/Markdown downloads.
+- Applying a design saves a new snapshot and never replaces the baseline twin.
+- `ui/pages/agent_control_center.py`: read-only DAG table with dependencies,
+  status, attempts, re-plans, duration, skipped reason, and error; typed stop
+  reason; critic findings; full trace with a JSON download; and a source
+  selector for multiple session workflows.
+- `agents/requirements_agent.py`: `understand_requirements` helper that runs the
+  agent once in an isolated single-task context for the UI.
+- `tests/unit/ui/test_ai_designer_page.py` (7 tests) and
+  `tests/unit/ui/test_agent_control_center_page.py` (5 tests) covering both pages,
+  including the key-missing state and secret non-leakage.
+
+### Changed
+- `app.py`: wired the AI Network Designer and Agent Control Center into the
+  navigation, `READY_PAGES`, and dashboard text.
+- `agents/__init__.py`: exported the `understand_requirements` helper.
+- No public domain schema changed and no dependency was added.
+
 ## 2026-11-14 - Phase 10c: Documentation Agent
 
 ### Added

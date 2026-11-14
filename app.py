@@ -5,11 +5,13 @@ truth for the topology, planning results, traffic demands, and modeled
 operational state. Phase 7 adds deterministic what-if simulation over that twin.
 Phase 8 adds bounded, reproducible multi-objective optimization. Phase 9 adds
 the optional Groq provider layer, the deterministic agent framework, and the
-Settings page with a structured design-plan runner. The Topology
-Editor, IP Addressing, VLAN & DHCP Planner, Routing Analysis, Network Analytics,
-Digital Twin, Simulation Lab, Optimization Center, and Settings are working
-engineering pages; the remaining planned pages stay as placeholders and are
-added phase by phase.
+Settings page with a structured design-plan runner. Phase 10 adds the
+specialized requirements, critic, and documentation agents plus the AI Network
+Designer and read-only Agent Control Center pages. The Topology Editor, IP
+Addressing, VLAN & DHCP Planner, Routing Analysis, Network Analytics, Digital
+Twin, Simulation Lab, Optimization Center, AI Network Designer, Agent Control
+Center, and Settings are working engineering pages; the remaining planned pages
+stay as placeholders and are added phase by phase.
 """
 
 from __future__ import annotations
@@ -17,6 +19,8 @@ from __future__ import annotations
 import streamlit as st
 
 from config.settings import get_settings
+from ui.pages.agent_control_center import render as render_agent_control_center
+from ui.pages.ai_designer import render as render_ai_designer
 from ui.pages.digital_twin import render as render_digital_twin
 from ui.pages.ip_addressing import render as render_ip_addressing
 from ui.pages.network_analytics import render as render_network_analytics
@@ -48,6 +52,7 @@ PAGES: tuple[str, ...] = (
 READY_PAGES: frozenset[str] = frozenset(
     {
         "Dashboard",
+        "AI Network Designer",
         "Topology Editor",
         "IP Addressing & Subnetting",
         "VLAN & DHCP Planner",
@@ -56,6 +61,7 @@ READY_PAGES: frozenset[str] = frozenset(
         "Digital Twin",
         "Simulation Lab",
         "Optimization Center",
+        "Agent Control Center",
         "Settings",
     }
 )
@@ -68,9 +74,10 @@ def render_sidebar_navigation() -> str:
         page = st.selectbox("Page", PAGES, index=0, key="page_nav")
         if page in READY_PAGES:
             st.caption(
-                "Available now: Dashboard, Topology Editor, IP Addressing, "
-                "VLAN & DHCP Planner, Routing Analysis, Network Analytics, "
-                "Digital Twin, Simulation Lab, Optimization Center, and Settings."
+                "Available now: Dashboard, AI Network Designer, Topology Editor, "
+                "IP Addressing, VLAN & DHCP Planner, Routing Analysis, Network "
+                "Analytics, Digital Twin, Simulation Lab, Optimization Center, "
+                "Agent Control Center, and Settings."
             )
         else:
             st.caption("This page arrives in a later phase.")
@@ -97,12 +104,13 @@ def render_dashboard() -> None:
     st.write(f"**Deployment target:** {settings.DEPLOYMENT_TARGET}")
 
     st.info(
-        "Phase 9 is in progress. The Topology Editor, IP Addressing, VLAN & "
+        "Phase 10 is in progress. The Topology Editor, IP Addressing, VLAN & "
         "DHCP Planner, Routing Analysis, Network Analytics, Digital Twin, "
-        "Simulation Lab, Optimization Center, and Settings are available from "
-        "the sidebar; remaining pages are introduced with their engineering "
-        "modules. AI features are optional and need a Groq API key, while the "
-        "engineering engines and the deterministic structured plan do not."
+        "Simulation Lab, Optimization Center, AI Network Designer, Agent Control "
+        "Center, and Settings are available from the sidebar; remaining pages are "
+        "introduced with their engineering modules. AI features are optional and "
+        "need a Groq API key, while the engineering engines and the deterministic "
+        "structured plan do not."
     )
 
 
@@ -130,6 +138,8 @@ def main() -> None:
 
     if page == "Dashboard":
         render_dashboard()
+    elif page == "AI Network Designer":
+        render_ai_designer()
     elif page == "Topology Editor":
         render_topology_editor()
     elif page == "IP Addressing & Subnetting":
@@ -146,6 +156,8 @@ def main() -> None:
         render_simulation_lab()
     elif page == "Optimization Center":
         render_optimization_center()
+    elif page == "Agent Control Center":
+        render_agent_control_center()
     elif page == "Settings":
         render_settings()
     else:

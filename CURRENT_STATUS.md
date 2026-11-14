@@ -1,9 +1,9 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 10 - Specialized AI Agents (in progress)
-- Current task: Phase 10c - Documentation Agent (complete)
-- Overall status: Phase 10 in progress; 10a-10c complete, 10d pending
+- Current phase: Phase 10 - Specialized AI Agents (complete)
+- Current task: Phase 10d - AI Network Designer and Agent Control Center (complete)
+- Overall status: Phase 10 complete on `feature/phase10-agents`; Phase 11 not started
 - Last updated: 2026-11-14
 - Branch: `feature/phase10-agents` (based on merged `main` commit `8832961`)
 
@@ -17,7 +17,7 @@
 - [x] Phase 7: Network Simulation Engine
 - [x] Phase 8: Multi-Objective Optimization Engine
 - [x] Phase 9: Agentic AI Framework
-- [ ] Phase 10: Specialized AI Agents
+- [x] Phase 10: Specialized AI Agents
 - [ ] Phase 11: Predictive Capacity Planning
 - [ ] Phase 12: Explainability and Documentation
 - [ ] Phase 13: Frontend Integration and User Experience
@@ -882,6 +882,47 @@ structured-form workflow works with no API key.
 - No live provider request was made. The optional explanation is exercised with
   the scripted `FakeProvider`; the deterministic path needs no provider.
 - Public domain schemas were not changed by 10c.
+
+## Phase 10d delivered - AI Network Designer and Agent Control Center
+- `ui/pages/ai_designer.py`: free-text interpretation and the structured form
+  side by side when a key is configured. Without a key the page shows the form
+  alone with a note; the form runs the full deterministic workflow.
+- Free text is optional and bounded by `MAX_REQUIREMENTS_TEXT_CHARS`. Structured
+  form values are merged into the interpretation only when the user enables the
+  explicit merge checkbox; otherwise free text is interpreted alone.
+- `agents/requirements_agent.py`: added `understand_requirements`, a
+  single-task helper used by the UI. It builds the same bounded `AgentContext`
+  as the orchestrator and writes no workflow or baseline state.
+- Results show the requirements summary, user-provided facts and system
+  assumptions in separate tables, missing/contradictory items, and clarification
+  questions. The workflow result shows the summary, critic verdict and findings,
+  documentation preview, assumptions, limitations, and labelled AI text.
+- Applying a design always saves a new snapshot through
+  `ui.state.save_twin_snapshot`; the page never replaces the baseline twin.
+- `ui/pages/agent_control_center.py`: read-only task DAG table with dependencies,
+  status, attempts, re-plans, summed duration, skipped reason, and error; typed
+  stop reason and workflow error; critic verdict and findings; full trace table
+  with a JSON download. A source selector appears when more than one workflow
+  has run in the session.
+- `app.py`: both pages are wired into navigation and `READY_PAGES`; the
+  dashboard text and navigation caption now describe Phase 10.
+- `tests/unit/ui/test_ai_designer_page.py` (7 tests) and
+  `tests/unit/ui/test_agent_control_center_page.py` (5 tests): no-key form-only
+  state, deterministic run with baseline immutability, fact/assumption
+  separation, provider failure, interpreted requirements driving the workflow,
+  new-snapshot apply, typed failure display, read-only DAG/trace/critic,
+  multi-source selection, and no session-key leakage into rendered text or
+  trace JSON.
+
+## Test evidence (Phase 10d)
+- Commands and results:
+  - `.venv\Scripts\python.exe -m pytest -q tests/unit/ui/test_ai_designer_page.py tests/unit/ui/test_agent_control_center_page.py`: `12 passed in 3.46s`
+  - `.venv\Scripts\python.exe -m pytest -q`: `698 passed in 11.54s`
+  - `.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- No live provider request was made. Free-text tests use the scripted
+  `FakeProvider` through an injected `_build_provider`; the no-key path uses no
+  provider at all.
+- Public domain schemas were not changed by 10d.
 
 ## Test evidence (Phase 8)
 - Commands and results:

@@ -103,6 +103,7 @@ from .requirements_agent import (
     RequirementsExtraction,
     RequirementsGap,
     RequirementsUnderstandingAgent,
+    understand_requirements,
 )
 from .tools import Tool, ToolRegistry, default_tools, registry_with_defaults
 
@@ -196,5 +197,6 @@ __all__ = [
     "run_structured_design",
     "structured_inputs",
     "summarize",
+    "understand_requirements",
     "validate_workflow_plan",
 ]
