@@ -72,6 +72,20 @@ MAX_WORKFLOW_STEPS: int = 50
 # Maximum wall-clock seconds for one complete agent workflow.
 MAX_AGENT_RUNTIME_SECONDS: int = 120
 
+# Maximum characters accepted in one free-text requirements description. The
+# requirements agent rejects longer input instead of truncating it silently.
+MAX_REQUIREMENTS_TEXT_CHARS: int = 20_000
+
+# Maximum departments the requirements agent may emit from one description.
+MAX_REQUIREMENTS_DEPARTMENTS: int = 64
+
+# Maximum constraints, design goals, or assumptions accepted from one
+# requirements extraction. Keeps a malformed response from flooding memory/UI.
+MAX_REQUIREMENTS_LIST_ITEMS: int = 50
+
+# Maximum clarification questions returned by the requirements agent.
+MAX_CLARIFICATION_QUESTIONS: int = 20
+
 # Maximum number of selective re-plans (re-running the responsible task and its
 # dependents) allowed in one workflow. Prevents a validation/re-plan loop.
 MAX_AGENT_REPLANS: int = 2

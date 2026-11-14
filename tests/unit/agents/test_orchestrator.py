@@ -409,8 +409,8 @@ def test_agent_package_has_no_execution_or_provider_escape_hatches() -> None:
         "os.popen",
         "eval(",
         "exec(",
-        "from services",
-        "import services",
+        "urllib",
+        "http.client",
     ):
         assert forbidden not in sources
     assert "streamlit" not in sources

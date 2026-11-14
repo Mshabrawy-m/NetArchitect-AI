@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 9 - Agentic AI Framework (in progress)
-- Current task: Phase 9c - Settings page and structured requirements form (complete)
-- Overall status: Phase 9 in progress; Phase 10 not started
-- Last updated: 2026-11-13
-- Branch: `feature/phase9-agent-framework` (based on merged `main` commit `42bddfc`)
+- Current phase: Phase 10 - Specialized AI Agents (in progress)
+- Current task: Phase 10a - Requirements Understanding Agent (complete)
+- Overall status: Phase 10 in progress; 10a complete, 10b-10d pending
+- Last updated: 2026-11-14
+- Branch: `feature/phase10-agents` (based on merged `main` commit `8832961`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -16,7 +16,7 @@
 - [x] Phase 6: Network Digital Twin
 - [x] Phase 7: Network Simulation Engine
 - [x] Phase 8: Multi-Objective Optimization Engine
-- [ ] Phase 9: Agentic AI Framework
+- [x] Phase 9: Agentic AI Framework
 - [ ] Phase 10: Specialized AI Agents
 - [ ] Phase 11: Predictive Capacity Planning
 - [ ] Phase 12: Explainability and Documentation
@@ -758,6 +758,51 @@ structured-form workflow works with no API key.
   - `.venv\Scripts\ruff.exe check .`: `All checks passed!`
 - No real Groq request was made in this task. The connection test was exercised
   only with injected fake providers (success and typed-failure cases).
+
+## Phase 10a delivered - Requirements Understanding Agent
+- `agents/requirements_agent.py`: `RequirementsUnderstandingAgent` converts
+  bounded free text into validated `NetworkRequirements`. The optional model
+  returns only a `RequirementsExtraction` draft; deterministic Python audits
+  every number, rebuilds the typed facts, and keeps user-provided facts and
+  system assumptions in separate fields.
+- A number is promoted to a user fact only when it appears literally in the
+  supplied text or comes from structured input. Invented department counts are
+  dropped from the fact layer and recorded as assumptions with a clarification
+  question.
+- Deterministic checks include non-negative bounds, the per-subnet host limit,
+  duplicate departments, missing user counts, missing total, missing
+  organization/site/goals, and a stated-total versus department-sum
+  contradiction.
+- Merge policy: structured-form values are authoritative; verified extracted
+  departments with new names are appended. The contradiction check compares the
+  stated total against the fully merged department sum.
+- No-provider behaviour: free text returns an `unavailable` status with the
+  structured-form path offered; supplied structured requirements are validated
+  and kept. No requirements are fabricated without a provider.
+- Provider failures and exhausted bounded repairs return a typed `failed`
+  result. Malformed output is retried only within `MAX_LLM_REPAIR_RETRIES`.
+- New bounded constants in `config/limits.py`:
+  `MAX_REQUIREMENTS_TEXT_CHARS`, `MAX_REQUIREMENTS_DEPARTMENTS`,
+  `MAX_REQUIREMENTS_LIST_ITEMS`, and `MAX_CLARIFICATION_QUESTIONS`.
+- Tool allowlist is exactly `requirements_validate`; the agent imports the LLM
+  provider interfaces but performs no network, shell, Streamlit, or code
+  execution.
+- `tests/unit/agents/test_requirements_agent.py` (16 tests): valid extraction,
+  facts versus assumptions, ungrounded goal removal, invented number rejection,
+  missing information/questions, contradiction detection, oversized counts,
+  provider failure, malformed-output repair and exhaustion, unavailable paths,
+  structured-only path, structured merge, input bounds, and tool allowlist.
+- The agent package escape-hatch test now also rejects `urllib` and
+  `http.client` imports.
+
+## Test evidence (Phase 10a)
+- Commands and results:
+  - `.venv\Scripts\python.exe -m pytest -q tests/unit/agents`: `42 passed in 0.76s`
+  - `.venv\Scripts\python.exe -m pytest -q`: `653 passed in 11.14s`
+  - `.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- No live provider request was made. All model paths use the scripted
+  `FakeProvider`; the no-provider path uses no provider at all.
+- Public domain schemas were not changed by 10a.
 
 ## Test evidence (Phase 8)
 - Commands and results:

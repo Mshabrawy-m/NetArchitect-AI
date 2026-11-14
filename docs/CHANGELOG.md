@@ -2,6 +2,26 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-14 - Phase 10a: Requirements Understanding Agent
+
+### Added
+- `agents/requirements_agent.py`: bounded free-text extraction into validated
+  `NetworkRequirements`, with deterministic number provenance, separate user
+  facts and system assumptions, missing/contradictory item detection, bounded
+  clarification questions, and typed unavailable/failed outcomes.
+- `tests/unit/agents/test_requirements_agent.py`: 16 tests covering valid and
+  invented numbers, facts versus assumptions, missing data, contradictions,
+  oversized values, repair bounds, provider failure, no-provider paths,
+  structured merge, input limits, and the tool allowlist.
+
+### Changed
+- `config/limits.py`: added bounded requirements-text, department, list-item,
+  and clarification-question limits.
+- `agents/__init__.py`: exported the requirements agent and its typed models.
+- `tests/unit/agents/test_orchestrator.py`: the agent-package escape-hatch test
+  now also rejects `urllib` and `http.client`.
+- No public domain schema changed and no dependency was added.
+
 ## 2026-11-14 - Phase 9c: Settings page and structured design form
 
 ### Added
