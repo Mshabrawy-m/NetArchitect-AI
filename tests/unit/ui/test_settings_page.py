@@ -191,8 +191,8 @@ def test_settings_page_runs_the_deterministic_plan_from_the_form() -> None:
     assert isinstance(plan_state, WorkflowState)
     assert plan_state.stop_reason is WorkflowStopReason.completed
     assert plan_state.succeeded()
-    assert len(plan_state.tasks) == 10
-    assert plan_state.steps == 10
+    assert len(plan_state.tasks) == 11
+    assert plan_state.steps == 11
     assert plan_state.working_twin is not None
     assert "baseline_twin" not in plan_state.to_dict()
     assert at.session_state[state.TWIN_KEY] == baseline

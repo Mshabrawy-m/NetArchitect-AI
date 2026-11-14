@@ -166,10 +166,12 @@ def test_standard_plan_has_deterministic_shape() -> None:
         "optimization",
         "revalidation",
         "critic",
+        "documentation",
         "report",
     ]
     assert plan.task("critic").dependencies == ("revalidation",)
-    assert plan.task("report").dependencies == ("critic",)
+    assert plan.task("documentation").dependencies == ("critic",)
+    assert plan.task("report").dependencies == ("documentation",)
     assert plan.task("requirements").dependencies == ()
     requirements = sample_requirements()
     inputs = structured_inputs(requirements)
@@ -429,7 +431,7 @@ def test_structured_plan_matches_direct_engines_without_a_provider() -> None:
 
     assert state.stop_reason is WorkflowStopReason.completed
     assert state.succeeded()
-    assert state.steps == 10
+    assert state.steps == 11
     assert state.replans == 0
 
     topology = state.results["topology"].topology
@@ -459,6 +461,7 @@ def test_structured_plan_matches_direct_engines_without_a_provider() -> None:
         "Optimization",
         "Re-validation",
         "Critic review",
+        "Documentation",
     ]
 
 

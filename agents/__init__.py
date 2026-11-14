@@ -16,6 +16,19 @@ from .critic import (
     CriticVerdict,
     responsible_step_for,
 )
+from .documentation import (
+    DOCUMENTATION_SYSTEM_PROMPT,
+    DocumentationAgent,
+    DocumentationInput,
+    DocumentationOutput,
+    DocumentationTraceEntry,
+    DocumentSection,
+    DocumentTable,
+    DocumentValue,
+    export_csv,
+    export_json,
+    export_markdown,
+)
 from .models import (
     Clock,
     ExecutionTrace,
@@ -95,6 +108,7 @@ from .tools import Tool, ToolRegistry, default_tools, registry_with_defaults
 
 __all__ = [
     "CRITIC_SUMMARY_PROMPT",
+    "DOCUMENTATION_SYSTEM_PROMPT",
     "EXTRACTION_SYSTEM_PROMPT",
     "ISSUE_TASK_POLICY",
     "RESPONSIBLE_STEPS",
@@ -108,6 +122,13 @@ __all__ = [
     "CriticOutput",
     "CriticVerdict",
     "DemandPlan",
+    "DocumentSection",
+    "DocumentTable",
+    "DocumentValue",
+    "DocumentationAgent",
+    "DocumentationInput",
+    "DocumentationOutput",
+    "DocumentationTraceEntry",
     "ExecutionTrace",
     "ExtractedAssumption",
     "ExtractedDepartment",
@@ -165,6 +186,9 @@ __all__ = [
     "default_agents",
     "default_tools",
     "departments",
+    "export_csv",
+    "export_json",
+    "export_markdown",
     "next_base_network",
     "redundancy_requested",
     "registry_with_defaults",

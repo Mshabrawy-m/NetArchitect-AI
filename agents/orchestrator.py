@@ -67,12 +67,13 @@ ISSUE_TASK_POLICY: dict[str, str] = {
 def build_standard_plan(
     requirements: NetworkRequirements | None = None,
 ) -> WorkflowPlan:
-    """Return the deterministic ten-step structured-form plan.
+    """Return the deterministic eleven-step structured-form plan.
 
     The order is requirements -> topology -> IP/VLAN -> routing -> validation
-    -> simulation -> optimization -> re-validation -> critic -> report. When
-    ``requirements`` is supplied it is embedded in the tasks that need it, so
-    :meth:`Orchestrator.run` can execute the plan without extra inputs.
+    -> simulation -> optimization -> re-validation -> critic -> documentation
+    -> report. When ``requirements`` is supplied it is embedded in the tasks
+    that need it, so :meth:`Orchestrator.run` can execute the plan without extra
+    inputs.
     """
     base_payload: dict[str, Any] = (
         {} if requirements is None else {"requirements": requirements}
@@ -139,10 +140,20 @@ def build_standard_plan(
             payload=base_payload,
         ),
         WorkflowTask(
+            id="documentation",
+            agent="documentation",
+            description=(
+                "Assemble validated results into a traceable report with "
+                "provenance, assumptions, and limitations."
+            ),
+            dependencies=("critic",),
+            payload=base_payload,
+        ),
+        WorkflowTask(
             id="report",
             agent="report",
             description="Summarize the plan, assumptions, and results.",
-            dependencies=("critic",),
+            dependencies=("documentation",),
         ),
     )
     return WorkflowPlan(name="Structured design plan", tasks=tasks)

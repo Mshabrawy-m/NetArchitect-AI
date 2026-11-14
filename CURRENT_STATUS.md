@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: Phase 10 - Specialized AI Agents (in progress)
-- Current task: Phase 10b - Validation and Critic Agent (complete)
-- Overall status: Phase 10 in progress; 10a-10b complete, 10c-10d pending
+- Current task: Phase 10c - Documentation Agent (complete)
+- Overall status: Phase 10 in progress; 10a-10c complete, 10d pending
 - Last updated: 2026-11-14
 - Branch: `feature/phase10-agents` (based on merged `main` commit `8832961`)
 
@@ -842,6 +842,46 @@ structured-form workflow works with no API key.
 - No live provider request was made. Model notes use the scripted
   `FakeProvider`; the deterministic workflow runs without any provider.
 - Public domain schemas were not changed by 10b.
+
+## Phase 10c delivered - Documentation Agent
+- `agents/documentation.py`: `DocumentationAgent` collects only validated task
+  results. It never recalculates a design value; every printed number is copied
+  from a deterministic result and tagged with its `step` and `tool`.
+- The report contains a summary, topology choice with a deterministic rationale,
+  addressing/VLAN and DHCP tables, routing summary, critic findings, simulation
+  comparison, optimization comparison against the baseline, assumptions,
+  limitations, and the full execution trace.
+- Assumptions come only from `NetworkRequirements.assumptions` and the demand
+  planning note; limitations explicitly label modeled estimates, bounded
+  search, optional free-text interpretation, and the absence of PDF export.
+- Optional AI explanation: the model receives the computed report and may only
+  add prose. Any numeric token that does not match a computed value causes the
+  text to be rejected and replaced with the deterministic summary, with
+  `ai_rejected=True` and a visible note. Provider failures never fail the task.
+- Exports: `export_json` (sorted, round-trips through the model),
+  `export_csv` (one provenance-tagged row per table cell), and
+  `export_markdown` (sections, tables, sources, assumptions, limitations,
+  trace). No PDF is produced.
+- `agents/orchestrator.py`: standard plan is now eleven tasks with
+  `documentation` between `critic` and `report`.
+- `agents/network_agents.py`: registered `DocumentationAgent` and added a
+  deterministic "Documentation" report section.
+- `config/limits.py`: added `MAX_DOCUMENTATION_EXPLANATION_CHARS`.
+- `tests/unit/agents/test_documentation.py` (14 tests): complete plan without a
+  provider, engine-matching addressing/routing/topology values, provenance on
+  every number, critic findings copied, separated assumptions/limitations,
+  hostile model number rejection, accepted model text, provider failure,
+  export round-trip, rejected-explanation labelling, trace coverage, empty tool
+  allowlist, and the no-execution/no-network import guard.
+
+## Test evidence (Phase 10c)
+- Commands and results:
+  - `.venv\Scripts\python.exe -m pytest -q tests/unit/agents`: `75 passed in 0.99s`
+  - `.venv\Scripts\python.exe -m pytest -q`: `686 passed in 11.23s`
+  - `.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- No live provider request was made. The optional explanation is exercised with
+  the scripted `FakeProvider`; the deterministic path needs no provider.
+- Public domain schemas were not changed by 10c.
 
 ## Test evidence (Phase 8)
 - Commands and results:

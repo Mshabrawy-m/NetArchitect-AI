@@ -90,6 +90,10 @@ MAX_CLARIFICATION_QUESTIONS: int = 20
 # summary. The deterministic verdict never depends on this text.
 MAX_CRITIC_SUMMARY_CHARS: int = 1_500
 
+# Maximum characters accepted from the documentation agent's optional
+# model-written explanation. It is never treated as a source of design data.
+MAX_DOCUMENTATION_EXPLANATION_CHARS: int = 2_000
+
 # Maximum number of selective re-plans (re-running the responsible task and its
 # dependents) allowed in one workflow. Prevents a validation/re-plan loop.
 MAX_AGENT_REPLANS: int = 2

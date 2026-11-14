@@ -2,6 +2,37 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-14 - Phase 10c: Documentation Agent
+
+### Added
+- `agents/documentation.py`: `DocumentationAgent` assembles the validated
+  workflow results into a typed report with a summary, topology choice and
+  deterministic rationale, addressing/VLAN/DHCP tables, routing summary, critic
+  findings, simulation comparison, optimization comparison against the
+  baseline, assumptions, limitations, and the full execution trace.
+- Every reported value carries `step` and `tool` provenance; the agent copies
+  values from task results and never recalculates them.
+- Optional model-written explanation, clearly separated from the deterministic
+  report. A numeric token that does not match a computed value causes the text
+  to be rejected and deterministically replaced; provider failures are ignored.
+- `export_json`, `export_csv`, and `export_markdown` deterministic exports. No
+  PDF is produced.
+- `tests/unit/agents/test_documentation.py`: 14 tests covering the no-provider
+  plan, engine-matching values, provenance, copied critic findings, separated
+  assumptions and limitations, hostile number rejection, accepted model text,
+  provider failure, export round-trip, rejection labelling, trace coverage, the
+  empty tool allowlist, and the import guard.
+
+### Changed
+- `agents/orchestrator.py`: the standard plan now has eleven tasks with
+  `documentation` between `critic` and `report`.
+- `agents/network_agents.py`: registered `DocumentationAgent` and added a
+  deterministic "Documentation" report section.
+- `config/limits.py`: added `MAX_DOCUMENTATION_EXPLANATION_CHARS`.
+- `ui/components/requirements_form.py` and the settings-page test now reflect
+  the eleven-step plan.
+- No public domain schema changed and no dependency was added.
+
 ## 2026-11-14 - Phase 10b: Validation and Critic Agent
 
 ### Added

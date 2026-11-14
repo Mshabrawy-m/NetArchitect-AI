@@ -562,6 +562,24 @@ class ReportAgent(BaseAgent):
                     status="ok" if critic.verdict.value != "REJECTED" else "error",
                 )
             )
+        documentation = context.result("documentation")
+        if documentation is not None and hasattr(documentation, "sections"):
+            ai_label = (
+                "rejected and replaced deterministically"
+                if documentation.ai_rejected
+                else ("present" if documentation.ai_explanation else "absent")
+            )
+            sections.append(
+                ReportSection(
+                    title="Documentation",
+                    body=(
+                        f"{len(documentation.sections)} section(s), "
+                        f"{len(documentation.tables)} table(s); "
+                        f"AI explanation {ai_label}."
+                    ),
+                    status="info",
+                )
+            )
         headline = (
             "Structured design plan completed with no blocking validation issues."
             if all(section.status != "error" for section in sections)
@@ -573,6 +591,7 @@ class ReportAgent(BaseAgent):
 def default_agents() -> dict[str, BaseAgent]:
     """Return one instance of every standard agent, keyed by name."""
     from .critic import CriticAgent
+    from .documentation import DocumentationAgent
 
     agents: list[BaseAgent] = [
         RequirementsAgent(),
@@ -584,6 +603,7 @@ def default_agents() -> dict[str, BaseAgent]:
         OptimizationAgent(),
         RevalidationAgent(),
         CriticAgent(),
+        DocumentationAgent(),
         ReportAgent(),
     ]
     return {agent.name: agent for agent in agents}
