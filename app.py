@@ -7,11 +7,13 @@ Phase 8 adds bounded, reproducible multi-objective optimization. Phase 9 adds
 the optional Groq provider layer, the deterministic agent framework, and the
 Settings page with a structured design-plan runner. Phase 10 adds the
 specialized requirements, critic, and documentation agents plus the AI Network
-Designer and read-only Agent Control Center pages. The Topology Editor, IP
-Addressing, VLAN & DHCP Planner, Routing Analysis, Network Analytics, Digital
-Twin, Simulation Lab, Optimization Center, AI Network Designer, Agent Control
-Center, and Settings are working engineering pages; the remaining planned pages
-stay as placeholders and are added phase by phase.
+Designer and read-only Agent Control Center pages. Phase 11 adds
+provenance-tagged reports, in-memory exports, and the Reports & Documentation
+page. The Topology Editor, IP Addressing, VLAN & DHCP Planner, Routing
+Analysis, Network Analytics, Digital Twin, Simulation Lab, Optimization Center,
+AI Network Designer, Agent Control Center, Reports & Documentation, and
+Settings are working engineering pages; the remaining planned pages stay as
+placeholders and are added phase by phase.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from ui.pages.digital_twin import render as render_digital_twin
 from ui.pages.ip_addressing import render as render_ip_addressing
 from ui.pages.network_analytics import render as render_network_analytics
 from ui.pages.optimization_center import render as render_optimization_center
+from ui.pages.reports import render as render_reports
 from ui.pages.routing_analysis import render as render_routing_analysis
 from ui.pages.settings import render as render_settings
 from ui.pages.simulation_lab import render as render_simulation_lab
@@ -62,6 +65,7 @@ READY_PAGES: frozenset[str] = frozenset(
         "Simulation Lab",
         "Optimization Center",
         "Agent Control Center",
+        "Reports & Documentation",
         "Settings",
     }
 )
@@ -77,7 +81,7 @@ def render_sidebar_navigation() -> str:
                 "Available now: Dashboard, AI Network Designer, Topology Editor, "
                 "IP Addressing, VLAN & DHCP Planner, Routing Analysis, Network "
                 "Analytics, Digital Twin, Simulation Lab, Optimization Center, "
-                "Agent Control Center, and Settings."
+                "Agent Control Center, Reports & Documentation, and Settings."
             )
         else:
             st.caption("This page arrives in a later phase.")
@@ -104,13 +108,13 @@ def render_dashboard() -> None:
     st.write(f"**Deployment target:** {settings.DEPLOYMENT_TARGET}")
 
     st.info(
-        "Phase 10 is in progress. The Topology Editor, IP Addressing, VLAN & "
+        "Phase 11 is in progress. The Topology Editor, IP Addressing, VLAN & "
         "DHCP Planner, Routing Analysis, Network Analytics, Digital Twin, "
         "Simulation Lab, Optimization Center, AI Network Designer, Agent Control "
-        "Center, and Settings are available from the sidebar; remaining pages are "
-        "introduced with their engineering modules. AI features are optional and "
-        "need a Groq API key, while the engineering engines and the deterministic "
-        "structured plan do not."
+        "Center, Reports & Documentation, and Settings are available from the "
+        "sidebar; remaining pages are introduced with their engineering modules. "
+        "AI features are optional and need a Groq API key, while the engineering "
+        "engines and the deterministic structured plan do not."
     )
 
 
@@ -158,6 +162,8 @@ def main() -> None:
         render_optimization_center()
     elif page == "Agent Control Center":
         render_agent_control_center()
+    elif page == "Reports & Documentation":
+        render_reports()
     elif page == "Settings":
         render_settings()
     else:

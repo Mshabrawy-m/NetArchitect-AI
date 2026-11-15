@@ -2,6 +2,25 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-15 - Phase 11c: Reports & Documentation page
+
+### Added
+- `ui/pages/reports.py`: report page that selects the current twin plus any
+  retained workflow, scenario run, or optimization run; lets the user choose
+  sections; lists not-run sections with their reason and producing page; runs
+  the consistency checker on the selected document; previews typed blocks and
+  tables; and shows the bounded source-value registry.
+- The page offers in-memory PDF, Markdown, JSON, CSV-table ZIP, and
+  configuration-template ZIP downloads, with the PDF font-coverage warning and
+  the template-only notice.
+- `tests/unit/ui/test_reports_page.py`: 6 AppTest cases covering the empty
+  state, populated preview and all downloads, section-limited preview, the
+  no-selection guard, a retained workflow, and a retained scenario run.
+
+### Changed
+- `app.py`: Reports & Documentation is a ready page, dispatched to the new
+  renderer; the sidebar and dashboard text include it.
+
 ## 2026-11-15 - Phase 11b: report exports and configuration templates
 
 ### Added

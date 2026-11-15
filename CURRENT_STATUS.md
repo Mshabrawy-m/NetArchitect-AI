@@ -1,9 +1,9 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 11 - Reports and Explainability (in progress)
-- Current task: Phase 11b - Markdown, JSON, CSV, PDF, and configuration-template exports (complete)
-- Overall status: Phase 10 merged to `main`; Phase 11a and 11b implemented on `feature/phase11-reports`
+- Current phase: Phase 11 - Reports and Explainability (complete)
+- Current task: Phase 11c - Reports & Documentation page (complete)
+- Overall status: Phase 11 complete on `feature/phase11-reports`; Phase 12 not started
 - Last updated: 2026-11-15
 - Branch: `feature/phase11-reports` (based on `main` commit `a29e4eb`)
 
@@ -18,7 +18,7 @@
 - [x] Phase 8: Multi-Objective Optimization Engine
 - [x] Phase 9: Agentic AI Framework
 - [x] Phase 10: Specialized AI Agents
-- [ ] Phase 11: Reports and Explainability
+- [x] Phase 11: Reports and Explainability
 - [ ] Phase 12: Frontend Integration and User Experience
 - [ ] Phase 13: Predictive Capacity Planning
 - [ ] Phase 14: Testing, Security, and Deployment
@@ -1030,6 +1030,45 @@ network access, no disk writes).
 - No dependency was added; ReportLab was already in `requirements.txt`. No
   public domain schema changed.
 
+## Phase 11c delivered - Reports & Documentation page
+Location: `ui/pages/reports.py`, wired into `app.py`.
+
+- The page builds one report document from the current twin plus any retained
+  workflow, scenario run, or optimization run the user selects. Sources are
+  chosen explicitly; the latest retained run is preselected. The report body
+  never contains raw model output.
+- Section selection uses a multiselect over the ordered section ids, with
+  available sections preselected. A section table lists every section that was
+  not run, its reason, and the page that produces the missing data
+  (`Simulation Lab`, `Optimization Center`, `AI Network Designer`).
+- The consistency panel runs `check_consistency` on the selected document and
+  shows the summary plus a finding table (code, severity, section, token,
+  message) when anything fails.
+- The preview renders typed blocks directly: paragraphs, notes, key/value
+  tables, and paginated data tables with their source line and truncation note.
+  A collapsed appendix lists the source-value registry, bounded to
+  `MAX_REPORT_TABLE_ROWS`.
+- Downloads offer PDF, Markdown, JSON, a CSV-table ZIP, and a configuration
+  template ZIP. All five are generated in memory for the current selection. A
+  non-Latin document shows the PDF font-coverage warning before the buttons,
+  and the template note states that no template is device-applied.
+- The empty state explains that a twin with a topology is required and points
+  to the Topology Editor. Selecting no sections shows a warning and suppresses
+  the downloads.
+- `tests/unit/ui/test_reports_page.py` (6 tests): empty state, populated page
+  with every download, section-limited preview, no-selection guard, a retained
+  workflow filling the agent-trace section, and a retained scenario run filling
+  the simulation section.
+
+## Test evidence (Phase 11c)
+- Commands and results:
+  - `.\.venv\Scripts\python.exe -m pytest tests/unit/ui/test_reports_page.py -q`: `6 passed in 3.48s`
+  - `.\.venv\Scripts\python.exe -m pytest -q`: `745 passed in 13.59s`
+  - `.\.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- AppTest exercises the page in-process; no real browser, screenshot, or
+  download-file inspection was performed. Export bytes are covered by the 11b
+  service tests.
+
 ## Test evidence (Phase 8)
 - Commands and results:
   - `& ".venv\Scripts\python.exe" -m pytest -q`: `588 passed in 7.81s`
@@ -1259,7 +1298,23 @@ network access, no disk writes).
 - Configuration templates are vendor-neutral design intent. They are not
   device-applied, not vendor-complete, and not syntax-checked against any
   device operating system.
+- The Reports page does not request optional AI-written prose. The explanation
+  service exists and is tested, but the page deliberately keeps every section
+  engine-derived and never calls a provider.
+- Source selection preselects the latest retained workflow, scenario run, and
+  optimization run. The report uses exactly the selected run objects; a run
+  created against an older twin revision is still offered, and its recorded
+  twin versions make that visible in the provenance columns.
+- Section selection filters the report body and section list. The source-value
+  appendix and the JSON registry still contain every value computed for the
+  build, so provenance remains complete for the whole document even when some
+  sections are hidden.
+- All five exports are rebuilt on every page rerun, including the PDF. The page
+  does not cache export bytes, so a very large report makes each interaction
+  slower.
+- Page verification is AppTest-only. Widget placement, table widths, the
+  collapsed appendix, and real browser download behaviour were not inspected
+  visually.
 
 ## Next task
-- Phase 11c: Reports and Documentation page, including section selection,
-  preview, consistency findings, and download actions (not started).
+- Phase 12: Frontend Integration and User Experience (not started).
