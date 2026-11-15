@@ -122,3 +122,13 @@ MAX_LLM_TIMEOUT_SECONDS: int = 30
 
 # Maximum completion tokens requested from the LLM provider.
 MAX_LLM_RESPONSE_TOKENS: int = 4_096
+
+# Maximum data rows one report table may contain. Longer engine results are
+# truncated with an explicit "showing first N of M rows" note; the report never
+# silently drops rows.
+MAX_REPORT_TABLE_ROWS: int = 500
+
+# Maximum serialized bytes for one report export (Markdown, JSON, CSV bundle, or
+# PDF). Exports are built in memory, so this bounds session memory on the
+# Streamlit Community Cloud free tier.
+MAX_REPORT_BYTES: int = 5_000_000

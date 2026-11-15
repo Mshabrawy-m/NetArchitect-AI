@@ -2,6 +2,37 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-15 - Phase 11a: report document, provenance, and consistency
+
+### Added
+- `services/reporting/models.py`: stable `ReportDocument` with ordered,
+  typed sections and blocks; per-value and per-table `Provenance`; a
+  `ValueRecord` audit appendix; fixed disclosure labels; and a `not_run`
+  section status that requires both a reason and the producing page.
+- `services/reporting/builder.py`: deterministic report from the digital twin
+  plus optional scenario, optimization, and workflow objects. Sections cover
+  architecture, topology rationale, addressing, VLAN/DHCP, routing and
+  reachability, structural analysis, simulation before/after, optimization
+  versus baseline, assumptions, limitations, and the agent execution trace.
+  Every printed number is copied from an engine and recorded with step, tool,
+  and twin fingerprint. Tables are bounded and keep the source row count.
+- `services/reporting/consistency.py`: checker that detects orphan numbers,
+  missing disclosure labels, missing provenance, and empty available sections.
+- `services/reporting/explain.py`: optional AI explanation with the Phase 10
+  numeric-token rejection rule and graceful provider-failure handling.
+- `services/reporting/formatting.py` and `templates.py`: deterministic number
+  formatting, token extraction with IP/CIDR masking, and explanation templates
+  built only from supplied values.
+- `tests/unit/services/test_reporting.py`: 24 tests covering engine-matching
+  values, not-run pointers, deterministic output, tampering detection, table
+  truncation, section filtering, the three run types, and AI explanation
+  acceptance/rejection/failure.
+
+### Changed
+- `config/limits.py`: added `MAX_REPORT_TABLE_ROWS` and `MAX_REPORT_BYTES`.
+- `core/exceptions/__init__.py`: added report error classes.
+- No dependency was added and no public domain schema changed.
+
 ## 2026-11-14 - Phase 10d: AI Network Designer and Agent Control Center
 
 ### Added

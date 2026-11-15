@@ -177,3 +177,19 @@ class WorkflowCycleError(WorkflowError):
 
 class WorkflowLimitError(WorkflowError):
     """A workflow hit a structural or resource limit."""
+
+
+class ReportError(NetArchitectError):
+    """Base class for report-building and report-export failures."""
+
+
+class ReportBuildError(ReportError):
+    """A report could not be assembled from the supplied validated data."""
+
+
+class ReportExportError(ReportError):
+    """A report export is malformed, unsupported, or not round-trippable."""
+
+
+class ReportLimitError(ReportError):
+    """A report or export exceeded a configured size or row limit."""

@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 10 - Specialized AI Agents (complete)
-- Current task: Phase 10d - AI Network Designer and Agent Control Center (complete)
-- Overall status: Phase 10 complete on `feature/phase10-agents`; Phase 11 not started
-- Last updated: 2026-11-14
-- Branch: `feature/phase10-agents` (based on merged `main` commit `8832961`)
+- Current phase: Phase 11 - Reports and Explainability (in progress)
+- Current task: Phase 11a - report document, provenance, and consistency (complete)
+- Overall status: Phase 10 merged to `main`; Phase 11a implemented on `feature/phase11-reports`
+- Last updated: 2026-11-15
+- Branch: `feature/phase11-reports` (based on `main` commit `a29e4eb`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -18,9 +18,9 @@
 - [x] Phase 8: Multi-Objective Optimization Engine
 - [x] Phase 9: Agentic AI Framework
 - [x] Phase 10: Specialized AI Agents
-- [ ] Phase 11: Predictive Capacity Planning
-- [ ] Phase 12: Explainability and Documentation
-- [ ] Phase 13: Frontend Integration and User Experience
+- [ ] Phase 11: Reports and Explainability
+- [ ] Phase 12: Frontend Integration and User Experience
+- [ ] Phase 13: Predictive Capacity Planning
 - [ ] Phase 14: Testing, Security, and Deployment
 
 ## Task 0 evidence (verification and version control)
@@ -924,6 +924,53 @@ structured-form workflow works with no API key.
   provider at all.
 - Public domain schemas were not changed by 10d.
 
+## Phase 11a delivered - report document, provenance, and consistency
+Location: `services/reporting/` (pure Python; no Streamlit, ReportLab, or
+network import).
+
+- `models.py`: `ReportDocument` with ordered typed sections, discriminated
+  content blocks (`paragraph`, `key_value`, `table`, `note`), `Provenance`
+  (`step`, `tool`, `twin_version`), the `ValueRecord` audit appendix, and
+  disclosure labels. A section with no input is stored as `status="not_run"`
+  with both a reason and the page that produces the missing data.
+- `builder.py`: builds eleven sections from the digital twin and the optional
+  scenario, optimization, and workflow objects: architecture summary, topology
+  and selection rationale, addressing, VLAN/DHCP, routing/reachability, graph
+  analysis, simulation before/after, optimization versus baseline,
+  assumptions, limitations, and agent execution trace. Every number is copied
+  from an engine, formatted through `format_number`, and recorded with
+  provenance. Engine prose that is reproduced verbatim (findings, notes,
+  paths, errors) is scanned so its numeric tokens stay traceable. Tables are
+  bounded by `MAX_REPORT_TABLE_ROWS` and keep the source row count for a
+  visible truncation note.
+- `templates.py`: deterministic explanation prose built only from caller-
+  supplied values, plus the fixed limitation statements and disclosure text.
+- `consistency.py`: `check_consistency` treats the `ValueRecord` appendix as
+  the authoritative number set and reports `orphan_number`, `missing_label`,
+  `missing_provenance`, and `empty_section` findings. IP addresses, CIDR
+  prefixes, and identifier-embedded digits are masked before token extraction.
+- `explain.py`: optional AI prose using the Phase 10 numeric-token rule.
+  Unavailable providers and unsourced numbers leave the deterministic report
+  unchanged; accepted text is always labelled as AI-generated.
+- `config/limits.py`: added `MAX_REPORT_TABLE_ROWS` and `MAX_REPORT_BYTES`.
+  `core/exceptions/__init__.py`: added `ReportError`, `ReportBuildError`,
+  `ReportExportError`, and `ReportLimitError`.
+- `tests/unit/services/test_reporting.py` (24 tests): engine-matching values,
+  not-run reasons and producer pages, injected clock, deterministic rebuild,
+  clean consistency, tampered-number and missing-label detection, provenance
+  completeness, table truncation, section filtering, simulation/optimization/
+  workflow values, AI accept/reject/absent/provider-error paths, and token
+  masking.
+
+## Test evidence (Phase 11a)
+- Commands and results:
+  - `.\.venv\Scripts\python.exe -m pytest -q`: `722 passed in 14.01s`
+  - `.\.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- No live provider request was made; the explanation tests use
+  `services.llm.testing.FakeProvider`.
+- No report export exists yet; Markdown, JSON, CSV, PDF, and configuration
+  templates are Phase 11b.
+
 ## Test evidence (Phase 8)
 - Commands and results:
   - `& ".venv\Scripts\python.exe" -m pytest -q`: `588 passed in 7.81s`
@@ -1128,6 +1175,16 @@ structured-form workflow works with no API key.
   department list. Multi-site entry, device/link requirements, and explicitly
   requested topologies are not exposed by the form yet; the deterministic
   policy derives those from the modeled assumptions.
+- Report consistency masks IPv4/IPv6 addresses and identifier-embedded digits
+  before matching numeric tokens. A fabricated quantity disguised as part of
+  an identifier (for example `link999`) is therefore not flagged as an orphan
+  number. Standalone quantities in prose, key/value items, tables, notes, and
+  AI text are checked.
+- The report builder recomputes routing and structural analysis from the
+  stored twin at build time; it does not reuse a page's cached result. Values
+  therefore match the current twin revision, but a page showing an older
+  snapshot can display different numbers until it is rerun.
 
 ## Next task
-- Phase 10: Specialized AI Agents (not started).
+- Phase 11b: Markdown, JSON, CSV, PDF, and configuration-template exports
+  (not started).
