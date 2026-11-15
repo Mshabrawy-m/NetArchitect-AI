@@ -1011,18 +1011,19 @@ network access, no disk writes).
   characters are replaced with `?` and a visible notice points to the
   Markdown/JSON exports; Arabic shaping and right-to-left layout are not
   attempted.
-- `tests/unit/services/test_export.py` (17 tests): JSON round-trip and
+- `tests/unit/services/test_export.py` (18 tests): JSON round-trip and
   malformed/unsupported payloads, Markdown content and determinism, truncation
-  notes, CSV content/BOM/ZIP stability and README, configuration-template
-  header and twin-only values, ZIP stability, PDF structure/footer/injected
-  clock, byte-identical repeats, long-table pagination, visible truncation,
-  non-Latin fallback (with UTF-8 exports preserving the original text), and
-  the size bound on all four exports.
+  notes, CSV content/BOM/ZIP stability and README truncation reporting,
+  configuration-template header and twin-only values, ZIP stability, PDF
+  structure/footer/injected clock, byte-identical repeats, long-table
+  pagination, visible row and cell truncation, non-Latin fallback (with UTF-8
+  exports preserving the original text), and the size bound on all four
+  exports.
 
 ## Test evidence (Phase 11b)
 - Commands and results:
-  - `.\.venv\Scripts\python.exe -m pytest tests/unit/services/test_export.py -q`: `17 passed in 1.29s`
-  - `.\.venv\Scripts\python.exe -m pytest -q`: `739 passed in 14.21s`
+  - `.\.venv\Scripts\python.exe -m pytest tests/unit/services/test_export.py -q`: `18 passed in 1.44s`
+  - `.\.venv\Scripts\python.exe -m pytest -q`: `746 passed in 13.70s`
   - `.\.venv\Scripts\ruff.exe check .`: `All checks passed!`
 - PDF assertions inspect the uncompressed Latin-1 byte stream for literal text
   and count `/Type /Page` objects. A visual render pass (glyph positioning,
@@ -1063,7 +1064,7 @@ Location: `ui/pages/reports.py`, wired into `app.py`.
 ## Test evidence (Phase 11c)
 - Commands and results:
   - `.\.venv\Scripts\python.exe -m pytest tests/unit/ui/test_reports_page.py -q`: `6 passed in 3.48s`
-  - `.\.venv\Scripts\python.exe -m pytest -q`: `745 passed in 13.59s`
+  - `.\.venv\Scripts\python.exe -m pytest -q`: `746 passed in 13.70s`
   - `.\.venv\Scripts\ruff.exe check .`: `All checks passed!`
 - AppTest exercises the page in-process; no real browser, screenshot, or
   download-file inspection was performed. Export bytes are covered by the 11b

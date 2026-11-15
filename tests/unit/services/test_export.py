@@ -34,6 +34,7 @@ from services.export import (
     to_markdown,
     to_pdf,
 )
+from services.export.pdf import MAX_PDF_CELL_CHARS
 from services.reporting import (
     DISCLOSURE_TEXT,
     MODELED_ESTIMATE_LABEL,
@@ -93,6 +94,20 @@ def _table(
             twin_version=report.twin.fingerprint,
         ),
     )
+
+
+def _replace_table(report: ReportDocument, table: TableBlock) -> ReportDocument:
+    """Replace the table with ``table.id`` wherever it appears."""
+    sections = []
+    for section in report.sections:
+        blocks = tuple(
+            table
+            if isinstance(block, TableBlock) and block.id == table.id
+            else block
+            for block in section.blocks
+        )
+        sections.append(section.model_copy(update={"blocks": blocks}))
+    return report.model_copy(update={"sections": tuple(sections)})
 
 
 def test_json_round_trip_is_exact_and_stable(report: ReportDocument) -> None:
@@ -198,18 +213,24 @@ def test_csv_bundle_is_stable_and_documents_encoding(
 
 
 def test_csv_bundle_reports_table_truncation(report: ReportDocument) -> None:
-    table = _table(
-        report,
-        rows=(("row", "1"), ("row", "2")),
-        total_rows=9,
+    source = next(
+        table for table in report.tables() if table.id == "findings"
     )
-    document = _with_table(report, table)
-    assert not any(
-        item.table_id == "test_table" for item in csv_tables(document)
+    truncated = source.model_copy(
+        update={
+            "rows": source.rows[:1],
+            "total_rows": len(source.rows) + 4,
+        }
     )
+    document = _replace_table(report, truncated)
     with zipfile.ZipFile(io.BytesIO(to_csv_bundle(document))) as archive:
         readme = archive.read("README.txt").decode("utf-8")
-    assert "ip_plan.csv" in readme
+        findings = archive.read("findings.csv").decode("utf-8")
+    assert "findings.csv: 1 rows" in readme
+    assert (
+        f"Showing first 1 of {len(source.rows) + 4} rows." in readme
+    )
+    assert len(findings.splitlines()) == 2
 
 
 def test_configuration_templates_use_only_twin_data(twin) -> None:
@@ -278,6 +299,16 @@ def test_pdf_shows_a_visible_truncation_note(report: ReportDocument) -> None:
     document = _with_table(report, _table(report, rows=rows, total_rows=8))
     text = to_pdf(document).decode("latin-1")
     assert "Showing first 2 of 8 rows." in text
+
+
+def test_pdf_truncates_an_overlong_cell(report: ReportDocument) -> None:
+    tail = "TAIL-MARKER-NOT-RENDERED"
+    long_value = "x" * MAX_PDF_CELL_CHARS + tail
+    table = _table(report, rows=(("row", long_value),))
+    text = to_pdf(_with_table(report, table)).decode("latin-1")
+    assert "[cell" in text
+    assert "truncated for PDF]" in text
+    assert tail not in text
 
 
 def test_pdf_warns_and_falls_back_for_non_latin_text(

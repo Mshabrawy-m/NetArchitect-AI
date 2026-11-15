@@ -44,11 +44,11 @@ All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
   contents, paginating tables, page numbers, an injected-clock header/footer,
   the exact disclosure footer, bounded layout sizes, deterministic byte output,
   and detect-and-warn fallback for non-Latin text.
-- `tests/unit/services/test_export.py`: 17 tests covering JSON round-trip,
-  Markdown content and determinism, CSV content/BOM/archive stability,
-  configuration-template headers and twin-only values, PDF structure and clock,
-  long-table pagination, visible truncation, non-Latin behaviour, and size
-  limits.
+- `tests/unit/services/test_export.py`: 18 tests covering JSON round-trip,
+  Markdown content and determinism, CSV content/BOM/archive stability and
+  truncation reporting, configuration-template headers and twin-only values,
+  PDF structure and clock, long-table pagination, visible row and cell
+  truncation, non-Latin behaviour, and size limits.
 
 ### Changed
 - No dependency was added (ReportLab was already present) and no public domain
