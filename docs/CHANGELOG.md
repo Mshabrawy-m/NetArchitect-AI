@@ -2,6 +2,39 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-15 - Phase 11b: report exports and configuration templates
+
+### Added
+- `services/export/common.py`: in-memory export helpers with a fixed ZIP member
+  timestamp for byte-stable archives and a shared `MAX_REPORT_BYTES` bound that
+  raises `ReportLimitError`.
+- `services/export/markdown.py`: deterministic Markdown rendering of the report
+  document with escaped table cells, visible truncation notes, and a bounded
+  value-provenance appendix.
+- `services/export/json_export.py`: stable sorted-key UTF-8 JSON plus
+  `from_json`, which validates schema version and structure back into
+  `ReportDocument`. The round trip is exact.
+- `services/export/csv_export.py`: CSV tables for the IP plan, VLAN
+  assignments, DHCP scopes, routing table, link utilization, findings, and
+  optimization candidates, an optional documented UTF-8 BOM, and a stable ZIP
+  bundle with a README.
+- `services/export/config_templates.py`: vendor-neutral device, interface,
+  subnet, VLAN, and DHCP-scope templates built only from validated twin data.
+  Every file starts with `TEMPLATE - not applied to any device`.
+- `services/export/pdf.py`: ReportLab PDF with title block, disclosure labels,
+  contents, paginating tables, page numbers, an injected-clock header/footer,
+  the exact disclosure footer, bounded layout sizes, deterministic byte output,
+  and detect-and-warn fallback for non-Latin text.
+- `tests/unit/services/test_export.py`: 17 tests covering JSON round-trip,
+  Markdown content and determinism, CSV content/BOM/archive stability,
+  configuration-template headers and twin-only values, PDF structure and clock,
+  long-table pagination, visible truncation, non-Latin behaviour, and size
+  limits.
+
+### Changed
+- No dependency was added (ReportLab was already present) and no public domain
+  schema changed.
+
 ## 2026-11-15 - Phase 11a: report document, provenance, and consistency
 
 ### Added

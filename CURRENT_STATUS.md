@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: Phase 11 - Reports and Explainability (in progress)
-- Current task: Phase 11a - report document, provenance, and consistency (complete)
-- Overall status: Phase 10 merged to `main`; Phase 11a implemented on `feature/phase11-reports`
+- Current task: Phase 11b - Markdown, JSON, CSV, PDF, and configuration-template exports (complete)
+- Overall status: Phase 10 merged to `main`; Phase 11a and 11b implemented on `feature/phase11-reports`
 - Last updated: 2026-11-15
 - Branch: `feature/phase11-reports` (based on `main` commit `a29e4eb`)
 
@@ -968,8 +968,67 @@ network import).
   - `.\.venv\Scripts\ruff.exe check .`: `All checks passed!`
 - No live provider request was made; the explanation tests use
   `services.llm.testing.FakeProvider`.
-- No report export exists yet; Markdown, JSON, CSV, PDF, and configuration
-  templates are Phase 11b.
+- No report export existed at 11a; Markdown, JSON, CSV, PDF, and configuration
+  templates were delivered in 11b.
+
+## Phase 11b delivered - Markdown, JSON, CSV, PDF, and configuration templates
+Location: `services/export/` (pure Python plus ReportLab; no Streamlit, no
+network access, no disk writes).
+
+- Every function is a pure in-memory export: `to_markdown`, `to_json`,
+  `from_json`, `to_csv_bundle`, `to_pdf`, `config_templates`, and
+  `to_config_bundle` all return `bytes` (or immutable models) and never touch
+  the filesystem or a device.
+- `common.py`: fixed ZIP member timestamp and permissions make archives
+  byte-identical for the same input; every exporter enforces
+  `MAX_REPORT_BYTES` through `ReportLimitError`.
+- `markdown.py`: readable rendering of the same typed document (title block,
+  labels, contents, every section, AI appendix, value-provenance appendix,
+  model note). Table cells are escaped, truncated tables keep their visible
+  note, and the value appendix is bounded by `MAX_REPORT_TABLE_ROWS` with a
+  "showing first N of M" line.
+- `json_export.py`: deterministic UTF-8 JSON (sorted keys, two-space indent)
+  of the document's own model dump. `from_json` validates schema version and
+  document structure back into `ReportDocument`; the round trip is exact.
+- `csv_export.py`: exports the IP plan, VLAN assignments, DHCP scopes, routing
+  table, link utilization, findings, and optimization-candidate tables that
+  exist in the document. UTF-8 with CRLF terminators; an optional UTF-8 BOM is
+  documented in `CSV_ENCODING_NOTE` and written only on request. The ZIP
+  bundle includes a README naming the report, twin fingerprint, encoding and
+  BOM state, each table's row count, and any truncation note.
+- `config_templates.py`: five design-intent templates (devices, interfaces,
+  subnets, VLANs, DHCP scopes) built only from validated twin data. The first
+  line of every file is exactly `TEMPLATE - not applied to any device`; every
+  value is traceable to the twin, and no static-route or device-derived
+  content is invented.
+- `pdf.py`: ReportLab rendering with a title block, disclosure labels,
+  contents, section list, wrapping and paginating tables (repeating header
+  rows), source captions, page numbers, a header/footer stamped from the
+  injected clock, the exact disclosure footer, and a bounded value appendix.
+  Metadata dates and body text are pinned to the injected clock, and
+  `pageCompression=0` with `invariant=1` makes repeat builds byte-identical.
+  Texts longer than `MAX_PDF_CELL_CHARS` are visibly truncated. Non-Latin
+  characters are replaced with `?` and a visible notice points to the
+  Markdown/JSON exports; Arabic shaping and right-to-left layout are not
+  attempted.
+- `tests/unit/services/test_export.py` (17 tests): JSON round-trip and
+  malformed/unsupported payloads, Markdown content and determinism, truncation
+  notes, CSV content/BOM/ZIP stability and README, configuration-template
+  header and twin-only values, ZIP stability, PDF structure/footer/injected
+  clock, byte-identical repeats, long-table pagination, visible truncation,
+  non-Latin fallback (with UTF-8 exports preserving the original text), and
+  the size bound on all four exports.
+
+## Test evidence (Phase 11b)
+- Commands and results:
+  - `.\.venv\Scripts\python.exe -m pytest tests/unit/services/test_export.py -q`: `17 passed in 1.29s`
+  - `.\.venv\Scripts\python.exe -m pytest -q`: `739 passed in 14.21s`
+  - `.\.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- PDF assertions inspect the uncompressed Latin-1 byte stream for literal text
+  and count `/Type /Page` objects. A visual render pass (glyph positioning,
+  column widths, page-break quality, non-Latin squares) was not performed.
+- No dependency was added; ReportLab was already in `requirements.txt`. No
+  public domain schema changed.
 
 ## Test evidence (Phase 8)
 - Commands and results:
@@ -1184,7 +1243,23 @@ network import).
   stored twin at build time; it does not reuse a page's cached result. Values
   therefore match the current twin revision, but a page showing an older
   snapshot can display different numbers until it is rerun.
+- PDF rendering uses ReportLab's built-in Latin fonts. Characters outside
+  Latin are replaced with `?` and a visible notice points to the Markdown or
+  JSON export. Arabic shaping, bidirectional text, and embedded Unicode fonts
+  are not implemented, so an Arabic PDF is legible only as a placeholder
+  layout.
+- PDF verification is structural, not visual: tests search the uncompressed
+  byte stream for text and count page objects. Glyph overlap, row widths,
+  table page-break quality, and rendered Arabic placeholders were not inspected
+  in a viewer.
+- CSV exports contain bounded table rows only; a truncated source table keeps
+  the "showing first N of M" note in the bundle README rather than adding a
+  synthetic row to the CSV. Values are strings exactly as rendered in the
+  report, so downstream numeric parsing depends on the displayed precision.
+- Configuration templates are vendor-neutral design intent. They are not
+  device-applied, not vendor-complete, and not syntax-checked against any
+  device operating system.
 
 ## Next task
-- Phase 11b: Markdown, JSON, CSV, PDF, and configuration-template exports
-  (not started).
+- Phase 11c: Reports and Documentation page, including section selection,
+  preview, consistency findings, and download actions (not started).
