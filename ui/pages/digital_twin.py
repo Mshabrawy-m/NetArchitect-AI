@@ -23,10 +23,9 @@ from digital_twin import (
     effective_device_state,
     effective_link_state,
     to_json,
-    validate_twin,
 )
 from ui import state
-from ui.components import csv_bytes, render_findings
+from ui.components import csv_bytes, render_design_health
 
 SNAPSHOT_LABEL_KEY = "twin_snapshot_label"
 SNAPSHOT_CREATE_KEY = "twin_create_snapshot"
@@ -454,10 +453,17 @@ def render() -> None:
     _render_state_editor(twin)
     st.divider()
     st.subheader("Validation")
-    render_findings(
-        validate_twin(twin).findings,
-        "No digital-twin findings: topology, plans, demands, and state are consistent.",
+    include_expensive = st.checkbox(
+        "Run expensive structural checks",
+        value=False,
+        key="twin_design_health_expensive",
+        help=(
+            "Adds all-pairs reachability and redundancy/SPOF analysis. These "
+            "checks run one Dijkstra search per device and one removal analysis "
+            "per device and link."
+        ),
     )
+    render_design_health(twin, include_expensive=include_expensive)
     st.divider()
     _render_snapshot_actions(twin, state.get_snapshots())
     st.divider()

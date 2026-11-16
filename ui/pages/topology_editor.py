@@ -21,7 +21,6 @@ from pydantic import ValidationError
 from config.limits import MAX_NODES
 from core.exceptions import NetArchitectError
 from core.schemas.network import Device, DeviceRole, DeviceType, Link, Topology
-from digital_twin import validate_twin
 from network.topology import (
     add_device,
     add_link,
@@ -41,6 +40,7 @@ from network.topology import (
     update_device,
     update_link,
 )
+from services.validation import ValidationCategory, build_design_health
 from ui import state
 from ui.components import findings_frame
 
@@ -717,11 +717,16 @@ def _render_twin_consistency() -> None:
     twin = state.get_twin()
     if twin is None:
         return
-    findings = [
-        finding
-        for finding in validate_twin(twin).findings
-        if finding.code != "twin_topology_disconnected"
-    ]
+    health = build_design_health(twin)
+    findings = health.findings_in(
+        {
+            ValidationCategory.schema,
+            ValidationCategory.addressing,
+            ValidationCategory.vlan,
+            ValidationCategory.dhcp,
+            ValidationCategory.references,
+        }
+    )
     with st.container(border=True):
         st.subheader("Digital twin consistency")
         if not findings:

@@ -7,8 +7,15 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
-from digital_twin import DigitalTwin, TwinMetadata, apply_failure
+from digital_twin import (
+    DeviceState,
+    DigitalTwin,
+    OperationalState,
+    TwinMetadata,
+    apply_failure,
+)
 from network.topology import generate_ring
+from tests.unit.digital_twin.helpers import make_twin
 from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -22,6 +29,24 @@ def test_digital_twin_page_requires_a_twin() -> None:
 
     assert not at.exception
     assert any("No digital twin is loaded" in info.value for info in at.info)
+
+
+def test_digital_twin_page_shows_categorized_design_health() -> None:
+    twin = make_twin(
+        device_states=(
+            DeviceState(device_id="ghost", state=OperationalState.down),
+        )
+    )
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = twin
+    at.selectbox(key="page_nav").select("Digital Twin").run()
+
+    assert not at.exception
+    subheaders = [element.value for element in at.get("subheader")]
+    assert "Design health" in subheaders
+    assert any("design-health finding" in error.value for error in at.error)
+    metrics = {element.label: element.value for element in at.get("metric")}
+    assert metrics["Error"] == "1"
 
 
 def test_digital_twin_page_summarizes_state_and_creates_snapshot() -> None:

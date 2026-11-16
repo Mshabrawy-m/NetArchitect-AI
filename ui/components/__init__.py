@@ -68,10 +68,14 @@ def render_findings(findings: Sequence[Finding], empty_message: str) -> None:
     )
 
 
+# Imported last: the health module reuses findings_frame from this module.
+from .health import render_design_health
+
 __all__ = [
     "SEVERITY_ORDER",
     "csv_bytes",
     "findings_frame",
     "format_error",
+    "render_design_health",
     "render_findings",
 ]

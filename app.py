@@ -21,6 +21,8 @@ from __future__ import annotations
 import streamlit as st
 
 from config.settings import get_settings
+from ui import state
+from ui.components import render_design_health
 from ui.pages.agent_control_center import render as render_agent_control_center
 from ui.pages.ai_designer import render as render_ai_designer
 from ui.pages.digital_twin import render as render_digital_twin
@@ -116,6 +118,10 @@ def render_dashboard() -> None:
         "AI features are optional and need a Groq API key, while the engineering "
         "engines and the deterministic structured plan do not."
     )
+
+    twin = state.get_twin()
+    if twin is not None:
+        render_design_health(twin)
 
 
 def render_placeholder(page: str) -> None:
