@@ -8,7 +8,8 @@ import streamlit as st
 
 from core.schemas.validation import Severity
 from digital_twin import DigitalTwin
-from services.validation import CATEGORY_LABELS, DesignHealth, build_design_health
+from services.validation import CATEGORY_LABELS, DesignHealth
+from ui.cache import cached_design_health, twin_payload
 
 from . import findings_frame
 
@@ -20,10 +21,11 @@ def render_design_health(
     constraints: Sequence[str] | Iterable[str] = (),
 ) -> DesignHealth:
     """Render the single design-health panel and return its report."""
-    health = build_design_health(
-        twin,
-        include_expensive=include_expensive,
-        constraints=constraints,
+    constraint_list = tuple(constraints)
+    health = cached_design_health(
+        twin_payload(twin),
+        include_expensive,
+        constraint_list,
     )
 
     with st.container(border=True):
@@ -66,7 +68,7 @@ def render_design_health(
         with st.expander("Checks and cost"):
             for note in health.notes:
                 st.caption(note)
-            if constraints:
+            if constraint_list:
                 st.caption(
                     "Constraints are checked only in the documented forms; "
                     "unrecognized text is reported as not machine-checkable."

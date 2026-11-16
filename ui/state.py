@@ -58,6 +58,9 @@ CIDR_KEY = "ip_cidr_result"
 VLSM_KEY = "addressing_result"
 CHECK_KEY = "addressing_check_report"
 
+REPORT_TIME_KEY = "report_generated_at"
+REPORT_TIME_ENTRIES = 4
+
 _UNSET = object()
 _DEFAULT_TWIN_NAME = "Working design"
 
@@ -324,6 +327,28 @@ def remove_optimization_run(index: int) -> OptimizationRun:
 def clear_optimization_history() -> None:
     """Remove every retained optimization run."""
     get_optimization_history().clear()
+
+
+def report_generated_at(fingerprint: str) -> datetime:
+    """Return a stable report timestamp for one twin fingerprint.
+
+    The same twin revision keeps the timestamp it was first prepared with, so
+    rebuilding the report on a later rerun does not change its contents. A new
+    twin revision gets a new timestamp. Only the most recent fingerprints are
+    remembered to keep session state bounded.
+    """
+    timestamps = st.session_state.get(REPORT_TIME_KEY)
+    if not isinstance(timestamps, dict):
+        timestamps = {}
+    value = timestamps.get(fingerprint)
+    if isinstance(value, datetime):
+        return value
+    moment = _now()
+    timestamps[fingerprint] = moment
+    while len(timestamps) > REPORT_TIME_ENTRIES:
+        del timestamps[next(iter(timestamps))]
+    st.session_state[REPORT_TIME_KEY] = timestamps
+    return moment
 
 
 def get_llm_session_key() -> str:

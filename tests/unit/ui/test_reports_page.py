@@ -78,6 +78,32 @@ def test_populated_page_previews_sections_and_offers_every_export() -> None:
     assert "Network" in ip_plan.columns
 
 
+def test_report_timestamp_is_stable_for_one_twin_and_resets_for_a_new_one() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120)
+    at.session_state[state.TWIN_KEY] = make_twin()
+    at.run()
+    at.selectbox(key="page_nav").select("Reports & Documentation").run()
+
+    def prepared_line() -> str:
+        return next(
+            caption.value
+            for caption in at.caption
+            if "Prepared at" in caption.value
+        )
+
+    first = prepared_line()
+    at.run()
+    assert prepared_line() == first
+
+    changed = make_twin()
+    changed = changed.model_copy(
+        update={"metadata": changed.metadata.model_copy(update={"name": "New twin"})}
+    )
+    at.session_state[state.TWIN_KEY] = changed
+    at.run()
+    assert prepared_line() != first
+
+
 def test_section_selection_limits_the_preview_and_downloads() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.TWIN_KEY] = make_twin()

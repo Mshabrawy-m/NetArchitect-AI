@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from core.exceptions import OptimizationValidationError
 from core.schemas.network import Link
-from digital_twin import DigitalTwin, set_link_capacity, set_link_cost, set_topology
-from network.topology import add_link
+from digital_twin import DigitalTwin, set_topology
+from network.topology import replace_links
 
 from .models import Candidate, CapacityTier, CostModel, OptimizationSettings
 
@@ -93,34 +93,45 @@ def build_candidate_twin(
     mutated.
     """
     pool, baseline_links = _validate_candidate(baseline_twin, candidate, settings)
-    twin = baseline_twin
+    replacements: dict[str, Link] = {}
+    additions: list[Link] = []
 
     for link_id, _ in candidate.tier_assignments:
         if link_id not in baseline_links:
             continue
         tier = tier_for_link(link_id, candidate, settings.cost_model)
-        twin = set_link_capacity(twin, link_id, tier.capacity_mbps)
+        replacements[link_id] = baseline_links[link_id].model_copy(
+            update={"capacity_mbps": tier.capacity_mbps}
+        )
 
     for link_id in candidate.selected_link_ids:
         source = pool[link_id]
         tier = tier_for_link(link_id, candidate, settings.cost_model)
         multiplier = candidate.multiplier_for(link_id)
-        link = source.model_copy(
-            update={
-                "capacity_mbps": tier.capacity_mbps,
-                "cost": source.cost * multiplier,
-            }
+        additions.append(
+            source.model_copy(
+                update={
+                    "capacity_mbps": tier.capacity_mbps,
+                    "cost": source.cost * multiplier,
+                }
+            )
         )
-        twin = set_topology(twin, add_link(twin.topology, link))
 
     for link_id, multiplier in candidate.cost_multipliers:
         if link_id in baseline_links:
-            current = next(
-                link for link in twin.topology.links if link.id == link_id
+            current = replacements.get(link_id, baseline_links[link_id])
+            replacements[link_id] = current.model_copy(
+                update={"cost": current.cost * multiplier}
             )
-            twin = set_link_cost(twin, link_id, current.cost * multiplier)
 
-    return twin
+    if not replacements and not additions:
+        return baseline_twin
+    topology = replace_links(
+        baseline_twin.topology,
+        replacements=replacements,
+        additions=additions,
+    )
+    return set_topology(baseline_twin, topology)
 
 
 def candidate_changes(

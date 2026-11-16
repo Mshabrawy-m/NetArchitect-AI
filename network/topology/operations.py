@@ -16,6 +16,8 @@ a generic validation traceback:
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+
 from config.limits import MAX_EDGES, MAX_NODES
 from core.exceptions import (
     DeviceNotFoundError,
@@ -146,6 +148,50 @@ def add_link(topology: Topology, link: Link) -> Topology:
 
     updated = topology.model_copy(deep=True)
     updated.links.append(link)
+    return _revalidated(updated)
+
+
+def replace_links(
+    topology: Topology,
+    *,
+    replacements: Mapping[str, Link] | None = None,
+    additions: Sequence[Link] = (),
+) -> Topology:
+    """Return a copy with several link changes applied in one validation pass.
+
+    ``replacements`` maps existing link ids to fully-built replacement links.
+    ``additions`` are appended after the existing links. This is equivalent to
+    calling :func:`update_link` or :func:`add_link` once per change, but copies
+    and revalidates the topology once instead of once per link. The input is
+    never mutated.
+    """
+    replacements = dict(replacements or {})
+    enforce_limits(topology)
+    if len(topology.links) + len(additions) > MAX_EDGES:
+        raise LimitsExceededError(
+            "Topology would have "
+            f"{len(topology.links) + len(additions)} links; the limit is "
+            f"{MAX_EDGES}"
+        )
+
+    existing = {link.id for link in topology.links}
+    missing = sorted(set(replacements) - existing)
+    if missing:
+        raise LinkNotFoundError(
+            f"Link {missing[0]!r} does not exist in the topology"
+        )
+
+    seen = set(existing)
+    for link in additions:
+        if link.id in seen:
+            raise DuplicateIdError(f"Link id {link.id!r} already exists")
+        seen.add(link.id)
+        _require_endpoints(topology, link)
+
+    updated = topology.model_copy(deep=True)
+    updated.links = [
+        replacements.get(link.id, link) for link in topology.links
+    ] + list(additions)
     return _revalidated(updated)
 
 

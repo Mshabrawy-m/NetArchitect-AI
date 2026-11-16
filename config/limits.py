@@ -24,7 +24,9 @@ MAX_HOSTS_PER_SUBNET: int = 1_000_000
 # pair. Keeps k-shortest-path enumeration bounded on the deployment target.
 MAX_ALTERNATIVE_PATHS: int = 10
 
-# Maximum number of what-if scenarios retained for comparison.
+# Maximum number of what-if scenarios retained for comparison. A scenario run on
+# the 500-device profile twin serializes to about 0.75 MiB, so the worst case is
+# roughly 37 MiB of session data.
 MAX_SCENARIOS: int = 50
 
 # Maximum number of entities (links, devices, demands, or expansion records) a
@@ -53,10 +55,14 @@ MAX_EVALUATIONS: int = 20_000
 
 # Maximum wall-clock seconds for the search phase of one optimization run.
 # Baseline evaluation is performed first and is not counted against this
-# search budget.
+# search budget. The deadline is checked before each candidate evaluation. This
+# is a user-triggered search, not a page-rerun cost, so it is intentionally
+# longer than the 5-second interactive target.
 MAX_OPTIMIZATION_RUNTIME_SECONDS: int = 60
 
-# Maximum number of optimization runs retained in one session history.
+# Maximum number of optimization runs retained in one session history. A
+# 60-second run on the 500-device profile twin keeps about 76 candidates and
+# serializes to about 2.4 MiB, so the worst case is roughly 48 MiB.
 MAX_OPTIMIZATION_RUNS: int = 20
 
 # Maximum wall-clock seconds for a single simulation run.

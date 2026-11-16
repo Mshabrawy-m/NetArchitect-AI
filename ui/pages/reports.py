@@ -14,7 +14,6 @@ missing data.
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
 
 import pandas as pd
 import streamlit as st
@@ -24,14 +23,6 @@ from config.limits import MAX_REPORT_TABLE_ROWS
 from core.exceptions import ReportError
 from digital_twin import DigitalTwin
 from optimization import OptimizationRun
-from services.export import (
-    pdf_warnings,
-    to_config_bundle,
-    to_csv_bundle,
-    to_json,
-    to_markdown,
-    to_pdf,
-)
 from services.reporting import (
     KeyValueBlock,
     NoteBlock,
@@ -44,8 +35,14 @@ from services.reporting import (
     check_consistency,
     filter_sections,
 )
-from simulation import ScenarioRun
+from simulation import ScenarioRun, twin_fingerprint
 from ui import state
+from ui.cache import (
+    cached_exports,
+    cached_report,
+    source_payload,
+    twin_payload,
+)
 from ui.components import format_error
 from ui.pages.agent_control_center import PLAN_SOURCES
 
@@ -363,18 +360,13 @@ def _render_downloads(document: ReportDocument, twin: DigitalTwin) -> None:
         "applied to a device."
     )
     try:
-        pdf = to_pdf(document)
-        markdown = to_markdown(document)
-        json_payload = to_json(document)
-        csv_bundle = to_csv_bundle(document)
-        config_bundle = to_config_bundle(twin)
+        bundle = cached_exports(document.model_dump_json(), twin_payload(twin))
     except ReportError as error:
         st.error(format_error(error), title="Export failed")
         return
 
-    warnings = pdf_warnings(document)
-    if warnings:
-        st.warning(" ".join(warnings), title="PDF font coverage")
+    if bundle.warnings:
+        st.warning(" ".join(bundle.warnings), title="PDF font coverage")
 
     slug = _safe_slug(
         f"{document.twin.name}-{document.generated_at.date().isoformat()}"
@@ -383,14 +375,14 @@ def _render_downloads(document: ReportDocument, twin: DigitalTwin) -> None:
     with columns[0]:
         st.download_button(
             "Download PDF report",
-            data=pdf,
+            data=bundle.pdf,
             file_name=f"{slug}.pdf",
             mime="application/pdf",
             key="reports_download_pdf",
         )
         st.download_button(
             "Download Markdown report",
-            data=markdown,
+            data=bundle.markdown,
             file_name=f"{slug}.md",
             mime="text/markdown",
             key="reports_download_markdown",
@@ -398,14 +390,14 @@ def _render_downloads(document: ReportDocument, twin: DigitalTwin) -> None:
     with columns[1]:
         st.download_button(
             "Download JSON report",
-            data=json_payload,
+            data=bundle.json,
             file_name=f"{slug}.json",
             mime="application/json",
             key="reports_download_json",
         )
         st.download_button(
             "Download CSV tables (ZIP)",
-            data=csv_bundle,
+            data=bundle.csv,
             file_name=f"{slug}-tables.zip",
             mime="application/zip",
             key="reports_download_csv",
@@ -413,7 +405,7 @@ def _render_downloads(document: ReportDocument, twin: DigitalTwin) -> None:
     with columns[2]:
         st.download_button(
             "Download configuration templates (ZIP)",
-            data=config_bundle,
+            data=bundle.config,
             file_name=f"{slug}-templates.zip",
             mime="application/zip",
             key="reports_download_templates",
@@ -459,16 +451,27 @@ def render() -> None:
         return
 
     workflow, scenario_run, optimization_run = _render_sources()
+    generated_at = state.report_generated_at(twin_fingerprint(twin))
     try:
-        document = build_report(
-            ReportSources(
-                twin=twin,
-                workflow=workflow,
-                scenario_run=scenario_run,
-                optimization_run=optimization_run,
-                generated_at=datetime.now(UTC),
+        if workflow is None:
+            document = cached_report(
+                twin_payload(twin),
+                source_payload(scenario_run),
+                source_payload(optimization_run),
+                generated_at.isoformat(),
             )
-        )
+        else:
+            # WorkflowState holds a live accessor and is not serializable, so it
+            # cannot be a content-keyed cache argument. Exports are still cached.
+            document = build_report(
+                ReportSources(
+                    twin=twin,
+                    workflow=workflow,
+                    scenario_run=scenario_run,
+                    optimization_run=optimization_run,
+                    generated_at=generated_at,
+                )
+            )
     except (ReportError, ValueError) as error:
         st.error(format_error(error), title="Report could not be built")
         return

@@ -19,6 +19,7 @@ from network.topology.operations import (
     enforce_limits,
     remove_device,
     remove_link,
+    replace_links,
     update_device,
     update_link,
 )
@@ -194,3 +195,46 @@ def test_revalidated_result_keeps_referential_integrity() -> None:
         for link in updated.links
         for endpoint in link.endpoints
     )
+
+
+def test_replace_links_matches_sequential_updates_in_one_pass() -> None:
+    topology = _topology()
+    upgraded = topology.links[0].model_copy(update={"capacity_mbps": 10_000.0})
+    added = make_link("l2", "r1", "r2")
+
+    batched = replace_links(
+        topology,
+        replacements={"l1": upgraded},
+        additions=[added],
+    )
+    sequential = add_link(update_link(topology, "l1", capacity_mbps=10_000.0), added)
+
+    assert batched == sequential
+    assert topology.links[0].capacity_mbps == 1_000.0
+    assert [link.id for link in topology.links] == ["l1"]
+
+
+def test_replace_links_rejects_unknown_replacement() -> None:
+    with pytest.raises(LinkNotFoundError, match="does not exist"):
+        replace_links(
+            _topology(),
+            replacements={"missing": make_link("missing", "r1", "r2")},
+        )
+
+
+def test_replace_links_rejects_duplicate_addition() -> None:
+    with pytest.raises(DuplicateIdError, match="already exists"):
+        replace_links(_topology(), additions=[make_link("l1", "r1", "r2")])
+
+
+def test_replace_links_rejects_missing_endpoint() -> None:
+    with pytest.raises(MissingEndpointError, match="unknown device"):
+        replace_links(_topology(), additions=[make_link("l2", "r1", "missing")])
+
+
+def test_replace_links_enforces_edge_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("network.topology.operations.MAX_EDGES", 1)
+    with pytest.raises(LimitsExceededError, match="limit is 1"):
+        replace_links(_topology(), additions=[make_link("l2", "r1", "r2")])

@@ -137,6 +137,37 @@ def test_build_candidate_applies_routing_cost_multiplier() -> None:
     assert ab.cost == 2.5
 
 
+def test_candidate_applies_all_link_changes_in_one_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import optimization.space as space_module
+
+    calls: list[tuple[int, int]] = []
+    original = space_module.replace_links
+
+    def spy(topology, *, replacements=None, additions=()):
+        calls.append((len(replacements or {}), len(additions)))
+        return original(
+            topology,
+            replacements=replacements,
+            additions=additions,
+        )
+
+    monkeypatch.setattr(space_module, "replace_links", spy)
+    candidate = Candidate(
+        selected_link_ids=("cd",),
+        tier_assignments=(("ab", "large"),),
+        cost_multipliers=(("ab", 2.0),),
+    )
+
+    twin = build_candidate_twin(tiny_twin(), candidate, settings())
+
+    assert calls == [(1, 1)]
+    ab = next(link for link in twin.topology.links if link.id == "ab")
+    assert ab.capacity_mbps == two_tier_model().tier("large").capacity_mbps
+    assert ab.cost == 2.0
+
+
 def test_unknown_tier_is_rejected_at_application() -> None:
     candidate = Candidate(
         selected_link_ids=("cd",),

@@ -20,6 +20,7 @@ from .operations import (
     enforce_limits,
     remove_device,
     remove_link,
+    replace_links,
     update_device,
     update_link,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "generate_tree",
     "remove_device",
     "remove_link",
+    "replace_links",
     "to_json",
     "to_networkx",
     "topology_directedness",
