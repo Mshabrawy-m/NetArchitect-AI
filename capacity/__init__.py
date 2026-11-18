@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .demand import project_demands
 from .engine import evaluate_capacity
+from .history import CapacityHistory
 from .models import (
     CAPACITY_METHOD_NOTE,
     CAPACITY_NOTE,
@@ -31,6 +32,7 @@ __all__ = [
     "CapacityFinding",
     "CapacityFindingCode",
     "CapacityGap",
+    "CapacityHistory",
     "CapacityRun",
     "CapacityStopReason",
     "Crossing",

@@ -7,9 +7,11 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 from agents import run_structured_design
+from capacity import CapacityHistory, DemandMapping, evaluate_capacity
 from core.schemas.scenario import ScenarioType
 from simulation import ScenarioHistory, run_scenario
 from tests.unit.agents.helpers import sample_requirements
+from tests.unit.capacity.helpers import constant_run, line_capacity_twin
 from tests.unit.digital_twin.helpers import make_twin
 from tests.unit.simulation.helpers import line_twin, make_demand, make_scenario
 from ui import state
@@ -179,3 +181,31 @@ def test_a_retained_scenario_run_fills_the_simulation_section() -> None:
     assert "Simulation Lab" not in set(unavailable["Producing page"])
     headings = [markdown.value for markdown in at.markdown]
     assert any("Simulation before and after" in value for value in headings)
+
+
+def test_a_retained_capacity_run_fills_the_capacity_section() -> None:
+    twin = line_capacity_twin()
+    forecast = constant_run(30.0)
+    mapping = DemandMapping(series_to_demand={"s1": "call"}, per_user_mbps=1.0)
+    run = evaluate_capacity(twin, forecast, mapping)
+    history = CapacityHistory()
+    history.add(run)
+
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120)
+    at.session_state[state.TWIN_KEY] = twin
+    at.session_state[state.CAPACITY_HISTORY_KEY] = history
+    at.run()
+    at.selectbox(key="page_nav").select("Reports & Documentation").run()
+
+    assert not at.exception
+    selector = at.multiselect(key="reports_sections")
+    assert "Capacity planning (available)" in selector.options
+    assert "capacity" in selector.value
+    assert at.selectbox(key="reports_capacity_source")
+
+    unavailable = _find_frame(at, "Producing page")
+    assert unavailable is not None
+    assert "Capacity Planning" not in set(unavailable["Producing page"])
+    headings = [markdown.value for markdown in at.markdown]
+    assert any("Capacity planning" in value for value in headings)
+    assert any(success.value.startswith("Consistent:") for success in at.success)

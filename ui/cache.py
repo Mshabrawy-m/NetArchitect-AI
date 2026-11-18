@@ -12,13 +12,21 @@ well lets the cached function rebuild the model without touching session state.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 
 import streamlit as st
 
+from capacity import CapacityRun, DemandMapping, evaluate_capacity
 from digital_twin import DigitalTwin, to_json
-from optimization import OptimizationRun
+from forecasting import (
+    ForecastRun,
+    GapPolicy,
+    TimeSeries,
+    forecast_series,
+)
+from optimization import CostModel, OptimizationRun
 from services.export import (
     pdf_warnings,
     to_config_bundle,
@@ -31,7 +39,7 @@ from services.export import (
 )
 from services.reporting import ReportDocument, ReportSources, build_report
 from services.validation import DesignHealth, build_design_health
-from simulation import ScenarioRun, twin_fingerprint
+from simulation import ScenarioRun, SimulationAssumptions, twin_fingerprint
 
 CACHE_ENTRIES = 8
 
@@ -58,6 +66,70 @@ def source_payload(source: ScenarioRun | OptimizationRun | None) -> str:
     return source.model_dump_json()
 
 
+def capacity_series_payload(series: tuple[TimeSeries, ...]) -> str:
+    """Return canonical JSON for the bounded capacity input series."""
+    return json.dumps(
+        [json.loads(item.model_dump_json()) for item in series],
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+
+def capacity_source_payload(source: CapacityRun | None) -> str:
+    """Return canonical JSON for an optional capacity report source."""
+    return source.model_dump_json() if source is not None else ""
+
+
+@st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
+def cached_forecast_run(
+    series_payload: str,
+    horizon: int,
+    moving_window: int,
+    seasonal_period: int,
+    gap_policy: str,
+) -> ForecastRun:
+    """Build one forecast run per content keyed input set."""
+    items = json.loads(series_payload)
+    series = tuple(TimeSeries.model_validate_json(json.dumps(item)) for item in items)
+    results = tuple(
+        forecast_series(
+            item,
+            horizon=horizon,
+            moving_window=moving_window,
+            seasonal_period=seasonal_period,
+        )
+        for item in series
+    )
+    return ForecastRun(
+        results=results,
+        horizon=horizon,
+        gap_policy=GapPolicy(gap_policy),
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
+def cached_capacity_run(
+    twin_payload: str,
+    forecast_payload: str,
+    mapping_payload: str,
+    assumptions_payload: str,
+    cost_payload: str,
+    max_evaluations: int,
+    max_runtime_seconds: float,
+) -> CapacityRun:
+    """Evaluate one bounded capacity run per content keyed input set."""
+    return evaluate_capacity(
+        DigitalTwin.model_validate_json(twin_payload),
+        ForecastRun.model_validate_json(forecast_payload),
+        DemandMapping.model_validate_json(mapping_payload),
+        assumptions=SimulationAssumptions.model_validate_json(assumptions_payload),
+        cost_model=CostModel.model_validate_json(cost_payload),
+        max_evaluations=max_evaluations,
+        max_runtime_seconds=max_runtime_seconds,
+    )
+
+
 @st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
 def cached_design_health(
     twin_payload: str,
@@ -79,6 +151,7 @@ def cached_report(
     optimization_payload: str,
     generated_at_iso: str,
     title: str = "",
+    capacity_payload: str = "",
 ) -> ReportDocument:
     """Build one report document once per twin revision and source selection."""
     return build_report(
@@ -92,6 +165,11 @@ def cached_report(
             optimization_run=(
                 OptimizationRun.model_validate_json(optimization_payload)
                 if optimization_payload
+                else None
+            ),
+            capacity_run=(
+                CapacityRun.model_validate_json(capacity_payload)
+                if capacity_payload
                 else None
             ),
             generated_at=datetime.fromisoformat(generated_at_iso),
@@ -128,9 +206,13 @@ def cached_exports(document_payload: str, twin_payload: str) -> ExportBundle:
 
 __all__ = [
     "ExportBundle",
+    "cached_capacity_run",
     "cached_design_health",
     "cached_exports",
+    "cached_forecast_run",
     "cached_report",
+    "capacity_series_payload",
+    "capacity_source_payload",
     "source_payload",
     "twin_cache_key",
     "twin_payload",

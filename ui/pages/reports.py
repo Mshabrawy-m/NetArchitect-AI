@@ -19,6 +19,7 @@ import pandas as pd
 import streamlit as st
 
 from agents import WorkflowState
+from capacity import CapacityRun
 from config.limits import MAX_REPORT_TABLE_ROWS
 from core.exceptions import ReportError
 from digital_twin import DigitalTwin
@@ -40,6 +41,7 @@ from ui import state
 from ui.cache import (
     cached_exports,
     cached_report,
+    capacity_source_payload,
     source_payload,
     twin_payload,
 )
@@ -49,6 +51,7 @@ from ui.pages.agent_control_center import PLAN_SOURCES
 WORKFLOW_KEY = "reports_workflow_source"
 SIMULATION_KEY = "reports_simulation_source"
 OPTIMIZATION_KEY = "reports_optimization_source"
+CAPACITY_KEY = "reports_capacity_source"
 SECTIONS_KEY = "reports_sections"
 
 NONE_LABEL = "None"
@@ -128,25 +131,51 @@ def _select_optimization() -> OptimizationRun | None:
     return runs[labels.index(selected) - 1]
 
 
+def _select_capacity() -> CapacityRun | None:
+    runs = state.peek_capacity_runs()
+    labels = [NONE_LABEL] + [
+        f"{index + 1}. {len(run.steps)} projected steps | "
+        f"{len(run.recommendations)} upgrades | {run.bounds.stop_reason.value}"
+        for index, run in enumerate(runs)
+    ]
+    selected = st.selectbox(
+        "Capacity run",
+        labels,
+        index=len(labels) - 1,
+        key=CAPACITY_KEY,
+        help=(
+            "Adds one retained capacity analysis with its forecast provenance "
+            "and modeled upgrade recommendations. Runs are created on the "
+            "Capacity Planning page."
+        ),
+    )
+    if selected == NONE_LABEL:
+        return None
+    return runs[labels.index(selected) - 1]
+
+
 def _render_sources() -> tuple[
     WorkflowState | None,
     ScenarioRun | None,
     OptimizationRun | None,
+    CapacityRun | None,
 ]:
     st.subheader("Report sources")
     st.caption(
         "The report always includes the current digital twin. A retained "
-        "workflow, scenario run, or optimization run is added only when it is "
-        "selected here."
+        "workflow, scenario run, optimization run, or capacity run is added only "
+        "when it is selected here."
     )
-    columns = st.columns(3)
+    columns = st.columns(4)
     with columns[0]:
         workflow = _select_workflow()
     with columns[1]:
         scenario_run = _select_simulation()
     with columns[2]:
         optimization_run = _select_optimization()
-    return workflow, scenario_run, optimization_run
+    with columns[3]:
+        capacity_run = _select_capacity()
+    return workflow, scenario_run, optimization_run, capacity_run
 
 
 def _section_label(document: ReportDocument, section_id: str) -> str:
@@ -451,7 +480,7 @@ def render() -> None:
         _render_empty_state()
         return
 
-    workflow, scenario_run, optimization_run = _render_sources()
+    workflow, scenario_run, optimization_run, capacity_run = _render_sources()
     generated_at = state.report_generated_at(twin_fingerprint(twin))
     try:
         if workflow is None:
@@ -460,6 +489,7 @@ def render() -> None:
                 source_payload(scenario_run),
                 source_payload(optimization_run),
                 generated_at.isoformat(),
+                capacity_payload=capacity_source_payload(capacity_run),
             )
         else:
             # WorkflowState holds a live accessor and is not serializable, so it
@@ -470,6 +500,7 @@ def render() -> None:
                     workflow=workflow,
                     scenario_run=scenario_run,
                     optimization_run=optimization_run,
+                    capacity_run=capacity_run,
                     generated_at=generated_at,
                 )
             )

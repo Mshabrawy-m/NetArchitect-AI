@@ -170,3 +170,6 @@ MAX_CAPACITY_HORIZON_STEPS: int = 12
 # Maximum wall-clock seconds for one complete capacity analysis, including all
 # projected-step and upgrade evaluations.
 MAX_CAPACITY_RUNTIME_SECONDS: float = 30.0
+
+# Maximum number of bounded capacity runs retained in one Streamlit session.
+MAX_CAPACITY_RUNS: int = 20

@@ -15,6 +15,7 @@ from typing import Any
 
 import streamlit as st
 
+from capacity import CapacityHistory, CapacityRun
 from core.schemas.addressing import AddressingPlan, DhcpScope
 from core.schemas.network import Topology
 from core.schemas.routing import TrafficDemand
@@ -39,6 +40,7 @@ from digital_twin import (
 from digital_twin import (
     set_vlan_plan as twin_set_vlan_plan,
 )
+from forecasting import ForecastRun, TimeSeries
 from network.vlan.plan import VlanPlanResult
 from optimization import OptimizationHistory, OptimizationRun
 from services.llm import RequestBudget
@@ -48,6 +50,9 @@ TWIN_KEY = "digital_twin"
 SNAPSHOTS_KEY = "digital_twin_snapshots"
 SIMULATION_HISTORY_KEY = "simulation_history"
 OPTIMIZATION_HISTORY_KEY = "optimization_history"
+CAPACITY_SERIES_KEY = "capacity_series"
+CAPACITY_FORECAST_KEY = "capacity_forecast"
+CAPACITY_HISTORY_KEY = "capacity_history"
 LEGACY_TOPOLOGY_KEY = "topology"
 FLASH_KEY = "topology_editor_flash"
 
@@ -345,6 +350,76 @@ def remove_optimization_run(index: int) -> OptimizationRun:
 def clear_optimization_history() -> None:
     """Remove every retained optimization run."""
     get_optimization_history().clear()
+
+
+def get_capacity_series() -> tuple[TimeSeries, ...]:
+    """Return the current capacity-planning input series."""
+    value = st.session_state.get(CAPACITY_SERIES_KEY)
+    return value if isinstance(value, tuple) else ()
+
+
+def peek_capacity_series() -> tuple[TimeSeries, ...]:
+    """Return capacity input series without creating an empty session key."""
+    return get_capacity_series()
+
+
+def set_capacity_series(series: tuple[TimeSeries, ...]) -> tuple[TimeSeries, ...]:
+    """Replace the bounded set of capacity-planning input series."""
+    st.session_state[CAPACITY_SERIES_KEY] = tuple(series)
+    return get_capacity_series()
+
+
+def get_capacity_forecast() -> ForecastRun | None:
+    """Return the last generated forecast run, if any."""
+    value = st.session_state.get(CAPACITY_FORECAST_KEY)
+    return value if isinstance(value, ForecastRun) else None
+
+
+def peek_capacity_forecast() -> ForecastRun | None:
+    """Return the last forecast run without creating an empty session key."""
+    return get_capacity_forecast()
+
+
+def set_capacity_forecast(run: ForecastRun) -> ForecastRun:
+    """Store one completed forecast run for the Capacity tab."""
+    st.session_state[CAPACITY_FORECAST_KEY] = run
+    return run
+
+
+def get_capacity_history() -> CapacityHistory:
+    """Return the session capacity history, creating it when needed."""
+    history = st.session_state.get(CAPACITY_HISTORY_KEY)
+    if not isinstance(history, CapacityHistory):
+        history = CapacityHistory()
+        st.session_state[CAPACITY_HISTORY_KEY] = history
+    return history
+
+
+def get_capacity_runs() -> tuple[CapacityRun, ...]:
+    """Return retained capacity runs in creation order."""
+    return get_capacity_history().runs
+
+
+def peek_capacity_runs() -> tuple[CapacityRun, ...]:
+    """Return retained capacity runs without creating an empty history."""
+    history = st.session_state.get(CAPACITY_HISTORY_KEY)
+    return history.runs if isinstance(history, CapacityHistory) else ()
+
+
+def add_capacity_run(run: CapacityRun) -> CapacityRun:
+    """Append a capacity run to the bounded session history."""
+    get_capacity_history().add(run)
+    return run
+
+
+def remove_capacity_run(index: int) -> CapacityRun:
+    """Remove one retained capacity run by index."""
+    return get_capacity_history().remove(index)
+
+
+def clear_capacity_history() -> None:
+    """Remove every retained capacity run."""
+    get_capacity_history().clear()
 
 
 def report_generated_at(fingerprint: str) -> datetime:

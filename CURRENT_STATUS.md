@@ -1,9 +1,9 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 13 - Predictive Capacity Planning (in progress)
-- Current task: Phase 13b - Capacity projection and evaluation (complete)
-- Overall status: Phase 12 complete on `main` (`97cc88c`); Phase 13a/13b complete on `feature/phase13-capacity`
+- Current phase: Phase 13 - Predictive Capacity Planning (complete)
+- Current task: Phase 13c - UI and report integration (complete)
+- Overall status: Phase 12 complete on `main` (`97cc88c`); Phase 13a/13b/13c complete on `feature/phase13-capacity`
 - Last updated: 2026-11-18
 - Branch: `feature/phase13-capacity` (based on `main` commit `97cc88c`)
 
@@ -20,7 +20,7 @@
 - [x] Phase 10: Specialized AI Agents
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
-- [ ] Phase 13: Predictive Capacity Planning (13a/13b complete)
+- [x] Phase 13: Predictive Capacity Planning (13a/13b/13c complete)
 - [ ] Phase 14: Testing, Security, and Deployment
 
 ## Task 0 evidence (verification and version control)
@@ -1437,9 +1437,9 @@ Digital Twin, Dashboard, and Topology Editor.
 - Phase 12 verification is AppTest- and service-test-only. Browser rendering,
   responsive behavior at narrow widths, and the PDF viewer were not inspected
   manually; no screenshots were taken.
-- The Capacity Planning page is still the Phase 12 read-only inventory. The
-  forecasting engine now exists, but page integration, capacity evaluation, and
-  recommendations arrive in Phase 13b/13c.
+- The Phase 12 read-only Capacity Planning inventory was replaced in Phase 13c
+  by the four-tab forecasting and capacity workflow. Browser rendering and real
+  CSV upload were not verified outside AppTest.
 - The profiler's flagged search rows are user-triggered searches bounded by
   `MAX_OPTIMIZATION_RUNTIME_SECONDS=60`, not page-background work. Tracemalloc
   measures Python allocations, not total process RSS, and adds time overhead.
@@ -1528,7 +1528,47 @@ Location: `capacity/` (reuses `forecasting`, `simulation.evaluator`, and
   `& ".venv\Scripts\python.exe" -m ruff check capacity tests/unit/capacity`
   -> `All checks passed!`.
 
+## Phase 13c delivered - UI and report integration
+Location: `ui/pages/capacity_planning.py`, `ui/pages/reports.py`, `ui/cache.py`,
+`ui/state.py`, `services/reporting/builder.py`, and `capacity/history.py`.
+
+- The Capacity Planning page now has four tabs: Data, Forecast, Capacity, and
+  Downloads. Data accepts strict `timestamp,series_id,value,unit` CSV rows or a
+  deterministic `SYNTHETIC` generator; Forecast runs the NumPy-only baselines;
+  Capacity maps forecast series to existing twin demands, applies a stated
+  `per_user_mbps` assumption where needed, and evaluates bounded projected
+  copies of the baseline twin; Downloads exports series, forecast points, run,
+  bottlenecks, and upgrades in memory.
+- The visible model-scope note is exactly: "Modeled projections from supplied or
+  synthetic data; not measurements or guarantees." Forecast provenance is shown
+  in tables and carried into the capacity run and report.
+- `services/reporting/builder.py` adds an optional `capacity` section between
+  `simulation` and `optimization`. It records the source twin fingerprint, data
+  label, selected models, stop reason, projected steps, mapped demands,
+  congestion crossings, bottlenecks, tier upgrades, and proxy cost deltas. All
+  numbers are registered in the sourced-value appendix with step, tool, and twin
+  version. No capacity input means the section stays `not_run` and points to the
+  Capacity Planning page.
+- `ui/state.py` adds bounded session storage for capacity series, the last
+  forecast run, and `CapacityHistory` (`MAX_CAPACITY_RUNS=20`). `ui/cache.py`
+  adds content-keyed `cached_forecast_run`, `cached_capacity_run`,
+  `capacity_series_payload`, and `capacity_source_payload`, and extends
+  `cached_report` with an optional `capacity_payload`. The baseline twin is not
+  mutated by any of these paths.
+- Additive schema/API changes: `ReportSources.capacity_run`, section id
+  `capacity`, `ProjectedDemand.model`, `CapacityHistory`, the capacity state
+  keys, and the new cache function parameters. No existing field was removed or
+  renamed.
+- Tests: AppTest coverage for the four-tab workflow, synthetic labeling,
+  forecast/capacity execution, download keys, and report source selection;
+  service tests for capacity provenance, consistency, and tampered-number
+  detection; cache tests for forecast/capacity reuse and capacity-backed
+  reports; bounded history tests.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `843 passed in
+  22.16s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering, real-network CSV upload, and live device
+  verification were not performed.
+
 ## Next task
-- Phase 13c: replace the read-only Capacity Planning page with the four-tab
-  Data/Forecast/Capacity/Downloads workflow and add a provenance-aware Capacity
-  section to reports.
+- None in this work item. The next backlog item is Phase 14 (testing, security,
+  and deployment); it was not started here.

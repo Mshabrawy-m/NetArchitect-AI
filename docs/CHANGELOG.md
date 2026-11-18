@@ -2,6 +2,32 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 13c: capacity UI and report integration
+
+### Added
+- `ui/pages/capacity_planning.py`: four-tab Data/Forecast/Capacity/Downloads
+  workflow using strict CSV input or a deterministic labeled SYNTHETIC generator,
+  statistical forecasts, bounded capacity evaluation against copies of the
+  current twin, and in-memory downloads. The visible note states that outputs
+  are modeled projections, not measurements or guarantees.
+- Optional report section `capacity` with source fingerprint, data labels,
+  forecast models, stop reason, projected utilization, bottlenecks, tier
+  upgrades, and proxy cost deltas. Capacity numbers are registered in the
+  sourced-value appendix for consistency checking.
+- `capacity/history.py`: bounded ordered `CapacityHistory`; `ui/state.py`
+  capacity series/forecast/run accessors; `ui/cache.py` content-keyed
+  forecast/capacity caches and an optional capacity payload for cached reports.
+- Tests: four-tab AppTest workflow, downloaded artifacts, capacity report
+  provenance/consistency/tamper detection, cache reuse, bounded history, and
+  report source selection. Full suite: `843 passed in 22.16s`.
+
+### Changed
+- Additive schema/API only: `ReportSources.capacity_run`, section id `capacity`
+  between `simulation` and `optimization`, `ProjectedDemand.model`,
+  `CapacityHistory`, capacity session keys, and the new cache parameters. No
+  existing field was removed or renamed. No new dependency or machine learning
+  was introduced.
+
 ## 2026-11-18 - Phase 13b: capacity projection and evaluation
 
 ### Added

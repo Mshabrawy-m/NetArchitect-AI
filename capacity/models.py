@@ -17,7 +17,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from forecasting.models import DataProvenance, SeriesUnit
+from forecasting.models import DataProvenance, ForecastModelKind, SeriesUnit
 from simulation.models import CongestionLevel, NetworkState
 
 CAPACITY_NOTE = (
@@ -108,6 +108,7 @@ class ProjectedDemand(BaseModel):
     provenance: DataProvenance
     data_label: str
     unit: SeriesUnit
+    model: ForecastModelKind
     points: tuple[ProjectedDemandPoint, ...]
 
     def point_for(self, step: int) -> ProjectedDemandPoint | None:

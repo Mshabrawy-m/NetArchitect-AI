@@ -13,9 +13,11 @@ import pytest
 from pydantic import ValidationError
 
 from agents import run_structured_design
+from capacity import CapacityRun, DemandMapping, evaluate_capacity
 from core.exceptions import LLMProviderError
 from core.schemas.scenario import ScenarioType
 from digital_twin import DigitalTwin
+from forecasting import DataProvenance
 from network.analysis import analyze_topology
 from network.routing import reachability_matrix, routing_table
 from optimization import Algorithm, run_optimization
@@ -42,6 +44,7 @@ from services.reporting import (
 from simulation import run_scenario
 from simulation.scenarios import ScenarioRun
 from tests.unit.agents.helpers import sample_requirements
+from tests.unit.capacity.helpers import constant_run, line_capacity_twin
 from tests.unit.digital_twin.helpers import make_twin
 from tests.unit.optimization.helpers import settings, tiny_twin
 from tests.unit.simulation.helpers import line_twin, make_demand, make_scenario
@@ -56,6 +59,7 @@ SECTION_IDS = (
     "routing",
     "graph_analysis",
     "simulation",
+    "capacity",
     "optimization",
     "assumptions",
     "limitations",
@@ -88,6 +92,22 @@ def scenario_case() -> tuple[DigitalTwin, ScenarioRun]:
     return twin, run
 
 
+@pytest.fixture(scope="module")
+def capacity_case() -> tuple[DigitalTwin, CapacityRun]:
+    twin = line_capacity_twin()
+    forecast = constant_run(
+        30.0,
+        2,
+        series_id="subscribers",
+        provenance=DataProvenance.synthetic,
+    )
+    mapping = DemandMapping(
+        series_to_demand={"subscribers": "call"},
+        per_user_mbps=1.0,
+    )
+    return twin, evaluate_capacity(twin, forecast, mapping)
+
+
 def test_report_has_the_required_ordered_sections(base_report: ReportDocument) -> None:
     assert base_report.section_ids() == SECTION_IDS
     assert base_report.generated_at == GENERATED_AT
@@ -100,6 +120,7 @@ def test_sections_without_inputs_are_marked_not_run_with_a_pointer(
 ) -> None:
     for section_id, producer_page in (
         ("simulation", "Simulation Lab"),
+        ("capacity", "Capacity Planning"),
         ("optimization", "Optimization Center"),
         ("agent_trace", "AI Network Designer"),
     ):
@@ -318,6 +339,79 @@ def test_simulation_values_equal_the_scenario_run(
     )
     assert value(document, "simulation.link.0.baseline_util") is not None
     assert check_consistency(document).ok
+
+
+def test_capacity_values_equal_the_run(
+    capacity_case: tuple[DigitalTwin, CapacityRun],
+) -> None:
+    twin, capacity_run = capacity_case
+    document = build_report(
+        ReportSources(
+            twin=twin,
+            capacity_run=capacity_run,
+            generated_at=GENERATED_AT,
+        )
+    )
+    section = document.section("capacity")
+    assert section.status.value == "available"
+    assert value(document, "capacity.projected_steps").numeric == len(
+        capacity_run.steps
+    )
+    assert value(document, "capacity.mapped_demands").numeric == len(
+        capacity_run.projection.demands
+    )
+    assert value(document, "capacity.data_label").display == "SYNTHETIC"
+    assert value(document, "capacity.crossing_count").numeric == len(
+        capacity_run.crossings
+    )
+    assert value(document, "capacity.cost_delta").numeric == pytest.approx(
+        capacity_run.total_cost_delta
+    )
+    record = value(document, "capacity.data_label")
+    assert record.provenance.step == "capacity"
+    assert record.provenance.tool == "capacity.engine.evaluate_capacity"
+    assert record.provenance.twin_version == capacity_run.twin_fingerprint
+    assert check_consistency(document).ok
+
+
+def test_tampered_capacity_number_is_detected(
+    capacity_case: tuple[DigitalTwin, CapacityRun],
+) -> None:
+    twin, capacity_run = capacity_case
+    document = build_report(
+        ReportSources(
+            twin=twin,
+            capacity_run=capacity_run,
+            generated_at=GENERATED_AT,
+        )
+    )
+    section = document.section("capacity")
+    paragraph = section.blocks[0]
+    tampered_block = paragraph.model_copy(
+        update={
+            "text": paragraph.text
+            + " An invented measurement reported 987654321 Mbps."
+        }
+    )
+    tampered = document.model_copy(
+        update={
+            "sections": tuple(
+                section.model_copy(update={"blocks": (tampered_block, *section.blocks[1:])})
+                if item.id == "capacity"
+                else item
+                for item in document.sections
+            )
+        }
+    )
+
+    result = check_consistency(tampered)
+    assert not result.ok
+    assert any(
+        finding.code is ConsistencyCode.orphan_number
+        and finding.section_id == "capacity"
+        and finding.token == "987654321"
+        for finding in result.findings
+    )
 
 
 def test_optimization_values_equal_the_run() -> None:

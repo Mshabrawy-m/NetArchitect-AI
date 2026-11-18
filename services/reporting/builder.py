@@ -44,6 +44,7 @@ from .models import (
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from agents.models import WorkflowState
+    from capacity.models import CapacityRun
     from optimization.models import OptimizationRun
     from simulation.scenarios import ScenarioRun
 
@@ -61,6 +62,7 @@ class ReportSources:
     workflow: WorkflowState | None = None
     scenario_run: ScenarioRun | None = None
     optimization_run: OptimizationRun | None = None
+    capacity_run: CapacityRun | None = None
     generated_at: datetime | None = None
 
 
@@ -166,6 +168,7 @@ class _Builder:
         self.workflow = sources.workflow
         self.scenario_run = sources.scenario_run
         self.optimization_run = sources.optimization_run
+        self.capacity_run = sources.capacity_run
         self.fingerprint = fingerprint
         self.numbers = _Collector(fingerprint)
         self._analysis_report: AnalysisReport | None = None
@@ -1685,7 +1688,332 @@ class _Builder:
         return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
 
     # ------------------------------------------------------------------
-    # 8. Optimization against baseline
+    # 8. Capacity planning from modeled projections
+    # ------------------------------------------------------------------
+    def capacity(self) -> ReportSection:
+        section_id = "capacity"
+        title = "Capacity planning"
+        run = self.capacity_run
+        if run is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No capacity analysis was selected. Run one on the Capacity Planning page.",
+                "Capacity Planning",
+            )
+
+        values = self.numbers
+        source_version = run.twin_fingerprint
+        step_tool = "capacity.engine.evaluate_capacity"
+        data_labels = sorted(
+            {demand.data_label for demand in run.projection.demands}
+        )
+        model_names = sorted({demand.model.value for demand in run.projection.demands})
+        data_label = values.text(
+            "capacity.data_label",
+            "Forecast data label",
+            ", ".join(data_labels) or "none",
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+        )
+        model_text = values.text(
+            "capacity.model",
+            "Selected forecast models",
+            ", ".join(model_names) or "none",
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+        )
+        source_fingerprint = values.text(
+            "capacity.source_fingerprint",
+            "Capacity source twin fingerprint",
+            source_version,
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+        )
+        stop_reason = values.text(
+            "capacity.stop_reason",
+            "Capacity run stop reason",
+            run.bounds.stop_reason.value,
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+        )
+        projected_steps = values.number(
+            "capacity.projected_steps",
+            "Projected steps evaluated",
+            len(run.steps),
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+            digits=0,
+        )
+        mapped_demands = values.number(
+            "capacity.mapped_demands",
+            "Mapped demands projected",
+            len(run.projection.demands),
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+            digits=0,
+        )
+        baseline_utilization = max(
+            (load.utilization_percent for load in run.baseline.links), default=0.0
+        )
+        horizon_links = run.steps[-1].state.links if run.steps else run.baseline.links
+        horizon_utilization = max(
+            (load.utilization_percent for load in horizon_links), default=0.0
+        )
+        baseline_text = values.number(
+            "capacity.baseline_max_utilization",
+            "Baseline maximum modeled utilization",
+            baseline_utilization,
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+        )
+        horizon_text = values.number(
+            "capacity.horizon_max_utilization",
+            "Horizon-end maximum modeled utilization",
+            horizon_utilization,
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+        )
+        crossing_text = values.number(
+            "capacity.crossing_count",
+            "Congestion-band crossings",
+            len(run.crossings),
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+            digits=0,
+        )
+        bottleneck_text = values.number(
+            "capacity.bottleneck_count",
+            "Ranked bottlenecks",
+            len(run.bottlenecks),
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+            digits=0,
+        )
+        recommendation_text = values.number(
+            "capacity.recommendation_count",
+            "Tier upgrade recommendations",
+            len(run.recommendations),
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+            digits=0,
+        )
+        gap_text = values.number(
+            "capacity.gap_count",
+            "Capacity gaps without a sufficient tier",
+            len(run.gaps),
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+            digits=0,
+        )
+        cost_text = values.number(
+            "capacity.cost_delta",
+            "Total modeled upgrade cost delta",
+            run.total_cost_delta,
+            step="capacity",
+            tool=step_tool,
+            twin_version=source_version,
+        )
+        summary = (
+            f"Capacity planning evaluated {projected_steps} projected steps from "
+            f"{mapped_demands} mapped demands using {data_label} data and "
+            f"{model_text} forecasts. Baseline maximum modeled utilization was "
+            f"{baseline_text} percent and the horizon-end maximum was "
+            f"{horizon_text} percent. The run recorded {crossing_text} "
+            f"congestion-band crossings, {bottleneck_text} ranked bottlenecks, "
+            f"{recommendation_text} tier upgrades totaling {cost_text} modeled "
+            f"cost units, and {gap_text} gaps without a sufficient tier. The run "
+            f"stopped because of {stop_reason}."
+        )
+        blocks: list[Any] = [
+            ParagraphBlock(
+                text=summary,
+                provenance=self.prov("capacity", step_tool, source_version),
+            ),
+            KeyValueBlock(
+                title="Capacity source and scope",
+                items=(
+                    KeyValueItem(
+                        key="twin_fingerprint",
+                        value=source_fingerprint,
+                        provenance=self.prov("capacity", step_tool, source_version),
+                    ),
+                    KeyValueItem(
+                        key="data_label",
+                        value=data_label,
+                        provenance=self.prov("capacity", step_tool, source_version),
+                    ),
+                    KeyValueItem(
+                        key="forecast_models",
+                        value=model_text,
+                        provenance=self.prov("capacity", step_tool, source_version),
+                    ),
+                    KeyValueItem(
+                        key="stop_reason",
+                        value=stop_reason,
+                        provenance=self.prov("capacity", step_tool, source_version),
+                    ),
+                ),
+            ),
+            NoteBlock(
+                text=run.note,
+                severity="info",
+                provenance=self.prov("capacity", step_tool, source_version),
+            ),
+            NoteBlock(
+                text=run.method_note,
+                severity="limitation",
+                provenance=self.prov("capacity", step_tool, source_version),
+            ),
+        ]
+
+        bottleneck_rows: list[tuple[str, ...]] = []
+        for index, item in enumerate(run.bottlenecks):
+            peak = values.number(
+                f"capacity.bottleneck.{index}.peak",
+                f"Peak utilization on {item.link_id}",
+                item.peak_utilization_percent,
+                step="capacity",
+                tool=step_tool,
+                twin_version=source_version,
+            )
+            headroom = values.number(
+                f"capacity.bottleneck.{index}.headroom",
+                f"Horizon-end headroom on {item.link_id}",
+                item.headroom_mbps,
+                step="capacity",
+                tool=step_tool,
+                twin_version=source_version,
+            )
+            levels = ", ".join(sorted({crossing.level.value for crossing in item.crossings}))
+            bottleneck_rows.append(
+                (
+                    item.link_id,
+                    "-".join(item.endpoints),
+                    peak,
+                    headroom,
+                    levels or "none",
+                )
+            )
+        blocks.append(
+            self.table(
+                "capacity_bottlenecks",
+                "Ranked projected bottlenecks",
+                ("Link", "Endpoints", "Peak utilization (%)", "Horizon headroom (Mbps)", "Bands crossed"),
+                bottleneck_rows,
+                step="capacity",
+                tool=step_tool,
+                twin_version=source_version,
+            )
+        )
+
+        recommendation_rows: list[tuple[str, ...]] = []
+        for index, item in enumerate(run.recommendations):
+            target = values.number(
+                f"capacity.recommendation.{index}.target",
+                f"Recommended tier capacity on {item.link_id}",
+                item.target_capacity_mbps,
+                step="capacity",
+                tool=step_tool,
+                twin_version=source_version,
+            )
+            projected = values.number(
+                f"capacity.recommendation.{index}.utilization",
+                f"Projected utilization after upgrade on {item.link_id}",
+                item.projected_utilization_percent,
+                step="capacity",
+                tool=step_tool,
+                twin_version=source_version,
+            )
+            delta = values.number(
+                f"capacity.recommendation.{index}.cost",
+                f"Modeled cost delta on {item.link_id}",
+                item.cost_delta,
+                step="capacity",
+                tool=step_tool,
+                twin_version=source_version,
+            )
+            recommendation_rows.append(
+                (item.link_id, target, projected, delta, item.cost_unit)
+            )
+        blocks.append(
+            self.table(
+                "capacity_upgrades",
+                "Smallest tier upgrades that clear the warning threshold",
+                ("Link", "Tier capacity (Mbps)", "Projected utilization (%)", "Cost delta", "Cost unit"),
+                recommendation_rows,
+                step="capacity",
+                tool=step_tool,
+                twin_version=source_version,
+            )
+        )
+
+        if run.gaps:
+            gap_rows: list[tuple[str, ...]] = []
+            for index, item in enumerate(run.gaps):
+                required = values.number(
+                    f"capacity.gap.{index}.required",
+                    f"Required capacity on {item.link_id}",
+                    item.required_capacity_mbps,
+                    step="capacity",
+                    tool=step_tool,
+                    twin_version=source_version,
+                )
+                largest = values.number(
+                    f"capacity.gap.{index}.largest",
+                    f"Largest configured tier on {item.link_id}",
+                    item.largest_available_capacity_mbps,
+                    step="capacity",
+                    tool=step_tool,
+                    twin_version=source_version,
+                )
+                gap_rows.append((item.link_id, required, largest, item.note))
+            blocks.append(
+                self.table(
+                    "capacity_gaps",
+                    "Gaps referred to the Optimization Center",
+                    ("Link", "Required capacity (Mbps)", "Largest tier (Mbps)", "Note"),
+                    gap_rows,
+                    step="capacity",
+                    tool=step_tool,
+                    twin_version=source_version,
+                )
+            )
+
+        if run.projection.findings:
+            for index, finding in enumerate(run.projection.findings):
+                blocks.append(
+                    NoteBlock(
+                        text=values.scan(
+                            f"capacity.finding.{index}",
+                            "Capacity planning finding",
+                            finding.message,
+                            step="capacity",
+                            tool="capacity.demand.project_demands",
+                            twin_version=source_version,
+                        ),
+                        severity="warning",
+                        provenance=self.prov(
+                            "capacity", "capacity.demand.project_demands", source_version
+                        ),
+                    )
+                )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    # ------------------------------------------------------------------
+    # 9. Optimization against baseline
     # ------------------------------------------------------------------
     def optimization(self) -> ReportSection:
         section_id = "optimization"
@@ -2549,6 +2877,7 @@ class _Builder:
             self.routing(),
             self.graph_analysis(),
             self.simulation(),
+            self.capacity(),
             self.optimization(),
             self.assumptions(),
             self.limitations(),

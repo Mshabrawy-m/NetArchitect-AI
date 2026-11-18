@@ -139,6 +139,7 @@ def project_demands(
                 provenance=result.provenance,
                 data_label=result.data_label,
                 unit=result.unit,
+                model=result.model,
                 points=points,
             )
         )
