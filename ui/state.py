@@ -238,6 +238,12 @@ def get_snapshots() -> tuple[Snapshot, ...]:
     return get_snapshot_store().snapshots
 
 
+def peek_snapshots() -> tuple[Snapshot, ...]:
+    """Return retained snapshots without creating an empty store."""
+    store = st.session_state.get(SNAPSHOTS_KEY)
+    return store.snapshots if isinstance(store, SnapshotStore) else ()
+
+
 def create_twin_snapshot(label: str) -> Snapshot:
     """Capture the current baseline twin into the bounded snapshot store."""
     twin = get_twin()
@@ -283,6 +289,12 @@ def get_simulation_runs() -> tuple[ScenarioRun, ...]:
     return get_simulation_history().runs
 
 
+def peek_simulation_runs() -> tuple[ScenarioRun, ...]:
+    """Return retained scenario runs without creating an empty history."""
+    history = st.session_state.get(SIMULATION_HISTORY_KEY)
+    return history.runs if isinstance(history, ScenarioHistory) else ()
+
+
 def add_simulation_run(run: ScenarioRun) -> ScenarioRun:
     """Append a scenario run to the bounded session history."""
     get_simulation_history().add(run)
@@ -311,6 +323,12 @@ def get_optimization_history() -> OptimizationHistory:
 def get_optimization_runs() -> tuple[OptimizationRun, ...]:
     """Return retained optimization runs in creation order."""
     return get_optimization_history().runs
+
+
+def peek_optimization_runs() -> tuple[OptimizationRun, ...]:
+    """Return retained optimization runs without creating an empty history."""
+    history = st.session_state.get(OPTIMIZATION_HISTORY_KEY)
+    return history.runs if isinstance(history, OptimizationHistory) else ()
 
 
 def add_optimization_run(run: OptimizationRun) -> OptimizationRun:

@@ -52,7 +52,8 @@ from optimization import (
     run_to_json_bytes,
 )
 from ui import state
-from ui.components import csv_bytes, format_error
+from ui.components import csv_bytes, format_error, model_estimate_note, page_header
+from ui.components.editors import bump_editor_key, editor_key
 
 VIEW_RUN_KEY = "optimization_view_run"
 FLASH_KEY = "optimization_flash"
@@ -284,7 +285,7 @@ def _render_pool_editor(twin: DigitalTwin) -> pd.DataFrame:
     device_options = sorted(device.id for device in twin.topology.devices)
     return st.data_editor(
         _pool_frame(),
-        key="optimization_pool_editor",
+        key=editor_key("optimization_pool_editor"),
         num_rows="dynamic",
         hide_index=True,
         width="stretch",
@@ -326,7 +327,7 @@ def _render_cost_model() -> tuple[pd.DataFrame, float, tuple[float, ...]]:
     )
     tiers = st.data_editor(
         _tier_frame(),
-        key="optimization_tier_editor",
+        key=editor_key("optimization_tier_editor"),
         num_rows="dynamic",
         hide_index=True,
         width="stretch",
@@ -661,7 +662,10 @@ def _render_optimization_form(
             runtime=runtime,
         )
     except (NetArchitectError, ValidationError, TypeError, ValueError) as error:
-        st.error(format_error(error), title="Optimization settings rejected")
+        bump_editor_key("optimization_pool_editor")
+        bump_editor_key("optimization_tier_editor")
+        _flash("error", f"Optimization settings rejected: {format_error(error)}")
+        st.rerun()
         return None
     return settings, algorithm
 
@@ -1452,13 +1456,13 @@ def _render_no_demands() -> None:
 
 def render() -> None:
     """Render the Optimization Center page."""
-    st.title("Optimization Center")
-    st.caption(
+    page_header(
+        "Optimization Center",
         "Bounded, reproducible multi-objective search over link additions, "
         "capacity tiers, and optional routing-cost adjustments. Every metric is "
-        "a modeled estimate from stated assumptions."
+        "a modeled estimate from stated assumptions.",
     )
-    st.info(SEARCH_NOTE, title="Search scope")
+    model_estimate_note(SEARCH_NOTE, title="Search scope")
     _render_flash()
 
     twin = state.get_twin()

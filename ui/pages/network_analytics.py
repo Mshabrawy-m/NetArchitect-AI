@@ -29,21 +29,23 @@ from network.analysis import (
 from ui import state
 from ui.components import (
     csv_bytes,
+    empty_state,
     findings_frame,
     format_error,
+    page_header,
     render_findings,
 )
 
 
 def _render_empty_state() -> None:
-    st.title("Network Analytics")
-    st.info(
+    page_header("Network Analytics")
+    empty_state(
         "No topology is loaded. Open the Topology Editor from the sidebar to "
-        "create, generate, or import a topology, then return to this page."
-    )
-    st.caption(
-        "Analytics are derived from the stored topology on each rerun; no "
-        "graph snapshot is cached by this page."
+        "create, generate, or import a topology, then return to this page.",
+        hint=(
+            "Analytics are derived from the stored topology on each rerun; no "
+            "graph snapshot is cached by this page."
+        ),
     )
 
 
@@ -278,15 +280,15 @@ def render() -> None:
     try:
         report = analyze_topology(**analysis_arguments(twin))
     except (NetArchitectError, ValueError) as error:
-        st.title("Network Analytics")
+        page_header("Network Analytics")
         st.error(format_error(error), title="Analysis failed")
         return
 
-    st.title("Network Analytics")
-    st.caption(
+    page_header(
+        "Network Analytics",
         "Structural indicators derived from the stored topology. They describe "
         "design position and connectivity, not measured traffic or hardware "
-        "performance."
+        "performance.",
     )
     if baseline_failures.has_failures:
         st.info(

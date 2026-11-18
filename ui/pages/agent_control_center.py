@@ -16,6 +16,7 @@ import streamlit as st
 
 from agents import CriticOutput, WorkflowState
 from ui import state
+from ui.components import page_header
 from ui.components.requirements_form import PLAN_STATE_KEY as FORM_PLAN_KEY
 from ui.pages.ai_designer import PLAN_STATE_KEY as AI_DESIGNER_PLAN_KEY
 
@@ -172,10 +173,10 @@ def _render_trace(plan_state: WorkflowState) -> None:
 
 def render() -> None:
     """Render the read-only Agent Control Center."""
-    st.title("Agent Control Center")
-    st.write(
+    page_header(
+        "Agent Control Center",
         "Read-only execution view of the deterministic workflow. This page does "
-        "not run agents, change a plan, or modify the baseline twin."
+        "not run agents, change a plan, or modify the baseline twin.",
     )
 
     available = _available_states()

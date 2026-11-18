@@ -2,6 +2,77 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 12c: UI consistency and navigation
+
+### Added
+- `ui/components`: shared `page_header`, `empty_state`, and
+  `model_estimate_note` helpers, plus versioned `st.data_editor` keys and
+  one-shot notices that survive the rerun after a rejected edit.
+- `ui/pages/capacity_planning.py`: read-only inventory of configured link
+  capacity, stated demand bandwidth, and the latest modeled utilization from a
+  scenario run on the same twin revision. It performs no forecasting and gives
+  no recommendation.
+- `tests/unit/ui/test_navigation.py`: 28 AppTest cases covering all 14 nav
+  entries with and without a twin, including an assertion that no placeholder
+  wording is visible.
+- `tests/unit/ui/test_dashboard_page.py`: 3 AppTest cases for the empty
+  Dashboard and the populated Dashboard backed by twin, snapshot, scenario,
+  and optimization data.
+- `tests/unit/ui/test_capacity_planning_page.py`: 2 AppTest cases for the
+  required-twin state and the read-only inventory.
+
+### Changed
+- Rejected table edits now advance the editor widget version, queue the error
+  message, and rerun, so the rejected rows disappear instead of remaining in
+  the widget. Applied to topology, simulation demand, optimization pool/tier,
+  IP addressing, VLAN, and digital-twin state editors.
+- Page titles, notes, empty states, number formats, table column labels, and
+  download-button placement were normalized across all pages. Modeled values
+  are labeled as estimates, and "coming soon"/"later phase" text was removed.
+- The Dashboard now reports only existing twin and session data and hosts the
+  single design-health panel. `ui.state` gained read-only `peek_*` accessors so
+  viewing the Dashboard does not create empty history stores.
+- `app.py` routes all 14 sidebar entries to working pages; no placeholder
+  renderer remains.
+
+## 2026-11-18 - Phase 12b: profiling and bounded derived results
+
+### Added
+- `scripts/profile_phase12.py`: reproducible wall-clock and tracemalloc
+  measurements for topology generation, twin construction, all-pairs routing,
+  evaluation, bounded searches, report build, and PDF build.
+- `ui/cache.py`: content-keyed caches for design health, report documents, and
+  each export; `tests/unit/ui/test_cache.py` and report assertions cover cache
+  reuse and invalidation when the twin changes.
+- Batched `network.topology.operations.replace_links` and optimizer runtime
+  budgeting, with tests for link replacement and configured search limits.
+- `ui/state.py`: bounded stable report-timestamp mapping keyed by twin
+  fingerprint.
+
+### Changed
+- Reports no longer rebuild every export on each rerun. Workflow-backed
+  reports build directly from the live workflow; exports remain cached.
+- `config/limits.py` documents measured session payload sizes used to set
+  history bounds.
+
+## 2026-11-18 - Phase 12a: unified design health
+
+### Added
+- `services/validation`: categorized `Finding` records with severity, affected
+  entities, remediation, and an expensive-check flag; one deterministic
+  design-health report combining addressing, topology, routing, and structural
+  checks.
+- `ui/components/health.py` and a single design-health panel on the Digital
+  Twin and Dashboard pages.
+- `tests/unit/services/test_design_health.py`: crafted twin per category, clean
+  twin, severity ordering, and constrained-check coverage.
+
+### Changed
+- Free-form user constraints are informational; only explicit utilization,
+  served-demand-ratio, and no-single-point-of-failure statements are
+  machine-checked. All-pairs reachability and redundancy checks report their
+  cost and are opt-in.
+
 ## 2026-11-15 - Phase 11c: Reports & Documentation page
 
 ### Added

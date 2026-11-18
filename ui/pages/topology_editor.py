@@ -42,7 +42,8 @@ from network.topology import (
 )
 from services.validation import ValidationCategory, build_design_health
 from ui import state
-from ui.components import findings_frame
+from ui.components import findings_frame, page_header
+from ui.components.editors import bump_editor_key, editor_key
 
 DEVICE_COLUMNS = ("id", "type", "site", "role")
 LINK_COLUMNS = ("id", "endpoint_a", "endpoint_b", "capacity_mbps", "cost", "directed")
@@ -500,7 +501,7 @@ def _render_tables(topology: Topology) -> None:
         with st.form("device_edit_form"):
             edited_devices = st.data_editor(
                 _device_rows(topology),
-                key="device_editor",
+                key=editor_key("device_editor"),
                 num_rows="dynamic",
                 hide_index=True,
                 width="stretch",
@@ -526,7 +527,9 @@ def _render_tables(topology: Topology) -> None:
             try:
                 changes = _apply_device_edits(topology, edited_devices)
             except (NetArchitectError, ValidationError, ValueError) as error:
-                st.error(_format_error(error), title="Device edits rejected")
+                bump_editor_key("device_editor")
+                _flash("error", f"Device edits rejected: {_format_error(error)}")
+                st.rerun()
             else:
                 if changes:
                     _flash("success", f"Applied {changes} device change(s).")
@@ -539,7 +542,7 @@ def _render_tables(topology: Topology) -> None:
         with st.form("link_edit_form"):
             edited_links = st.data_editor(
                 _link_rows(topology),
-                key="link_editor",
+                key=editor_key("link_editor"),
                 num_rows="dynamic",
                 hide_index=True,
                 width="stretch",
@@ -567,7 +570,9 @@ def _render_tables(topology: Topology) -> None:
             try:
                 changes = _apply_link_edits(topology, edited_links)
             except (NetArchitectError, ValidationError, ValueError) as error:
-                st.error(_format_error(error), title="Link edits rejected")
+                bump_editor_key("link_editor")
+                _flash("error", f"Link edits rejected: {_format_error(error)}")
+                st.rerun()
             else:
                 if changes:
                     _flash("success", f"Applied {changes} link change(s).")
@@ -809,10 +814,10 @@ def _render_json(topology: Topology | None) -> None:
 
 def render() -> None:
     """Render the topology editor page."""
-    st.title("Topology editor")
-    st.caption(
+    page_header(
+        "Topology Editor",
         "Generate, inspect, and edit the modeled network. All changes run "
-        "through deterministic engineering services."
+        "through deterministic engineering services.",
     )
     _render_flash()
 

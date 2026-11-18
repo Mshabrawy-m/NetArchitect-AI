@@ -43,7 +43,7 @@ from ui.cache import (
     source_payload,
     twin_payload,
 )
-from ui.components import format_error
+from ui.components import empty_state, format_error, model_estimate_note, page_header
 from ui.pages.agent_control_center import PLAN_SOURCES
 
 WORKFLOW_KEY = "reports_workflow_source"
@@ -419,26 +419,27 @@ def _render_downloads(document: ReportDocument, twin: DigitalTwin) -> None:
 
 
 def _render_empty_state() -> None:
-    st.info(
+    empty_state(
         "No digital twin with a topology is loaded. Open the Topology Editor "
         "from the sidebar to create, generate, or import one, then return here.",
         title="Digital twin required",
-    )
-    st.caption(
-        "A report is built only from validated application data. It never uses "
-        "raw model prose and never fills a missing section with a placeholder."
+        hint=(
+            "A report is built only from validated application data. It never "
+            "uses raw model prose and never fills a missing section with a "
+            "placeholder."
+        ),
     )
 
 
 def render() -> None:
     """Render the Reports & Documentation page."""
-    st.title("Reports & Documentation")
-    st.caption(
+    page_header(
+        "Reports & Documentation",
         "A provenance-tagged network design report assembled from the digital "
         "twin and the retained engineering runs. Every number is copied from "
-        "an engine, and every export is generated in memory."
+        "an engine, and every export is generated in memory.",
     )
-    st.info(
+    model_estimate_note(
         "The report contains deterministic sections and the values behind "
         "them. This page does not request AI-written prose; every section comes "
         "from an engine or from the stored twin.",

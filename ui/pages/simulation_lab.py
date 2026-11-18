@@ -41,7 +41,8 @@ from simulation import (
 )
 from simulation.models import CongestionThresholds, SimulationAssumptions
 from ui import state
-from ui.components import csv_bytes, format_error
+from ui.components import csv_bytes, format_error, model_estimate_note, page_header
+from ui.components.editors import bump_editor_key, editor_key
 
 VIEW_RUN_KEY = "simulation_view_run"
 FLASH_KEY = "simulation_flash"
@@ -252,7 +253,7 @@ def _render_demand_editor(twin: DigitalTwin) -> None:
     with st.form("simulation_demand_form"):
         edited = st.data_editor(
             _demand_frame(twin),
-            key="simulation_demand_editor",
+            key=editor_key("simulation_demand_editor"),
             num_rows="dynamic",
             hide_index=True,
             width="stretch",
@@ -291,7 +292,9 @@ def _render_demand_editor(twin: DigitalTwin) -> None:
         try:
             count, changed = _apply_demands(twin, edited)
         except (NetArchitectError, ValidationError, ValueError) as error:
-            st.error(format_error(error), title="Demand changes rejected")
+            bump_editor_key("simulation_demand_editor")
+            _flash("error", f"Demand changes rejected: {format_error(error)}")
+            st.rerun()
         else:
             if changed:
                 _flash(
@@ -1290,14 +1293,14 @@ def _render_empty_state() -> None:
 
 def render() -> None:
     """Render the Simulation Lab page."""
-    st.title("Simulation Lab")
-    st.caption(
+    page_header(
+        "Simulation Lab",
         "Run deterministic what-if scenarios over the digital twin. Every "
         "latency, throughput, and utilization value is a modeled estimate from "
         "the assumptions on this page; nothing is packet-level or "
-        "hardware-accurate."
+        "hardware-accurate.",
     )
-    st.info(MODEL_NOTE, title="Model scope")
+    model_estimate_note(MODEL_NOTE)
     _render_flash()
 
     twin = state.get_twin()

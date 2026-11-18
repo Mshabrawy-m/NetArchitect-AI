@@ -28,7 +28,7 @@ from config.settings import get_settings
 from core.exceptions import NetArchitectError
 from services.llm import GroqProvider, LLMMessage, MessageRole, RequestBudget
 from ui import state
-from ui.components import format_error
+from ui.components import format_error, page_header
 from ui.components.requirements_form import render_requirements_form
 
 KEY_ENTRY_KEY = "llm_key_entry"
@@ -222,10 +222,10 @@ def _render_documentation() -> None:
 
 def render() -> None:
     """Render the Settings page."""
-    st.title("Settings")
-    st.write(
+    page_header(
+        "Settings",
         "Optional AI configuration, read-only safety limits, and a deterministic "
-        "structured design runner that needs no API key."
+        "structured design runner that needs no API key.",
     )
 
     settings = get_settings()

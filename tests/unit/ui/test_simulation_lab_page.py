@@ -70,6 +70,27 @@ def test_simulation_lab_demand_editor_writes_to_twin() -> None:
     assert twin.demands[0].bandwidth_mbps == 25.0
 
 
+def test_rejected_demand_edit_resets_the_editor_widget() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = _twin_with_demand()
+    at.selectbox(key="page_nav").select("Simulation Lab").run()
+
+    at.session_state["simulation_demand_editor"] = {
+        "edited_rows": {0: {"source": "ghost"}},
+        "added_rows": [],
+        "deleted_rows": [],
+    }
+    at.button(key="simulation_apply_demands").click().run()
+
+    assert not at.exception
+    assert any("Demand changes rejected" in error.value for error in at.error)
+    assert at.session_state["editor_key_versions"]["simulation_demand_editor"] == 1
+    fresh = at.session_state.get("simulation_demand_editor_v1")
+    assert not fresh or not fresh.get("edited_rows")
+    twin = at.session_state[state.TWIN_KEY]
+    assert twin.demands[0].source == "a"
+
+
 def test_simulation_lab_runs_and_compares_scenarios() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()

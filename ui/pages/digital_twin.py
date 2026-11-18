@@ -25,7 +25,9 @@ from digital_twin import (
     to_json,
 )
 from ui import state
-from ui.components import csv_bytes, render_design_health
+from ui.components import csv_bytes, page_header, render_design_health
+from ui.components.editors import bump_editor_key, editor_key
+from ui.components.notices import queue_notice, render_notices
 
 SNAPSHOT_LABEL_KEY = "twin_snapshot_label"
 SNAPSHOT_CREATE_KEY = "twin_create_snapshot"
@@ -112,7 +114,7 @@ def _render_state_editor(twin) -> None:
         st.markdown("**Devices**")
         devices = st.data_editor(
             _device_state_rows(twin),
-            key="twin_device_state_editor",
+            key=editor_key("twin_device_state_editor"),
             hide_index=True,
             width="stretch",
             disabled=["device_id", "type", "site"],
@@ -130,7 +132,7 @@ def _render_state_editor(twin) -> None:
         st.markdown("**Links**")
         links = st.data_editor(
             _link_state_rows(twin),
-            key="twin_link_state_editor",
+            key=editor_key("twin_link_state_editor"),
             hide_index=True,
             width="stretch",
             disabled=[
@@ -180,7 +182,10 @@ def _render_state_editor(twin) -> None:
             down_links=down_links,
         )
     except (NetArchitectError, ValidationError, ValueError) as error:
-        st.error(str(error), title="State update failed")
+        bump_editor_key("twin_device_state_editor")
+        bump_editor_key("twin_link_state_editor")
+        queue_notice("error", str(error), title="State update failed")
+        st.rerun()
     else:
         st.success(
             f"Operational state applied: {len(down_devices)} device(s) and "
@@ -433,12 +438,13 @@ def _render_comparison(
 
 def render() -> None:
     """Render the Digital Twin page."""
-    st.title("Digital Twin")
-    st.caption(
+    page_header(
+        "Digital Twin",
         "The digital twin is a software model of the design and the single "
         "source of truth for topology, addressing, VLAN/DHCP plans, demands, "
-        "and modeled operational state. It is not a live copy of real equipment."
+        "and modeled operational state. It is not a live copy of real equipment.",
     )
+    render_notices()
 
     twin = state.get_twin()
     if twin is None:

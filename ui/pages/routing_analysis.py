@@ -34,7 +34,7 @@ from network.routing import (
 )
 from network.topology import to_networkx
 from ui import state
-from ui.components import csv_bytes, format_error
+from ui.components import csv_bytes, empty_state, format_error, page_header
 
 ROLE_COLORS = {
     "core": "#1f3a5f",
@@ -49,14 +49,14 @@ ROLE_COLORS = {
 
 
 def _render_empty_state() -> None:
-    st.title("Routing Analysis")
-    st.info(
+    page_header("Routing Analysis")
+    empty_state(
         "No topology is loaded. Open the Topology Editor from the sidebar to "
-        "create, generate, or import a topology, then return to this page."
-    )
-    st.caption(
-        "Routing calculations are deterministic and stateless: they read the "
-        "stored topology and return derived results without modifying it."
+        "create, generate, or import a topology, then return to this page.",
+        hint=(
+            "Routing calculations are deterministic and stateless: they read "
+            "the stored topology and return derived results without modifying it."
+        ),
     )
 
 
@@ -531,12 +531,12 @@ def render() -> None:
     device_ids = sorted(device.id for device in topology.devices)
     link_ids = sorted(link.id for link in topology.links)
 
-    st.title("Routing Analysis")
-    st.caption(
+    page_header(
+        "Routing Analysis",
         "Deterministic shortest-path routing over the stored topology. Link "
         "cost is the only path weight; link capacity is metadata and does not "
         "affect selection. Ties resolve to the lexicographically smallest "
-        "device sequence."
+        "device sequence.",
     )
 
     controls = st.columns(3)

@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 11 - Reports and Explainability (complete)
-- Current task: Phase 11c - Reports & Documentation page (complete)
-- Overall status: Phase 11 complete on `feature/phase11-reports`; Phase 12 not started
-- Last updated: 2026-11-15
-- Branch: `feature/phase11-reports` (based on `main` commit `a29e4eb`)
+- Current phase: Phase 12 - Frontend Integration and User Experience (complete)
+- Current task: Phase 12c - UI consistency and navigation (complete)
+- Overall status: Phase 12 complete on `feature/phase12-polish`
+- Last updated: 2026-11-18
+- Branch: `feature/phase12-polish` (based on `main` commit `bdbb64a`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -19,7 +19,7 @@
 - [x] Phase 9: Agentic AI Framework
 - [x] Phase 10: Specialized AI Agents
 - [x] Phase 11: Reports and Explainability
-- [ ] Phase 12: Frontend Integration and User Experience
+- [x] Phase 12: Frontend Integration and User Experience
 - [ ] Phase 13: Predictive Capacity Planning
 - [ ] Phase 14: Testing, Security, and Deployment
 
@@ -1070,6 +1070,124 @@ Location: `ui/pages/reports.py`, wired into `app.py`.
   download-file inspection was performed. Export bytes are covered by the 11b
   service tests.
 
+## Phase 12a delivered - unified design health
+Location: `services/validation/`, `ui/components/health.py`, wired into the
+Digital Twin, Dashboard, and Topology Editor.
+
+- One deterministic `build_design_health` entry point reuses the existing
+  twin, addressing, DHCP, routing, capacity, and redundancy engines. Every
+  `Finding` records category, severity, affected entities, remediation, and
+  whether its check is expensive. Findings are sorted by severity.
+- Basic checks always run. All-pairs reachability and redundancy/SPOF checks
+  are opt-in through `include_expensive=True` and carry a visible cost note.
+- Free-form constraints remain informational. Only `max utilization N%`,
+  `served demand ratio N`, and `no single point of failure` are machine-checked.
+- `tests/unit/services/test_design_health.py`: crafted twin per category, clean
+  twin, severity ordering, and opt-in expensive checks.
+- Commit: `e8e5d54`.
+
+## Phase 12b delivered - profiling and bounded derived results
+- `scripts/profile_phase12.py` measures real wall-clock time and tracemalloc
+  peak for eight worst-case operations. Both variants are reproducible with
+  `--no-memory` and the default tracemalloc mode.
+- Batched `replace_links` plus one `set_topology` removed 661 sequential
+  deep-copying link edits per candidate. GA and NSGA-II now stop at the
+  configured `MAX_OPTIMIZATION_RUNTIME_SECONDS=60` budget.
+- `ui/cache.py` adds content-keyed caches for design health, report documents,
+  and each export. Reports no longer rebuild exports on every rerun. Workflow
+  reports build directly from the live workflow; exports remain cached.
+- Report `generated_at` is stable per twin fingerprint through a session map
+  capped at 4 entries. `tests/unit/ui/test_cache.py` and new report assertions
+  cover reuse and invalidation when the twin changes.
+- `config/limits.py` documents the measured session payload sizes behind the
+  retained-history bounds.
+
+### Session-key audit (measured)
+| payload | measured size | bound |
+| --- | ---: | --- |
+| max twin JSON | 257,236 bytes | one active twin |
+| snapshot JSON | 257,301 bytes | 20 snapshots / 2 MB total |
+| scenario run JSON | 766,147 bytes | 50 runs, about 37 MiB worst case |
+| 5 s optimization run | 203,574 bytes | 20 runs |
+| 60 s GA run | about 2.38 MiB / 77 candidates | counted in the 20-run bound |
+| 60 s NSGA-II run | about 2.35 MiB / 76 candidates | counted in the 20-run bound |
+| optimization history worst case | about 48 MiB | 20 retained runs |
+
+- Cache keys are canonical twin JSON plus `twin_fingerprint`. The
+  `WorkflowState` accessor is live and deliberately not cacheable.
+- Commit: `642db31`.
+
+## Phase 12c delivered - UI consistency and navigation
+- `ui/components` now provides `page_header`, `empty_state`,
+  `model_estimate_note`, and `render_findings`, plus versioned editor keys and
+  one-shot notices. A rejected `st.data_editor` submission advances the widget
+  version, queues the error, and reruns; the rejected rows no longer linger.
+- All 14 sidebar entries route to working pages. `render_placeholder` and all
+  "coming soon"/"later phase" wording were removed.
+- Page titles, descriptions, empty states, error wording, units, number
+  formats, table column labels, and download placement were normalized. Model
+  outputs are consistently labeled as estimates.
+- The Dashboard is real-data only: twin metrics, retained-run counts, latest
+  scenario and optimization summaries, and one design-health panel. Read-only
+  `peek_*` accessors in `ui/state.py` prevent a Dashboard view from creating
+  empty history stores.
+- `ui/pages/capacity_planning.py` is a read-only inventory from existing twin
+  and scenario data. It does not forecast growth or recommend capacity changes.
+- New AppTest coverage: editor rejection reset, Dashboard empty and populated,
+  Capacity Planning empty and populated, and all 14 nav entries with and
+  without a twin. All existing assertions were kept; new tests were added.
+
+## Test evidence (Phase 12)
+- Commands and verbatim results:
+  - `.\.venv\Scripts\python.exe -m pytest -q`: `803 passed in 19.89s`
+  - `.\.venv\Scripts\ruff.exe check .`: `All checks passed!`
+- No existing test assertion was changed in Phase 12. New assertions were
+  added in `tests/unit/services/test_design_health.py`,
+  `tests/unit/topology/test_operations.py`,
+  `tests/unit/optimization/test_models.py`, `tests/unit/ui/test_cache.py`,
+  `tests/unit/ui/test_reports_page.py`,
+  `tests/unit/ui/test_digital_twin_page.py`,
+  `tests/unit/ui/test_navigation.py`,
+  `tests/unit/ui/test_dashboard_page.py`,
+  `tests/unit/ui/test_capacity_planning_page.py`, and
+  `tests/unit/ui/test_simulation_lab_page.py`.
+- Profiler output, wall clock (`--no-memory`):
+
+  | operation | seconds | peak MiB | over budget | note |
+  | --- | ---: | ---: | :---: | --- |
+  | generate max-size topology | 0.004 | 0.0 | no |  |
+  | build max twin | 0.088 | 0.0 | no |  |
+  | all-pairs routing | 0.935 | 0.0 | no |  |
+  | evaluate with MAX_DEMANDS | 0.761 | 0.0 | no |  |
+  | genetic at configured maxima | 60.872 | 0.0 | yes | user-triggered search; wall clock is bounded by MAX_OPTIMIZATION_RUNTIME_SECONDS=60 |
+  | nsga2 at configured maxima | 60.860 | 0.0 | yes | user-triggered search; wall clock is bounded by MAX_OPTIMIZATION_RUNTIME_SECONDS=60 |
+  | report build | 2.010 | 0.0 | no |  |
+  | PDF build | 1.158 | 0.0 | no |  |
+
+- Profiler output, tracemalloc:
+
+  | operation | seconds | peak MiB | over budget | note |
+  | --- | ---: | ---: | :---: | --- |
+  | generate max-size topology | 0.062 | 1.4 | no | timing includes tracemalloc overhead |
+  | build max twin | 0.212 | 0.8 | no | timing includes tracemalloc overhead |
+  | all-pairs routing | 3.768 | 4.8 | no | timing includes tracemalloc overhead |
+  | evaluate with MAX_DEMANDS | 4.778 | 4.6 | no | timing includes tracemalloc overhead |
+  | genetic at configured maxima | 65.271 | 7.3 | no | user-triggered search; wall clock is bounded by MAX_OPTIMIZATION_RUNTIME_SECONDS=60; timing includes tracemalloc overhead |
+  | nsga2 at configured maxima | 64.816 | 6.7 | no | user-triggered search; wall clock is bounded by MAX_OPTIMIZATION_RUNTIME_SECONDS=60; timing includes tracemalloc overhead |
+  | report build | 9.367 | 6.2 | no | timing includes tracemalloc overhead |
+  | PDF build | 6.954 | 8.7 | no | timing includes tracemalloc overhead |
+
+- Footer printed by both profiler runs: "Budget threshold: >5 s in a
+  `--no-memory` run, or >300 MiB in a tracemalloc run, is flagged. Tracemalloc
+  adds time overhead and records Python allocations, not total process RSS. Run
+  with `--no-memory` for wall-clock numbers."
+- The two marked search results are deliberate user-triggered bounded searches,
+  not unbounded page operations. All measured tracemalloc peaks are below
+  300 MiB.
+- Not verified: real-browser rendering, responsive layout at narrow widths,
+  visual PDF viewer behavior, and live LLM/provider responses. Verification
+  was AppTest plus service/unit tests and the reproducible profiler.
+
 ## Test evidence (Phase 8)
 - Commands and results:
   - `& ".venv\Scripts\python.exe" -m pytest -q`: `588 passed in 7.81s`
@@ -1206,9 +1324,9 @@ Location: `ui/pages/reports.py`, wired into `app.py`.
   in a browser) was not inspected manually. Verified only through AppTest, the
   Streamlit agent API, and HTTP status checks; no browser screenshot was
   taken.
-- The table editors use a form plus an Apply button. Because `st.data_editor`
-  keeps its own widget state, a rejected edit remains visible in the table
-  until the user corrects or reloads it; the model itself is never changed.
+- The table editors use a form plus an Apply button. A rejected edit advances
+  the widget key version and reruns, so the rejected rows disappear; the model
+  itself is never changed. An error notice is queued and shown after the rerun.
 - Phase 4 pages were verified through AppTest, the Streamlit agent API, and
   HTTP status checks only. Colors, spacing, progress-bar rendering, table
   sizing, and CSV download behaviour were not inspected in a real browser; no
@@ -1310,12 +1428,24 @@ Location: `ui/pages/reports.py`, wired into `app.py`.
   appendix and the JSON registry still contain every value computed for the
   build, so provenance remains complete for the whole document even when some
   sections are hidden.
-- All five exports are rebuilt on every page rerun, including the PDF. The page
-  does not cache export bytes, so a very large report makes each interaction
-  slower.
+- Export bytes are cached by canonical twin content, selected section ids, and
+  source fingerprints, so a rerun no longer rebuilds the PDF or other bundles.
+  A changed twin or source selection invalidates the cache.
 - Page verification is AppTest-only. Widget placement, table widths, the
   collapsed appendix, and real browser download behaviour were not inspected
   visually.
+- Phase 12 verification is AppTest- and service-test-only. Browser rendering,
+  responsive behavior at narrow widths, and the PDF viewer were not inspected
+  manually; no screenshots were taken.
+- The Capacity Planning page is deliberately a read-only inventory. It does not
+  forecast future demand, recommend link upgrades, or predict failures; those
+  belong to a later phase.
+- The profiler's flagged search rows are user-triggered searches bounded by
+  `MAX_OPTIMIZATION_RUNTIME_SECONDS=60`, not page-background work. Tracemalloc
+  measures Python allocations, not total process RSS, and adds time overhead.
+- Cached reports keep one prepared timestamp per twin fingerprint (at most four
+  fingerprints in the session map). A later twin revision changes the cache key
+  and therefore the timestamp.
 
 ## Next task
-- Phase 12: Frontend Integration and User Experience (not started).
+- Phase 13: Predictive Capacity Planning (not started).

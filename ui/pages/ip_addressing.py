@@ -24,7 +24,15 @@ from network.addressing import (
     validate_addressing,
 )
 from ui import state
-from ui.components import csv_bytes, findings_frame, format_error, render_findings
+from ui.components import (
+    csv_bytes,
+    findings_frame,
+    format_error,
+    page_header,
+    render_findings,
+)
+from ui.components.editors import bump_editor_key, editor_key
+from ui.components.notices import queue_notice, render_notices
 
 DEFAULT_REQUIREMENTS = pd.DataFrame(
     [
@@ -200,7 +208,7 @@ def _render_vlsm() -> None:
     with st.form("vlsm_form"):
         frame = st.data_editor(
             DEFAULT_REQUIREMENTS,
-            key="vlsm_requirements",
+            key=editor_key("vlsm_requirements"),
             num_rows="dynamic",
             hide_index=True,
             width="stretch",
@@ -228,7 +236,13 @@ def _render_vlsm() -> None:
             )
             state.session_set(state.VLSM_KEY, result)
         except (NetArchitectError, ValidationError, ValueError) as error:
-            st.error(format_error(error), title="Allocation failed")
+            bump_editor_key("vlsm_requirements")
+            queue_notice(
+                "error",
+                format_error(error),
+                title="Allocation failed",
+            )
+            st.rerun()
         else:
             _store_vlsm_subnets(result)
 
@@ -302,7 +316,7 @@ def _render_check() -> None:
     with st.form("subnet_check_form"):
         frame = st.data_editor(
             DEFAULT_CHECK_SUBNETS,
-            key="subnet_check_editor",
+            key=editor_key("subnet_check_editor"),
             num_rows="dynamic",
             hide_index=True,
             width="stretch",
@@ -318,7 +332,9 @@ def _render_check() -> None:
             subnets = _to_subnets(frame)
             state.session_set(state.CHECK_KEY, validate_addressing(subnets))
         except (ValidationError, ValueError) as error:
-            st.error(format_error(error), title="Check failed")
+            bump_editor_key("subnet_check_editor")
+            queue_notice("error", format_error(error), title="Check failed")
+            st.rerun()
 
     report = state.session_get(state.CHECK_KEY)
     if report is None:
@@ -343,11 +359,12 @@ def _render_check() -> None:
 
 def render() -> None:
     """Render the IP addressing page."""
-    st.title("IP addressing and subnetting")
-    st.caption(
+    page_header(
+        "IP Addressing & Subnetting",
         "Deterministic IPv4 and IPv6 planning. All arithmetic runs in the "
-        "addressing engine; the page only presents inputs and results."
+        "addressing engine; the page only presents inputs and results.",
     )
+    render_notices()
 
     cidr_tab, vlsm_tab, check_tab = st.tabs(
         ["CIDR calculator", "VLSM planner", "Subnet check"]

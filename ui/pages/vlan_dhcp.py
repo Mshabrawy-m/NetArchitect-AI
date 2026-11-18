@@ -31,8 +31,11 @@ from ui.components import (
     csv_bytes,
     findings_frame,
     format_error,
+    page_header,
     render_findings,
 )
+from ui.components.editors import bump_editor_key, editor_key
+from ui.components.notices import queue_notice, render_notices
 
 DEFAULT_DEPARTMENTS = pd.DataFrame(
     [
@@ -241,11 +244,12 @@ def _render_results() -> None:
 
 def render() -> None:
     """Render the VLAN and DHCP planner page."""
-    st.title("VLAN and DHCP planner")
-    st.caption(
+    page_header(
+        "VLAN & DHCP Planner",
         "Map departments to VLANs and generate one validated DHCP scope per "
-        "subnet. Address arithmetic runs in the deterministic engines."
+        "subnet. Address arithmetic runs in the deterministic engines.",
     )
+    render_notices()
 
     st.subheader("Department requirements")
     st.caption(
@@ -282,7 +286,7 @@ def render() -> None:
     with st.form("vlan_plan_form"):
         frame = st.data_editor(
             _default_departments(),
-            key="vlan_department_editor",
+            key=editor_key("vlan_department_editor"),
             num_rows="dynamic",
             hide_index=True,
             width="stretch",
@@ -314,7 +318,9 @@ def render() -> None:
                 lease_minutes=int(lease_minutes),
             )
         except (NetArchitectError, ValidationError, ValueError) as error:
-            st.error(format_error(error), title="Planning failed")
+            bump_editor_key("vlan_department_editor")
+            queue_notice("error", format_error(error), title="Planning failed")
+            st.rerun()
         else:
             state.set_planning(
                 addressing=_addressing_from_plan(plan),

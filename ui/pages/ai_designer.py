@@ -35,7 +35,7 @@ from core.exceptions import NetArchitectError
 from core.schemas.requirements import NetworkRequirements, UserFacts
 from services.llm import GroqProvider, LLMProvider
 from ui import state
-from ui.components import format_error
+from ui.components import format_error, page_header
 from ui.components.requirements_form import MAX_DEPARTMENTS, build_requirements
 
 FREE_TEXT_KEY = "ai_designer_free_text"
@@ -491,12 +491,12 @@ def _render_results() -> None:
 
 def render() -> None:
     """Render the AI Network Designer page."""
-    st.title("AI Network Designer")
-    st.write(
+    page_header(
+        "AI Network Designer",
         "Describe the network in free text or enter it in the structured form. "
         "The optional language model interprets free text only; topology, "
         "addressing, routing, validation, simulation, optimization, the critic, "
-        "and the report are deterministic."
+        "and the report are deterministic.",
     )
 
     active_key = _active_key()

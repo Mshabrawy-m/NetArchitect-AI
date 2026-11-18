@@ -23,6 +23,33 @@ SEVERITY_ORDER = {
 }
 
 
+def page_header(title: str, description: str = "") -> None:
+    """Render the standard page title and optional one-line description."""
+    st.title(title)
+    if description:
+        st.caption(description)
+
+
+def empty_state(
+    message: str,
+    *,
+    title: str | None = None,
+    hint: str = "",
+) -> None:
+    """Render the standard empty state for a page or section."""
+    if title:
+        st.info(message, title=title)
+    else:
+        st.info(message)
+    if hint:
+        st.caption(hint)
+
+
+def model_estimate_note(text: str, *, title: str = "Model scope") -> None:
+    """Render the standard note that separates modeled estimates from measurements."""
+    st.info(text, title=title)
+
+
 def format_error(error: Exception) -> str:
     """Return a concise message for domain and validation errors."""
     if isinstance(error, ValidationError):
@@ -74,8 +101,11 @@ from .health import render_design_health
 __all__ = [
     "SEVERITY_ORDER",
     "csv_bytes",
+    "empty_state",
     "findings_frame",
     "format_error",
+    "model_estimate_note",
+    "page_header",
     "render_design_health",
     "render_findings",
 ]
