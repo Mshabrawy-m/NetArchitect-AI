@@ -9,6 +9,7 @@ from core.schemas.network import Device, DeviceRole, DeviceType
 from core.schemas.requirements import Assumption
 from core.schemas.routing import TrafficDemand
 from digital_twin import (
+    TWIN_SCHEMA_VERSION,
     DeviceState,
     LinkState,
     OperationalState,
@@ -172,18 +173,26 @@ def test_disconnected_topology_is_a_warning() -> None:
     assert report.is_valid is True
 
 
-def test_unsupported_schema_version_is_an_error() -> None:
-    twin = make_twin(
+def test_supported_and_future_schema_versions_are_distinguished() -> None:
+    # Schema 1 remains valid for legacy twins; schema 2 added the optional
+    # security model. Only the first unsupported version is rejected.
+    legacy = make_twin(
+        metadata=TwinMetadata(
+            name="Legacy twin",
+            created_at=CREATED_AT.astimezone(UTC),
+            schema_version=1,
+        )
+    )
+    future = make_twin(
         metadata=TwinMetadata(
             name="Future twin",
             created_at=CREATED_AT.astimezone(UTC),
-            schema_version=2,
+            schema_version=TWIN_SCHEMA_VERSION + 1,
         )
     )
 
-    report = validate_twin(twin)
-
-    assert "twin_schema_version_unsupported" in _codes(report)
+    assert "twin_schema_version_unsupported" not in _codes(validate_twin(legacy))
+    assert "twin_schema_version_unsupported" in _codes(validate_twin(future))
 
 
 def test_duplicate_assumption_ids_warn() -> None:

@@ -2,6 +2,46 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 14a: security models and backward-compatible twin field
+
+### Added
+- `security/models.py`: frozen Pydantic models for zones, services, firewall
+  rules, and a bounded `SecurityModel`. Validation covers member references,
+  criticality range, port ranges, service/rule modes, duplicate ids/orders, and
+  `MAX_ZONES`, `MAX_SERVICES`, `MAX_FIREWALL_RULES`, and
+  `MAX_SECURITY_ASSUMPTIONS`. The exact disclaimer string is exported as
+  `SECURITY_DISCLAIMER`.
+- `security/derivation.py`: deterministic default zone derivation from VLAN
+  department/name/subnet/purpose and device type/role. Keyword priority is
+  fixed, unmatched members stay unassigned, the default policy is deny, and
+  explicit guest/IoT boundary deny rules are emitted only when those zones exist.
+- `security/operations.py`: immutable-style add/update/remove/reorder operations.
+  Every edit is revalidated after copying, references cannot be removed while a
+  rule uses them, and each operation returns a NEW twin with schema version 2.
+- `tests/unit/security`: model validation/bounds, reproducible derivation,
+  NEW-twin operation checks, and a forbidden-import/dynamic-execution audit.
+- Tests for legacy schema 1 JSON, omitted security field, unchanged legacy
+  fingerprint, schema 2 round-trip, and rejection of schema 3.
+
+### Changed
+- `DigitalTwin` gained optional `security: SecurityModel | None`; the schema
+  version is 2 and supported versions are 1 and 2. `canonical_payload()` omits
+  `security=None`, so legacy JSON and the legacy fingerprint
+  `4212909d2624a026229027d4266267906ae6a040df00678bf200d0430c2d802c` remain
+  unchanged. Newer schemas are rejected by serialization and twin validation.
+- `simulation.twin_fingerprint()` now hashes the canonical payload. A stored
+  security model changes the fingerprint; an absent one does not.
+- Changed existing assertions (disclosed): `test_unsupported_schema_version_is_an_error`
+  was renamed to `test_supported_and_future_schema_versions_are_distinguished`
+  and now uses version 1 as supported plus the first unsupported version,
+  replacing the literal assumption that version 2 was future.
+  `tests/unit/services/test_design_health.py::_schema_twin` now uses
+  `TWIN_SCHEMA_VERSION + 1` instead of literal 2. No assertion's behavior was
+  weakened: both still verify that unsupported schemas produce findings.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `866 passed in
+  20.29s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified.
+
 ## 2026-11-18 - Phase 14.0: housekeeping and report source freshness
 
 ### Owner decision

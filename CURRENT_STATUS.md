@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: Phase 14 - Design-time Network Security Analysis (in progress)
-- Current task: Phase 14.0 - housekeeping and report source freshness (complete)
-- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0 complete on `feature/phase14-security`
+- Current task: Phase 14a - security models and backward-compatible twin field (complete)
+- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0/14a complete on `feature/phase14-security`
 - Last updated: 2026-11-18
 - Branch: `feature/phase14-security` (based on updated `main` commit `7b33b74`)
 
@@ -21,7 +21,7 @@
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
 - [x] Phase 13: Predictive Capacity Planning (13a/13b/13c complete)
-- [ ] Phase 14: Design-time Network Security Analysis (14.0 complete)
+- [ ] Phase 14: Design-time Network Security Analysis (14.0/14a complete)
 - [ ] Phase 15: Testing, Security review, and Deployment
 
 ## Task 0 evidence (verification and version control)
@@ -1599,7 +1599,38 @@ Location: root blueprint, `AI_INSTRUCTIONS.md`, `docs/CHANGELOG.md`,
   20.74s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
   passed!`. Browser rendering and live LLM behavior were not verified.
 
+## Phase 14a delivered - security models and backward-compatible twin field
+Location: `security/`, `digital_twin/models.py`, `digital_twin/serialization.py`,
+`digital_twin/validation.py`, `digital_twin/__init__.py`,
+`simulation/evaluator.py`, `config/limits.py`, `tests/unit/security/`, and
+updated twin/serialization/validation/design-health tests.
+
+- Pure models: frozen `Zone`, `Service`, `FirewallRule`, and `SecurityModel`
+  with duplicate/order/range validation and bounds `MAX_ZONES=32`,
+  `MAX_FIREWALL_RULES=128`, `MAX_SERVICES=32`, and
+  `MAX_SECURITY_ASSUMPTIONS=50`. Every operation output must carry
+  `SECURITY_DISCLAIMER`.
+- Default derivation is deterministic over VLAN text and device type/role.
+  Keyword priority is fixed; unmatched members remain unassigned; the default
+  action is deny; guest/IoT boundary deny rules are emitted only where both
+  source and destination zones exist.
+- All security operations return a NEW twin, revalidate after `model_copy`, and
+  reject removal of a zone or service still referenced by a rule. There is no
+  network I/O, device access, vulnerability lookup, or dynamic execution.
+- Compatibility: `TWIN_SCHEMA_VERSION=2`, supported versions `(1, 2)`, optional
+  `security=None`, and `canonical_payload()` omission of absent security. Legacy
+  JSON and fingerprint `4212909d2624a026229027d4266267906ae6a040df00678bf200d0430c2d802c`
+  remain unchanged; schema 3 is rejected.
+- Changed existing assertions (disclosed): the digital-twin validation test that
+  used literal schema 2 as an unsupported future version was renamed and now
+  checks schema 1 as supported and `TWIN_SCHEMA_VERSION + 1` as unsupported. The
+  design-health `_schema_twin()` fixture was changed from literal 2 to
+  `TWIN_SCHEMA_VERSION + 1`. Both still assert the same finding behavior.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `866 passed in
+  20.29s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified.
+
 ## Next task
-- Phase 14a: add the pure Pydantic security model, deterministic default zone
-  derivation, bounded operations returning NEW twins, and backward-compatible
-  optional `DigitalTwin.security` with schema/fingerprint tests.
+- Phase 14b: implement stateless policy evaluation, first-match flow checks,
+  typed findings, the fixed design-weakness catalog, risk arithmetic, proposed
+  rules, and vendor-neutral templates.

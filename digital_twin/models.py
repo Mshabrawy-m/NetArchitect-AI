@@ -31,8 +31,10 @@ from core.schemas.network import Topology
 from core.schemas.requirements import Assumption
 from core.schemas.routing import TrafficDemand
 from network.vlan.plan import VlanPlanResult
+from security.models import SecurityModel
 
-TWIN_SCHEMA_VERSION = 1
+TWIN_SCHEMA_VERSION = 2
+SUPPORTED_TWIN_SCHEMA_VERSIONS: tuple[int, ...] = (1, 2)
 
 
 class OperationalState(str, Enum):
@@ -133,6 +135,13 @@ class DigitalTwin(BaseModel):
     assumptions: tuple[Assumption, ...] = Field(
         default_factory=tuple,
         description="Scenario assumptions recorded with the modeled design.",
+    )
+    security: SecurityModel | None = Field(
+        default=None,
+        description=(
+            "Optional design-time security model. It is omitted from JSON and "
+            "fingerprints when absent so legacy twin bytes stay compatible."
+        ),
     )
 
 

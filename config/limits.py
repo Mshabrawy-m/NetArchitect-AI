@@ -34,6 +34,20 @@ MAX_SCENARIOS: int = 20
 # single what-if scenario may name or add.
 MAX_SCENARIO_ELEMENTS: int = 50
 
+# Maximum zones in one modeled security design. Zones are design constructs,
+# not live network hosts, so this bound keeps editors and analysis deterministic.
+MAX_ZONES: int = 32
+
+# Maximum firewall rules in one modeled policy. First-match evaluation is linear
+# in rule count, so this keeps interactive flow checks bounded.
+MAX_FIREWALL_RULES: int = 128
+
+# Maximum named services in one modeled policy.
+MAX_SERVICES: int = 32
+
+# Maximum assumptions recorded with one security model.
+MAX_SECURITY_ASSUMPTIONS: int = 50
+
 # Maximum number of snapshots retained for one digital twin.
 MAX_SNAPSHOTS: int = 20
 

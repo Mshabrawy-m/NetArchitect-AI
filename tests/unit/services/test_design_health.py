@@ -5,7 +5,13 @@ from __future__ import annotations
 from core.schemas.addressing import AddressingPlan, DhcpScope, Subnet
 from core.schemas.network import Topology
 from core.schemas.validation import Severity
-from digital_twin import DeviceState, DigitalTwin, OperationalState, TwinMetadata
+from digital_twin import (
+    TWIN_SCHEMA_VERSION,
+    DeviceState,
+    DigitalTwin,
+    OperationalState,
+    TwinMetadata,
+)
 from network.vlan import VlanAssignment, VlanPlanResult
 from services.validation import (
     CATEGORY_ORDER,
@@ -31,7 +37,7 @@ def _schema_twin() -> DigitalTwin:
         metadata=TwinMetadata(
             name="Unsupported schema",
             created_at=CREATED_AT,
-            schema_version=2,
+            schema_version=TWIN_SCHEMA_VERSION + 1,
         )
     )
 

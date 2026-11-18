@@ -16,6 +16,7 @@ from .adapters import (
     validate_engine_twin,
 )
 from .models import (
+    SUPPORTED_TWIN_SCHEMA_VERSIONS,
     TWIN_SCHEMA_VERSION,
     DeviceState,
     DigitalTwin,
@@ -43,7 +44,7 @@ from .operations import (
     set_topology,
     set_vlan_plan,
 )
-from .serialization import from_json, json_size_bytes, to_json
+from .serialization import canonical_payload, from_json, json_size_bytes, to_json
 from .snapshots import (
     CapacityChange,
     CostChange,
@@ -58,6 +59,7 @@ from .snapshots import (
 from .validation import addressing_subnets, validate_twin
 
 __all__ = [
+    "SUPPORTED_TWIN_SCHEMA_VERSIONS",
     "TWIN_SCHEMA_VERSION",
     "CapacityChange",
     "CostChange",
@@ -77,6 +79,7 @@ __all__ = [
     "addressing_subnets",
     "analysis_arguments",
     "apply_failure",
+    "canonical_payload",
     "create_snapshot",
     "diff_twins",
     "effective_device_state",

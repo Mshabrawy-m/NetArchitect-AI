@@ -25,7 +25,7 @@ from network.addressing.validation import validate_addressing
 from network.topology import analyze_connectivity
 from network.vlan import validate_dhcp_scope
 
-from .models import TWIN_SCHEMA_VERSION, DigitalTwin
+from .models import SUPPORTED_TWIN_SCHEMA_VERSIONS, DigitalTwin
 
 _SEVERITY_ORDER = {
     Severity.critical: 0,
@@ -65,7 +65,8 @@ def validate_twin(twin: DigitalTwin) -> ValidationReport:
     """
     findings: list[Finding] = []
 
-    if twin.metadata.schema_version != TWIN_SCHEMA_VERSION:
+    if twin.metadata.schema_version not in SUPPORTED_TWIN_SCHEMA_VERSIONS:
+        supported = ", ".join(str(item) for item in SUPPORTED_TWIN_SCHEMA_VERSIONS)
         findings.append(
             Finding(
                 severity=Severity.error,
@@ -73,7 +74,7 @@ def validate_twin(twin: DigitalTwin) -> ValidationReport:
                 affected_entities=[],
                 explanation=(
                     f"Twin schema version {twin.metadata.schema_version} is not "
-                    f"supported; this build supports version {TWIN_SCHEMA_VERSION}."
+                    f"supported; this build supports versions {supported}."
                 ),
                 remediation="Re-import a twin produced by a supported application version.",
             )

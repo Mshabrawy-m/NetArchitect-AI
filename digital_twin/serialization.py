@@ -18,7 +18,7 @@ from config.limits import MAX_DEMANDS
 from core.exceptions import LimitsExceededError, SchemaError, TwinSchemaVersionError
 from network.topology import enforce_limits
 
-from .models import TWIN_SCHEMA_VERSION, DigitalTwin
+from .models import SUPPORTED_TWIN_SCHEMA_VERSIONS, DigitalTwin
 
 
 def _enforce_twin_limits(twin: DigitalTwin) -> None:
@@ -29,10 +29,21 @@ def _enforce_twin_limits(twin: DigitalTwin) -> None:
         )
 
 
+def canonical_payload(twin: DigitalTwin) -> dict[str, object]:
+    """Return the canonical mapping used for fingerprints.
+
+    ``security=None`` is omitted so twins created before Phase 14 have exactly
+    the same fingerprint bytes as before the optional field was added.
+    """
+    exclude = {"security"} if twin.security is None else None
+    return twin.model_dump(mode="json", exclude=exclude)
+
+
 def to_json(twin: DigitalTwin, *, indent: int | None = 2) -> str:
     """Serialize ``twin`` to JSON text after checking resource limits."""
     _enforce_twin_limits(twin)
-    return twin.model_dump_json(indent=indent)
+    exclude = {"security"} if twin.security is None else None
+    return twin.model_dump_json(indent=indent, exclude=exclude)
 
 
 def json_size_bytes(twin: DigitalTwin) -> int:
@@ -59,10 +70,11 @@ def from_json(payload: str) -> DigitalTwin:
         raise TwinSchemaVersionError(
             "Twin JSON metadata.schema_version must be an integer."
         )
-    if version != TWIN_SCHEMA_VERSION:
+    if version not in SUPPORTED_TWIN_SCHEMA_VERSIONS:
+        supported = ", ".join(str(item) for item in SUPPORTED_TWIN_SCHEMA_VERSIONS)
         raise TwinSchemaVersionError(
             f"Twin schema version {version} is not supported; this build "
-            f"supports version {TWIN_SCHEMA_VERSION}."
+            f"supports versions {supported}."
         )
 
     twin = DigitalTwin.model_validate(data)

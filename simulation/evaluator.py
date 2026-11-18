@@ -26,6 +26,7 @@ from core.schemas.network import Link, Topology
 from core.schemas.routing import TrafficDemand
 from digital_twin.adapters import failed_entities
 from digital_twin.models import DigitalTwin
+from digital_twin.serialization import canonical_payload
 from network.routing import component_summary, shortest_path
 from network.routing.paths import RoutePath
 
@@ -45,10 +46,11 @@ def twin_fingerprint(twin: DigitalTwin) -> str:
 
     Field order is fixed by the models, and ``sort_keys`` removes any
     dependence on mapping insertion order. The fingerprint changes whenever
-    the topology, demands, state, or metadata change.
+    the topology, demands, state, metadata, or stored security model change.
+    An absent security model is omitted so legacy twin fingerprints are stable.
     """
     payload = json.dumps(
-        twin.model_dump(mode="json"),
+        canonical_payload(twin),
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
