@@ -21,6 +21,7 @@ from config.limits import (
     MAX_SERVICES,
     MAX_ZONES,
 )
+from core.schemas.validation import Finding, Severity
 
 SECURITY_DISCLAIMER = (
     "Modeled design-time assessment. Not a vulnerability scan, penetration "
@@ -202,13 +203,256 @@ class SecurityModel(BaseModel):
         return tuple(sorted(self.rules, key=lambda rule: rule.order))
 
 
+class DisclosedModel(BaseModel):
+    """Base for every security output. The label cannot be edited away."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    disclaimer: str = SECURITY_DISCLAIMER
+
+    @field_validator("disclaimer")
+    @classmethod
+    def _require_exact_disclaimer(cls, value: str) -> str:
+        if value != SECURITY_DISCLAIMER:
+            raise ValueError("Security outputs must carry the exact disclaimer")
+        return value
+
+
+class FindingCategory(str, Enum):
+    """Origin of a typed security finding."""
+
+    policy = "policy"
+    design = "design"
+
+
+class RiskLevel(str, Enum):
+    """Modeled risk band derived from the visible score arithmetic."""
+
+    low = "low"
+    moderate = "moderate"
+    elevated = "elevated"
+    high = "high"
+
+
+class SecurityPosture(str, Enum):
+    """Overall posture derived from findings and modeled risk."""
+
+    hardened = "hardened"
+    needs_review = "needs_review"
+    high_risk = "high_risk"
+
+
+class FlowVerdict(str, Enum):
+    """Deterministic outcome of one end-to-end flow check."""
+
+    allowed = "allowed"
+    no_route = "no_route"
+    policy_denied = "policy_denied"
+    unassigned_zone = "unassigned_zone"
+
+
+class SecurityFinding(DisclosedModel):
+    """Typed finding with stable code, provenance, and remediation."""
+
+    code: str = Field(min_length=1)
+    category: FindingCategory
+    severity: Severity
+    affected_entities: tuple[str, ...] = Field(default_factory=tuple)
+    explanation: str
+    remediation: str
+    evidence: tuple[str, ...] = Field(default_factory=tuple)
+    proposal_src_zone: str = ""
+    proposal_dst_zone: str = ""
+
+    def to_validation_finding(self) -> Finding:
+        """Wrap this finding in the application's standard finding type."""
+        return Finding(
+            severity=self.severity,
+            code=self.code,
+            affected_entities=list(self.affected_entities),
+            explanation=self.explanation,
+            remediation=self.remediation,
+        )
+
+
+class CatalogRule(DisclosedModel):
+    """One fixed design-weakness catalog entry."""
+
+    id: str = Field(min_length=1)
+    title: str
+    trigger: str
+    base_severity: Severity
+    remediation: str
+
+
+class FlowRequest(DisclosedModel):
+    """One modeled flow between two devices in the twin."""
+
+    id: str = Field(min_length=1)
+    source_device_id: str = Field(min_length=1)
+    destination_device_id: str = Field(min_length=1)
+    protocol: Protocol
+    port: int = Field(default=0, ge=0, le=65_535)
+
+    @model_validator(mode="after")
+    def _validate_port(self) -> FlowRequest:
+        if self.protocol in {Protocol.icmp, Protocol.any} and self.port != 0:
+            raise ValueError(
+                f"Flow {self.id!r} uses {self.protocol.value}; its port must be 0"
+            )
+        return self
+
+
+class PolicyDecision(DisclosedModel):
+    """Result of stateless first-match policy evaluation."""
+
+    source_zone: str
+    destination_zone: str
+    protocol: Protocol
+    port: int
+    action: PolicyAction
+    matched_rule_id: str = ""
+    reason: str
+
+
+class ZoneTransition(DisclosedModel):
+    """One zone boundary crossed by a routed flow."""
+
+    index: int = Field(ge=1)
+    from_zone: str
+    to_zone: str
+    from_device: str
+    to_device: str
+    decision: PolicyDecision
+
+
+class FlowCheckResult(DisclosedModel):
+    """Routing plus policy outcome for one modeled flow."""
+
+    request: FlowRequest
+    verdict: FlowVerdict
+    route_reachable: bool
+    policy_permitted: bool
+    source_zone: str = ""
+    destination_zone: str = ""
+    device_path: tuple[str, ...] = Field(default_factory=tuple)
+    zone_transitions: tuple[ZoneTransition, ...] = Field(default_factory=tuple)
+    reason: str
+
+
+class RiskTerm(DisclosedModel):
+    """One visible contribution to the modeled risk score."""
+
+    label: str
+    value: int
+    basis: str
+
+
+class RiskAssessment(DisclosedModel):
+    """Deterministic risk score with hand-checkable arithmetic."""
+
+    score: int = Field(ge=0)
+    level: RiskLevel
+    formula: str
+    terms: tuple[RiskTerm, ...] = Field(default_factory=tuple)
+
+
+class SecuritySummary(DisclosedModel):
+    """Counts, highest severity, and overall posture for one analysis."""
+
+    zone_count: int = Field(ge=0)
+    service_count: int = Field(ge=0)
+    rule_count: int = Field(ge=0)
+    default_action: PolicyAction
+    finding_counts: dict[str, int] = Field(default_factory=dict)
+    highest_severity: Severity | None = None
+    posture: SecurityPosture
+
+
+class ProposedRule(DisclosedModel):
+    """A rule offered for explicit user acceptance, never auto-applied."""
+
+    id: str = Field(min_length=1)
+    src_zone: str = Field(min_length=1)
+    dst_zone: str = Field(min_length=1)
+    services: tuple[str, ...] = Field(default_factory=tuple)
+    any_service: bool = False
+    action: PolicyAction = PolicyAction.deny
+    reason: str
+    based_on_finding: str
+
+    @model_validator(mode="after")
+    def _validate_service_mode(self) -> ProposedRule:
+        if self.any_service and self.services:
+            raise ValueError("A proposed rule cannot combine any_service with services")
+        if not self.any_service and not self.services:
+            raise ValueError("A proposed rule must name a service or use any_service")
+        return self
+
+
+class ProposalSet(DisclosedModel):
+    """Bounded set of proposed policy changes."""
+
+    rules: tuple[ProposedRule, ...] = Field(
+        default_factory=tuple, max_length=MAX_FIREWALL_RULES
+    )
+
+
+class TemplateDocument(DisclosedModel):
+    """Vendor-neutral, data-only policy intent. No device syntax or commands."""
+
+    title: str
+    lines: tuple[str, ...] = Field(min_length=1)
+
+    @field_validator("lines")
+    @classmethod
+    def _require_template_header(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value or value[0] != "TEMPLATE - not applied to any device":
+            raise ValueError("Template first line must identify it as unapplied")
+        return value
+
+    def text(self) -> str:
+        """Return template lines as newline-delimited text."""
+        return "\n".join(self.lines)
+
+
+class SecurityAnalysis(DisclosedModel):
+    """Complete deterministic design-time security assessment."""
+
+    model: SecurityModel
+    findings: tuple[SecurityFinding, ...] = Field(default_factory=tuple)
+    flow_checks: tuple[FlowCheckResult, ...] = Field(default_factory=tuple)
+    summary: SecuritySummary
+    risk: RiskAssessment
+    proposals: ProposalSet
+    template: TemplateDocument
+
+
 __all__ = [
     "SECURITY_DISCLAIMER",
+    "CatalogRule",
+    "DisclosedModel",
+    "FindingCategory",
     "FirewallRule",
+    "FlowCheckResult",
+    "FlowRequest",
+    "FlowVerdict",
     "PolicyAction",
+    "PolicyDecision",
+    "ProposalSet",
+    "ProposedRule",
     "Protocol",
+    "RiskAssessment",
+    "RiskLevel",
+    "RiskTerm",
+    "SecurityAnalysis",
+    "SecurityFinding",
     "SecurityModel",
+    "SecurityPosture",
+    "SecuritySummary",
     "Service",
+    "TemplateDocument",
     "Zone",
+    "ZoneTransition",
     "ZoneType",
 ]

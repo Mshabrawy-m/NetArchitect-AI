@@ -2,17 +2,43 @@
 
 This package is deterministic and offline. It models policy and design
 weaknesses from a digital twin; it never scans, probes, or configures a network.
+Every analysis output carries the exact disclaimer in
+:data:`SECURITY_DISCLAIMER`.
 """
 
+from .catalog import (
+    OVERSIZED_SUBNET_RATIO,
+    RULE_CATALOG,
+    catalog_rule,
+    evaluate_design_rules,
+)
 from .derivation import derive_default_security_model
+from .engine import analyze_design
 from .models import (
     SECURITY_DISCLAIMER,
+    CatalogRule,
+    FindingCategory,
     FirewallRule,
+    FlowCheckResult,
+    FlowRequest,
+    FlowVerdict,
     PolicyAction,
+    PolicyDecision,
+    ProposalSet,
+    ProposedRule,
     Protocol,
+    RiskAssessment,
+    RiskLevel,
+    RiskTerm,
+    SecurityAnalysis,
+    SecurityFinding,
     SecurityModel,
+    SecurityPosture,
+    SecuritySummary,
     Service,
+    TemplateDocument,
     Zone,
+    ZoneTransition,
     ZoneType,
 )
 from .operations import (
@@ -33,27 +59,65 @@ from .operations import (
     update_service,
     update_zone,
 )
+from .policy import UNASSIGNED_ZONE, check_flow, device_zone_map, evaluate_policy
+from .remediation import accept_proposed_rules, build_proposals
+from .risk import DEFAULT_ALLOW_BONUS, SEVERITY_WEIGHTS, assess_risk, build_summary
+from .templates import TEMPLATE_HEADER, render_template
 
 __all__ = [
+    "DEFAULT_ALLOW_BONUS",
+    "OVERSIZED_SUBNET_RATIO",
+    "RULE_CATALOG",
     "SECURITY_DISCLAIMER",
+    "SEVERITY_WEIGHTS",
+    "TEMPLATE_HEADER",
+    "UNASSIGNED_ZONE",
+    "CatalogRule",
+    "FindingCategory",
     "FirewallRule",
+    "FlowCheckResult",
+    "FlowRequest",
+    "FlowVerdict",
     "PolicyAction",
+    "PolicyDecision",
+    "ProposalSet",
+    "ProposedRule",
     "Protocol",
+    "RiskAssessment",
+    "RiskLevel",
+    "RiskTerm",
+    "SecurityAnalysis",
+    "SecurityFinding",
     "SecurityModel",
+    "SecurityPosture",
+    "SecuritySummary",
     "Service",
+    "TemplateDocument",
     "Zone",
+    "ZoneTransition",
     "ZoneType",
+    "accept_proposed_rules",
     "add_assumption",
     "add_rule",
     "add_service",
     "add_zone",
+    "analyze_design",
+    "assess_risk",
+    "build_proposals",
+    "build_summary",
+    "catalog_rule",
+    "check_flow",
     "clear_security_model",
     "derive_default_security_model",
+    "device_zone_map",
     "ensure_security_model",
+    "evaluate_design_rules",
+    "evaluate_policy",
     "get_security_model",
     "remove_rule",
     "remove_service",
     "remove_zone",
+    "render_template",
     "reorder_rules",
     "set_default_action",
     "set_security_model",

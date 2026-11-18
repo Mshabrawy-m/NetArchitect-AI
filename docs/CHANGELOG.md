@@ -2,6 +2,45 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 14b: deterministic security engine
+
+### Added
+- `security/policy.py`: stateless first-match policy evaluation with explicit
+  default action, disabled-rule skipping, named-service matching, intra-zone
+  handling, and routing-aware `check_flow()` that distinguishes `no_route`,
+  `policy_denied`, `unassigned_zone`, and `allowed`.
+- `security/catalog.py`: nine fixed, ordered design-weakness rules from
+  `SEC-DW-001` to `SEC-DW-009`, covering flat networks, missing management zone,
+  public server placement, user-to-restricted paths, guest/IoT reachability,
+  boundary SPOF, oversized subnets, unzoned devices, and high-criticality
+  segmentation. Base severities are fixed in code, not configurable by UI state.
+- `security/risk.py`: visible modeled-risk arithmetic with weights
+  `info=0, warning=1, error=4, critical=8`, a `default_action=allow` bonus of 2,
+  thresholds `0=low`, `1-3=moderate`, `4-7=elevated`, `>=8=high`, and an
+  overall posture of hardened / needs_review / high_risk.
+- `security/remediation.py`: inert deny-rule proposals from actionable findings
+  and explicit acceptance into a NEW twin; accepted ids are validated before any
+  edit and applied in proposal order.
+- `security/templates.py`: vendor-neutral data-only records beginning with the
+  exact line `TEMPLATE - not applied to any device`; no device syntax or commands.
+- `security/engine.py`: `analyze_design()` combines the policy checks, design
+  catalog, flow checks, risk, proposals, and template in one deterministic call.
+- `tests/unit/security`: four-rule first-match tests, one crafted case per
+  catalog rule plus a clean hardened control, policy finding cases, exact risk
+  arithmetic and threshold/posture tests, proposal acceptance tests, both
+  end-to-end flow failure modes, and template header/data-only tests.
+
+### Changed
+- Security output models now inherit a `DisclosedModel` base that requires the
+  exact `SECURITY_DISCLAIMER`; findings, decisions, flow checks, risk, template,
+  and the complete analysis cannot be constructed with a different label.
+- Changed existing assertions: none. 14b adds new tests and new design fixtures;
+  it does not alter any assertion from earlier phases.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `904 passed in
+  23.74s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified. The
+  catalog is a modeling aid, not an audit standard.
+
 ## 2026-11-18 - Phase 14a: security models and backward-compatible twin field
 
 ### Added

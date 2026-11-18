@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: Phase 14 - Design-time Network Security Analysis (in progress)
-- Current task: Phase 14a - security models and backward-compatible twin field (complete)
-- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0/14a complete on `feature/phase14-security`
+- Current task: Phase 14b - deterministic security engine (complete)
+- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0/14a/14b complete on `feature/phase14-security`
 - Last updated: 2026-11-18
 - Branch: `feature/phase14-security` (based on updated `main` commit `7b33b74`)
 
@@ -21,7 +21,7 @@
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
 - [x] Phase 13: Predictive Capacity Planning (13a/13b/13c complete)
-- [ ] Phase 14: Design-time Network Security Analysis (14.0/14a complete)
+- [ ] Phase 14: Design-time Network Security Analysis (14.0/14a/14b complete)
 - [ ] Phase 15: Testing, Security review, and Deployment
 
 ## Task 0 evidence (verification and version control)
@@ -1630,7 +1630,36 @@ updated twin/serialization/validation/design-health tests.
   20.29s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
   passed!`. Browser rendering and live LLM behavior were not verified.
 
+## Phase 14b delivered - deterministic security engine
+Location: `security/models.py`, `security/policy.py`, `security/catalog.py`,
+`security/risk.py`, `security/remediation.py`, `security/templates.py`,
+`security/engine.py`, `security/__init__.py`, and `tests/unit/security/`.
+
+- Policy is stateless first-match with an explicit default. Flow checks combine
+  deterministic routing and policy; no-route and policy-denied are distinct,
+  typed outcomes. Intra-zone traffic bypasses inter-zone rules, and disabled
+  rules are ignored.
+- The fixed catalog has nine rules: `SEC-DW-001` flat network (error),
+  `SEC-DW-002` no management zone (warning), `SEC-DW-003` public server outside
+  DMZ (error), `SEC-DW-004` user reaches management/server without rule (error),
+  `SEC-DW-005` guest/IoT reaches internal zones (critical), `SEC-DW-006` single
+  security boundary/SPOF (warning), `SEC-DW-007` oversized subnet (warning),
+  `SEC-DW-008` devices without a zone (warning), and `SEC-DW-009` missing
+  inter-department segmentation for criticality >= 4 (error).
+- Risk is hand-checkable: `severity count x weight` plus a 2-point bonus when
+  the default action is allow. Weights are info 0, warning 1, error 4, critical
+  8; score bands are 0 low, 1-3 moderate, 4-7 elevated, 8+ high.
+- Proposals are inert deny rules until explicit ids are accepted into a NEW twin.
+  Templates are vendor-neutral data records beginning with
+  `TEMPLATE - not applied to any device`; no commands or device syntax are
+  generated. All outputs carry the exact disclaimer.
+- Changed existing assertions: none. 14b added new tests and design fixtures.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `904 passed in
+  23.74s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified. The
+  catalog is a modeling aid, not an audit standard.
+
 ## Next task
-- Phase 14b: implement stateless policy evaluation, first-match flow checks,
-  typed findings, the fixed design-weakness catalog, risk arithmetic, proposed
-  rules, and vendor-neutral templates.
+- Phase 14c: add the strictly allowlisted Security Agent with AI-labeled
+  explanations only, ToolRegistry validation, orchestrator/critic/report and
+  design-health integration, and a security gate with no network I/O.
