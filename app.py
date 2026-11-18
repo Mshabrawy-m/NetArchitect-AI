@@ -11,8 +11,8 @@ Designer and read-only Agent Control Center pages. Phase 11 adds
 provenance-tagged reports, in-memory exports, and the Reports & Documentation
 page. The Topology Editor, IP Addressing, VLAN & DHCP Planner, Routing
 Analysis, Network Analytics, Digital Twin, Simulation Lab, Optimization Center,
-Capacity Planning, AI Network Designer, Agent Control Center, Reports &
-Documentation, and Settings are working engineering pages.
+Capacity Planning, Security Analysis, AI Network Designer, Agent Control
+Center, Reports & Documentation, and Settings are working engineering pages.
 """
 
 from __future__ import annotations
@@ -30,12 +30,13 @@ from ui.pages.network_analytics import render as render_network_analytics
 from ui.pages.optimization_center import render as render_optimization_center
 from ui.pages.reports import render as render_reports
 from ui.pages.routing_analysis import render as render_routing_analysis
+from ui.pages.security_analysis import render as render_security_analysis
 from ui.pages.settings import render as render_settings
 from ui.pages.simulation_lab import render as render_simulation_lab
 from ui.pages.topology_editor import render as render_topology_editor
 from ui.pages.vlan_dhcp import render as render_vlan_dhcp
 
-# The 14 planned application pages from the blueprint (section 7).
+# The 15 planned application pages from the blueprint (section 7).
 PAGES: tuple[str, ...] = (
     "Dashboard",
     "AI Network Designer",
@@ -48,6 +49,7 @@ PAGES: tuple[str, ...] = (
     "Simulation Lab",
     "Optimization Center",
     "Capacity Planning",
+    "Security Analysis",
     "Agent Control Center",
     "Reports & Documentation",
     "Settings",
@@ -61,7 +63,7 @@ def render_sidebar_navigation() -> str:
     with st.sidebar:
         st.markdown("## Navigation")
         page = st.selectbox("Page", PAGES, index=0, key="page_nav")
-        st.caption("All 14 pages are available.")
+        st.caption("All 15 pages are available.")
         st.divider()
         st.caption("NetArchitect AI - deterministic network engineering first.")
     return page
@@ -202,6 +204,8 @@ def main() -> None:
         render_optimization_center()
     elif page == "Capacity Planning":
         render_capacity_planning()
+    elif page == "Security Analysis":
+        render_security_analysis()
     elif page == "Agent Control Center":
         render_agent_control_center()
     elif page == "Reports & Documentation":

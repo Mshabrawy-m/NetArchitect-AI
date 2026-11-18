@@ -2,6 +2,7 @@
 
 The baseline twin lives under exactly one session key (``TWIN_KEY``). Pages and
 tests must not read or write that key directly; they use the functions here.
+Modeled security flow checks are likewise kept behind bounded accessors.
 
 Legacy sessions that still hold a bare ``Topology`` in ``st.session_state[
 "topology"]`` are migrated once, on first access, into a twin. The legacy key is
@@ -17,7 +18,7 @@ from typing import Any
 import streamlit as st
 
 from capacity import CapacityHistory, CapacityRun
-from config.limits import MAX_OPTIMIZATION_RUNS
+from config.limits import MAX_OPTIMIZATION_RUNS, MAX_SECURITY_FLOW_CHECKS
 from core.schemas.addressing import AddressingPlan, DhcpScope
 from core.schemas.network import Topology
 from core.schemas.routing import TrafficDemand
@@ -45,6 +46,7 @@ from digital_twin import (
 from forecasting import ForecastRun, TimeSeries
 from network.vlan.plan import VlanPlanResult
 from optimization import OptimizationHistory, OptimizationRun
+from security import FlowRequest
 from services.llm import RequestBudget
 from simulation import ScenarioHistory, ScenarioRun
 
@@ -58,6 +60,7 @@ OPTIMIZATION_SOURCE_FINGERPRINTS_KEY = "optimization_source_fingerprints"
 CAPACITY_SERIES_KEY = "capacity_series"
 CAPACITY_FORECAST_KEY = "capacity_forecast"
 CAPACITY_HISTORY_KEY = "capacity_history"
+SECURITY_FLOWS_KEY = "security_flow_requests"
 LEGACY_TOPOLOGY_KEY = "topology"
 FLASH_KEY = "topology_editor_flash"
 
@@ -462,6 +465,59 @@ def remove_capacity_run(index: int) -> CapacityRun:
 def clear_capacity_history() -> None:
     """Remove every retained capacity run."""
     get_capacity_history().clear()
+
+
+def get_security_flows() -> tuple[FlowRequest, ...]:
+    """Return bounded, typed modeled flow checks without creating a session key."""
+    value = session_get(SECURITY_FLOWS_KEY, ())
+    if not isinstance(value, (tuple, list)):
+        return ()
+    return tuple(
+        item for item in value if isinstance(item, FlowRequest)
+    )[:MAX_SECURITY_FLOW_CHECKS]
+
+
+def peek_security_flows() -> tuple[FlowRequest, ...]:
+    """Return modeled flow checks without creating an empty session key."""
+    return get_security_flows()
+
+
+def set_security_flows(flows: tuple[FlowRequest, ...] | list[FlowRequest]) -> tuple[FlowRequest, ...]:
+    """Replace the bounded set of modeled flow checks."""
+    cleaned = tuple(
+        item for item in flows if isinstance(item, FlowRequest)
+    )[:MAX_SECURITY_FLOW_CHECKS]
+    session_set(SECURITY_FLOWS_KEY, cleaned)
+    return cleaned
+
+
+def add_security_flow(flow: FlowRequest) -> tuple[FlowRequest, ...]:
+    """Add or replace one flow check, enforcing the session bound."""
+    if not isinstance(flow, FlowRequest):
+        raise TypeError("A security flow check must be a FlowRequest.")
+    existing = [item for item in get_security_flows() if item.id != flow.id]
+    if len(existing) + 1 > MAX_SECURITY_FLOW_CHECKS:
+        raise ValueError(
+            f"The security session limit is {MAX_SECURITY_FLOW_CHECKS} flow checks."
+        )
+    updated = (*existing, flow)
+    session_set(SECURITY_FLOWS_KEY, updated)
+    return updated
+
+
+def remove_security_flow(index: int) -> FlowRequest:
+    """Remove one flow check by its displayed index."""
+    flows = get_security_flows()
+    if not isinstance(index, int) or not 0 <= index < len(flows):
+        raise IndexError("No flow check is selected for removal.")
+    removed = flows[index]
+    session_set(SECURITY_FLOWS_KEY, flows[:index] + flows[index + 1 :])
+    return removed
+
+
+def clear_security_flows() -> None:
+    """Remove every modeled flow check from this session."""
+    session_delete(SECURITY_FLOWS_KEY)
 
 
 def report_generated_at(fingerprint: str) -> datetime:

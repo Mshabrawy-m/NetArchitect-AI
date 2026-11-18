@@ -9,18 +9,22 @@ import pytest
 from capacity import DemandMapping, evaluate_capacity
 from forecasting import GapPolicy
 from optimization import CostModel
+from security import FlowRequest, Protocol
 from simulation import SimulationAssumptions
 from tests.unit.capacity.helpers import constant_run, line_capacity_twin
 from tests.unit.digital_twin.helpers import make_twin
 from tests.unit.forecasting.helpers import make_series
+from tests.unit.security.design_helpers import hardened_design
 from ui import cache
 from ui.cache import (
     cached_capacity_run,
     cached_design_health,
     cached_forecast_run,
     cached_report,
+    cached_security_analysis,
     capacity_series_payload,
     capacity_source_payload,
+    security_flows_payload,
     source_payload,
     twin_cache_key,
     twin_payload,
@@ -181,3 +185,45 @@ def test_cached_report_includes_the_selected_capacity_source() -> None:
         record.key == "capacity.projected_steps"
         for record in with_capacity.values
     )
+
+
+def test_security_analysis_cache_is_keyed_by_twin_model_and_flows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    original = cache.analyze_design
+    twin, model = hardened_design()
+    flow = FlowRequest(
+        id="user-to-mgmt",
+        source_device_id="user-sw",
+        destination_device_id="mgmt-sw",
+        protocol=Protocol.tcp,
+        port=80,
+    )
+    changed_flow = flow.model_copy(update={"id": "other"})
+
+    def spy(twin_arg, *, model=None, flows=()):
+        calls.append(f"{twin_arg.metadata.name}:{len(flows)}")
+        return original(twin_arg, model=model, flows=flows)
+
+    monkeypatch.setattr(cache, "analyze_design", spy)
+    cached_security_analysis.clear()
+
+    args = (
+        twin_payload(twin),
+        model.model_dump_json(),
+        security_flows_payload((flow,)),
+    )
+    first = cached_security_analysis(*args)
+    second = cached_security_analysis(*args)
+    changed = cached_security_analysis(
+        twin_payload(twin),
+        model.model_dump_json(),
+        security_flows_payload((changed_flow,)),
+    )
+
+    assert first == second
+    assert first.flow_checks[0].request.id == "user-to-mgmt"
+    assert changed.flow_checks[0].request.id == "other"
+    assert len(calls) == 2
+    assert all(call.endswith(":1") for call in calls)

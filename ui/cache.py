@@ -27,6 +27,7 @@ from forecasting import (
     forecast_series,
 )
 from optimization import CostModel, OptimizationRun
+from security import FlowRequest, SecurityAnalysis, SecurityModel, analyze_design
 from services.export import (
     pdf_warnings,
     to_config_bundle,
@@ -79,6 +80,33 @@ def capacity_series_payload(series: tuple[TimeSeries, ...]) -> str:
 def capacity_source_payload(source: CapacityRun | None) -> str:
     """Return canonical JSON for an optional capacity report source."""
     return source.model_dump_json() if source is not None else ""
+
+
+def security_flows_payload(flows: tuple[FlowRequest, ...] | list[FlowRequest]) -> str:
+    """Return canonical JSON for bounded modeled security flow checks."""
+    return json.dumps(
+        [json.loads(item.model_dump_json()) for item in flows],
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
+def cached_security_analysis(
+    twin_payload: str,
+    model_payload: str,
+    flows_payload: str,
+) -> SecurityAnalysis:
+    """Build one deterministic security assessment per content-keyed input set."""
+    return analyze_design(
+        DigitalTwin.model_validate_json(twin_payload),
+        model=SecurityModel.model_validate_json(model_payload),
+        flows=tuple(
+            FlowRequest.model_validate_json(json.dumps(item))
+            for item in json.loads(flows_payload)
+        ),
+    )
 
 
 @st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
@@ -213,8 +241,10 @@ __all__ = [
     "cached_exports",
     "cached_forecast_run",
     "cached_report",
+    "cached_security_analysis",
     "capacity_series_payload",
     "capacity_source_payload",
+    "security_flows_payload",
     "source_payload",
     "twin_cache_key",
     "twin_payload",

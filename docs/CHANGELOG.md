@@ -2,6 +2,40 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 14d: Security Analysis UI
+
+### Added
+- `ui/pages/security_analysis.py`: 15th application page with Zones, Policy,
+  Flow check, Findings, and Templates tabs. It is presentation only: all edits
+  go through the immutable security operations, all results come from the
+  deterministic engine, and the exact design-time disclaimer is always shown.
+- Zones and Policy editors use shared components and versioned widget keys.
+  Rejected edits bump the affected key, queue a one-shot error notice, and
+  rerun from the stored model rather than leaving rejected rows on screen.
+  Zone ids, service names, and rule ids are immutable, and rule references are
+  validated before a model is stored.
+- Bounded session accessors for modeled flow checks in `ui/state.py`, capped by
+  `MAX_SECURITY_FLOW_CHECKS`. `ui/cache.py` adds a content-keyed
+  `cached_security_analysis` keyed by canonical twin, model, and flow payloads.
+- Findings show visible risk arithmetic, typed findings, the fixed catalog, and
+  proposed rules. Proposals are inert until IDs are selected and explicitly
+  accepted into a new twin. Templates are vendor-neutral data-only downloads.
+- AppTest coverage for the twin-required state, five tabs, flow add/remove,
+  accepted and rejected edits, proposal acceptance, and disclosures; cache and
+  navigation tests cover the new content key and 15-page sidebar.
+
+### Changed
+- `app.py` now lists and dispatches 15 pages, with Security Analysis immediately
+  after Capacity Planning. The sidebar caption says all 15 pages are available.
+- Changed existing assertions (disclosed): `tests/unit/ui/test_navigation.py`
+  now asserts 15 declared pages and the Security Analysis position;
+  `tests/unit/ui/test_cache.py` imports the new security cache helpers and adds
+  one cache test. No existing assertion was weakened.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `938 passed in
+  22.97s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified. The
+  catalog is a modeling aid, not an audit standard.
+
 ## 2026-11-18 - Phase 14c: Security Agent and integration
 
 ### Added

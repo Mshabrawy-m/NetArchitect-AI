@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: Phase 14 - Design-time Network Security Analysis (in progress)
-- Current task: Phase 14c - Security Agent and integration (complete)
-- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0/14a/14b/14c complete on `feature/phase14-security`
+- Current task: Phase 14d - Security Analysis UI (complete)
+- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0/14a/14b/14c/14d complete on `feature/phase14-security`
 - Last updated: 2026-11-18
 - Branch: `feature/phase14-security` (based on updated `main` commit `7b33b74`)
 
@@ -21,7 +21,7 @@
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
 - [x] Phase 13: Predictive Capacity Planning (13a/13b/13c complete)
-- [ ] Phase 14: Design-time Network Security Analysis (14.0/14a/14b/14c complete)
+- [ ] Phase 14: Design-time Network Security Analysis (14.0/14a/14b/14c/14d complete)
 - [ ] Phase 15: Testing, Security review, and Deployment
 
 ## Task 0 evidence (verification and version control)
@@ -1693,9 +1693,34 @@ Location: `agents/security_agent.py`, `agents/tools.py`, `agents/critic.py`,
   passed!`. Browser rendering and live LLM behavior were not verified. The
   catalog is a modeling aid, not an audit standard.
 
+## Phase 14d delivered - Security Analysis UI
+Location: `ui/pages/security_analysis.py`, `app.py`, `ui/state.py`, `ui/cache.py`,
+and new/updated UI tests.
+
+- Security Analysis is the 15th sidebar page, placed immediately after Capacity
+  Planning. With no twin it shows the standard twin-required empty state; the
+  exact disclaimer is shown before the empty state and on every page load.
+- The five tabs are Zones, Policy, Flow check, Findings, and Templates. Zones and
+  Policy use shared UI components and versioned `st.data_editor` keys. Rejected
+  edits bump the relevant key, queue a notice, and rerun from the stored model;
+  zone ids, service names, and rule ids are immutable, and every rule reference
+  is validated before storage.
+- Flow checks are kept behind bounded, typed session accessors capped at
+  `MAX_SECURITY_FLOW_CHECKS`. `cached_security_analysis` is content-keyed by the
+  canonical twin, security model, and flow payloads, so identical reruns reuse
+  the assessment and any edit invalidates it.
+- Findings display visible risk arithmetic, typed design/policy findings, the
+  fixed catalog, and inert proposals. A proposal changes the twin only after the
+  user selects its id and confirms explicit acceptance. Templates are
+  vendor-neutral, data-only downloads and contain no device syntax or commands.
+- Changed existing assertions (disclosed): navigation now asserts 15 pages and
+  the Security Analysis position; the UI cache test file adds the security
+  cache helper imports and one cache test. No assertion was weakened.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `938 passed in
+  22.97s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified. The
+  catalog is a modeling aid, not an audit standard.
+
 ## Next task
-- Phase 14d: add the Security Analysis UI as the 15th page with the twin-required
-  empty state, Zones/Policy/Flow check/Findings/Templates tabs, exact disclaimer,
-  versioned editor keys, rejected-edit reset, bounded session accessors,
-  content-keyed caches, shared helpers, AppTest coverage, and 15-page navigation
-  tests.
+- Phase 15 Testing is not started and remains outside the approved Phase 14
+  scope. It requires its own owner-approved task before implementation.

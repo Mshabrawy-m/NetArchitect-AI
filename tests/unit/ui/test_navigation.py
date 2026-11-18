@@ -16,6 +16,12 @@ APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 _PLACEHOLDER_WORDS = ("coming soon", "later phase", "will be implemented")
 
 
+def test_navigation_has_fifteen_declared_pages() -> None:
+    assert len(PAGES) == 15
+    assert "Security Analysis" in PAGES
+    assert PAGES.index("Security Analysis") == PAGES.index("Capacity Planning") + 1
+
+
 def _visible_text(at: AppTest) -> str:
     groups = (
         at.title,
