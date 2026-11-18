@@ -10,8 +10,16 @@ from __future__ import annotations
 import csv
 import io
 import json
+from collections.abc import Iterable
+from typing import Any
+
+from core.csv_safe import neutralize_cell
 
 from .models import CandidateEvaluation, OptimizationRun
+
+
+def _write_row(writer: Any, values: Iterable[Any]) -> None:
+    writer.writerow([neutralize_cell(value) for value in values])
 
 
 def run_to_json(run: OptimizationRun, *, indent: int | None = 2) -> str:
@@ -111,7 +119,7 @@ def run_to_csv(run: OptimizationRun) -> str:
         "crowding_distance",
         *(f"objective_{kind}" for kind in objective_kinds),
     ]
-    writer.writerow(columns)
+    _write_row(writer, columns)
 
     def write_row(kind: str, evaluation: CandidateEvaluation, record) -> None:
         row = _base_row(run, evaluation)
@@ -122,7 +130,7 @@ def run_to_csv(run: OptimizationRun) -> str:
         )
         for value in evaluation.objectives:
             row[f"objective_{value.kind.value}"] = value.raw_value
-        writer.writerow([row.get(column) for column in columns])
+        _write_row(writer, (row.get(column) for column in columns))
 
     write_row("baseline", run.baseline, None)
     for record in run.candidates:

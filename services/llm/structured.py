@@ -6,12 +6,19 @@ provider under a bounded retry count or rejected with a typed error.
 
 from __future__ import annotations
 
-import json
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from core.exceptions import LLMMalformedResponseError, LLMSchemaError
+from core.exceptions import (
+    InputError,
+    LLMMalformedResponseError,
+    LLMSchemaError,
+    MalformedInputError,
+)
+from core.inputs import parse_json_text, validate_text_size
+
+_MALFORMED = object()
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -23,26 +30,30 @@ def extract_json(text: str) -> Any:
     for the first object or array and ignores surrounding text, but it never
     evaluates code.
     """
-    stripped = text.strip()
+    stripped = validate_text_size(text, label="LLM response").strip()
     if stripped.startswith("```"):
         lines = stripped.splitlines()
         if len(lines) >= 2:
             stripped = "\n".join(lines[1:]).removesuffix("```").strip()
 
-    try:
-        return json.loads(stripped)
-    except json.JSONDecodeError:
-        pass
+    def bounded_decode(candidate: str) -> Any:
+        try:
+            return parse_json_text(candidate, label="LLM response")
+        except MalformedInputError:
+            return _MALFORMED
+        except InputError as error:
+            raise LLMMalformedResponseError(str(error)) from error
 
-    decoder = json.JSONDecoder()
+    first = bounded_decode(stripped)
+    if first is not _MALFORMED:
+        return first
+
     for index, character in enumerate(stripped):
         if character not in "{[":
             continue
-        try:
-            value, _ = decoder.raw_decode(stripped[index:])
-        except json.JSONDecodeError:
-            continue
-        return value
+        value = bounded_decode(stripped[index:])
+        if value is not _MALFORMED:
+            return value
     raise LLMMalformedResponseError(
         "The LLM response did not contain a JSON object or array."
     )

@@ -75,6 +75,26 @@ class LimitsExceededError(NetArchitectError):
     """A bounded resource limit was exceeded."""
 
 
+class InputError(NetArchitectError):
+    """Base class for untrusted input rejected at an application boundary."""
+
+
+class InvalidInputError(InputError):
+    """Untrusted input is structurally invalid."""
+
+
+class MalformedInputError(InvalidInputError):
+    """Untrusted input could not be parsed into a structured value."""
+
+
+class OversizedInputError(InputError, LimitsExceededError):
+    """Untrusted input exceeds a documented size or complexity cap."""
+
+
+class UnsafeInputError(InvalidInputError):
+    """Untrusted input contains control, path-like, or injection-like text."""
+
+
 class SimulationError(NetArchitectError):
     """Base class for simulation-engine failures."""
 

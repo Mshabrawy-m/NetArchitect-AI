@@ -17,6 +17,7 @@ import csv
 import io
 from dataclasses import dataclass
 
+from core.csv_safe import neutralize_cell
 from services.reporting.models import ReportDocument, TableBlock
 
 from .common import stable_zip
@@ -63,8 +64,10 @@ class CsvTable:
         """Render one CSV table as UTF-8 bytes."""
         buffer = io.StringIO(newline="")
         writer = csv.writer(buffer, lineterminator="\r\n")
-        writer.writerow(self.columns)
-        writer.writerows(self.rows)
+        writer.writerow([neutralize_cell(value) for value in self.columns])
+        writer.writerows(
+            tuple(neutralize_cell(value) for value in row) for row in self.rows
+        )
         payload = buffer.getvalue().encode("utf-8")
         if bom:
             payload = codecs.BOM_UTF8 + payload

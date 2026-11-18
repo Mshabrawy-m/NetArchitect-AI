@@ -12,6 +12,8 @@ enum values, dangling endpoints, and duplicate ids are rejected with
 
 from __future__ import annotations
 
+from core.exceptions import MalformedInputError
+from core.inputs import parse_json_text
 from core.schemas.network import Topology
 
 from .operations import enforce_limits
@@ -28,6 +30,12 @@ def to_json(topology: Topology, *, indent: int | None = 2) -> str:
 
 
 def from_json(payload: str) -> Topology:
-    """Parse and validate a topology from JSON text."""
-    topology = Topology.model_validate_json(payload)
+    """Parse and validate a topology from bounded, untrusted JSON text."""
+    try:
+        data = parse_json_text(payload, label="Topology JSON")
+    except MalformedInputError:
+        # Preserve the existing ValidationError contract for malformed syntax.
+        topology = Topology.model_validate_json(payload)
+    else:
+        topology = Topology.model_validate(data)
     return enforce_limits(topology)

@@ -199,3 +199,30 @@ MAX_CAPACITY_RUNTIME_SECONDS: float = 30.0
 
 # Maximum number of bounded capacity runs retained in one Streamlit session.
 MAX_CAPACITY_RUNS: int = 20
+
+# Maximum UTF-8 byte size accepted by one untrusted JSON or text upload. The cap
+# is checked before decoding or parsing so a malformed payload cannot consume
+# unbounded memory on the free tier.
+MAX_INPUT_BYTES: int = 2_000_000
+
+# Maximum UTF-8 byte size accepted from one pasted or uploaded CSV payload. This
+# is deliberately below the generic JSON cap because CSV parsing is row-based.
+MAX_CSV_INPUT_BYTES: int = 1_000_000
+
+# Maximum nesting depth accepted in untrusted JSON. The depth is checked with a
+# linear scan before json.loads so deeply nested input cannot trigger recursion.
+MAX_JSON_DEPTH: int = 64
+
+# Maximum number of keys accepted in one untrusted JSON object.
+MAX_JSON_OBJECT_KEYS: int = 1_000
+
+# Maximum characters accepted in one untrusted JSON string value or object key.
+MAX_INPUT_STRING_CHARS: int = 4_000
+
+# Maximum characters accepted in one identifier (device id, link id, series id,
+# zone id, and similar fields) taken from untrusted input.
+MAX_IDENTIFIER_CHARS: int = 128
+
+# Largest absolute numeric magnitude accepted from untrusted JSON or CSV input.
+# Values beyond this are rejected with a typed finding before model projection.
+MAX_INPUT_NUMERIC_MAGNITUDE: float = 1e12

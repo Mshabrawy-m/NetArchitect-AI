@@ -12,6 +12,8 @@ import csv
 import io
 import json
 
+from core.csv_safe import neutralize_cell
+
 from .scenarios import ScenarioRun
 from .tables import metric_rows
 
@@ -39,7 +41,12 @@ def run_to_csv(run: ScenarioRun) -> str:
     writer.writerow(["Metric", "Baseline", "Scenario", "Delta"])
     for row in rows:
         writer.writerow(
-            [row["Metric"], row["Baseline"], row["Scenario"], row["Delta"]]
+            [
+                neutralize_cell(row["Metric"]),
+                neutralize_cell(row["Baseline"]),
+                neutralize_cell(row["Scenario"]),
+                neutralize_cell(row["Delta"]),
+            ]
         )
     return buffer.getvalue()
 

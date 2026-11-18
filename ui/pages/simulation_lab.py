@@ -22,7 +22,8 @@ import streamlit as st
 from pydantic import ValidationError
 
 from config.limits import MAX_SCENARIOS
-from core.exceptions import NetArchitectError
+from core.exceptions import InputError, NetArchitectError
+from core.inputs import parse_json_text
 from core.schemas.routing import TrafficDemand
 from core.schemas.scenario import Scenario, ScenarioType
 from digital_twin import DigitalTwin
@@ -484,10 +485,12 @@ def _parse_assumptions(
     delay_text: str,
 ) -> SimulationAssumptions:
     try:
-        delays = json.loads(delay_text or "{}")
-    except json.JSONDecodeError as error:
+        delays = parse_json_text(
+            delay_text or "{}", label="Link delay assumptions"
+        )
+    except InputError as error:
         raise ValueError(
-            "Link delay assumptions must be a valid JSON object."
+            "Link delay assumptions must be a bounded JSON object."
         ) from error
     if not isinstance(delays, dict):
         raise TypeError("Link delay assumptions must be a JSON object.")
@@ -504,10 +507,10 @@ def _parse_assumptions(
 def _parse_expansion() -> dict[str, object]:
     raw = state.session_get("simulation_expansion_json", EXPANSION_TEMPLATE)
     try:
-        expansion = json.loads(raw or "{}")
-    except json.JSONDecodeError as error:
+        expansion = parse_json_text(raw or "{}", label="Expansion entities")
+    except InputError as error:
         raise ValueError(
-            "Expansion entities must be a valid JSON object."
+            "Expansion entities must be a bounded JSON object."
         ) from error
     if not isinstance(expansion, dict):
         raise TypeError("Expansion entities must be a JSON object.")

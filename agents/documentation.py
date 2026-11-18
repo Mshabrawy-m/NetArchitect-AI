@@ -22,6 +22,7 @@ import re
 from pydantic import BaseModel, Field
 
 from config.limits import MAX_DOCUMENTATION_EXPLANATION_CHARS
+from core.csv_safe import neutralize_cell
 from core.exceptions import LLMError
 from core.schemas.requirements import NetworkRequirements
 from security import SECURITY_DISCLAIMER
@@ -992,12 +993,15 @@ def export_csv(report: DocumentationOutput) -> str:
                 )
                 writer.writerow(
                     [
-                        table.title,
-                        row_index,
-                        column,
-                        value,
-                        table.step,
-                        table.tool,
+                        neutralize_cell(item)
+                        for item in (
+                            table.title,
+                            row_index,
+                            column,
+                            value,
+                            table.step,
+                            table.tool,
+                        )
                     ]
                 )
     return buffer.getvalue()

@@ -12,10 +12,14 @@ actionable message rather than an opaque field error.
 
 from __future__ import annotations
 
-import json
-
 from config.limits import MAX_DEMANDS
-from core.exceptions import LimitsExceededError, SchemaError, TwinSchemaVersionError
+from core.exceptions import (
+    LimitsExceededError,
+    MalformedInputError,
+    SchemaError,
+    TwinSchemaVersionError,
+)
+from core.inputs import parse_json_text
 from network.topology import enforce_limits
 
 from .models import SUPPORTED_TWIN_SCHEMA_VERSIONS, DigitalTwin
@@ -54,9 +58,9 @@ def json_size_bytes(twin: DigitalTwin) -> int:
 def from_json(payload: str) -> DigitalTwin:
     """Parse a twin from JSON text and check its schema version first."""
     try:
-        data = json.loads(payload)
-    except json.JSONDecodeError as error:
-        raise SchemaError(f"Twin JSON is not valid JSON: {error.msg}") from error
+        data = parse_json_text(payload, label="Twin JSON")
+    except MalformedInputError as error:
+        raise SchemaError(f"Twin JSON is not valid JSON: {error}") from error
     if not isinstance(data, dict):
         raise SchemaError("Twin JSON payload must be an object.")
 

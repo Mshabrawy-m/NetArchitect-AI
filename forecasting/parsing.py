@@ -30,8 +30,11 @@ from datetime import datetime
 from config.limits import (
     MAX_FORECAST_POINTS,
     MAX_FORECAST_SERIES,
+    MAX_INPUT_NUMERIC_MAGNITUDE,
     MIN_FORECAST_POINTS,
 )
+from core.exceptions import InputError
+from core.inputs import validate_csv_input, validate_identifier
 
 from .models import (
     DataProvenance,
@@ -110,6 +113,15 @@ def _parse_value(raw: str, row: int, findings: list[Finding]) -> float | None | 
             _finding(
                 FindingCode.non_numeric_value,
                 f"Row {row}: value {raw!r} is not finite.",
+                row=row,
+            )
+        )
+        return _INVALID
+    if abs(value) > MAX_INPUT_NUMERIC_MAGNITUDE:
+        findings.append(
+            _finding(
+                FindingCode.non_numeric_value,
+                f"Row {row}: value {value:g} exceeds the supported magnitude.",
                 row=row,
             )
         )
@@ -212,9 +224,10 @@ def _fill_series(
 
 
 def parse_csv(text: str, *, gap_policy: GapPolicy = GapPolicy.reject) -> ParseResult:
-    """Parse and validate CSV text, returning series plus typed findings."""
+    """Parse and validate bounded CSV text, returning series plus findings."""
+    text = validate_csv_input(text, label="CSV rows")
     findings: list[Finding] = []
-    if not isinstance(text, str) or not text.strip():
+    if not text.strip():
         return ParseResult(
             findings=(_finding(FindingCode.empty_input, "No CSV data was supplied."),)
         )
@@ -269,6 +282,17 @@ def parse_csv(text: str, *, gap_policy: GapPolicy = GapPolicy.reject) -> ParseRe
                 _finding(
                     FindingCode.invalid_series_id,
                     f"Row {row_number}: series id is empty.",
+                    row=row_number,
+                )
+            )
+            continue
+        try:
+            validate_identifier(series_id, field="series_id")
+        except InputError:
+            findings.append(
+                _finding(
+                    FindingCode.invalid_series_id,
+                    f"Row {row_number}: series id is not a safe identifier.",
                     row=row_number,
                 )
             )

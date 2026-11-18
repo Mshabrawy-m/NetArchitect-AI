@@ -21,7 +21,7 @@ from config.limits import (
     MAX_CAPACITY_RUNTIME_SECONDS,
     MAX_FORECAST_SERIES,
 )
-from core.exceptions import CapacityError, ForecastError
+from core.exceptions import CapacityError, ForecastError, InputError
 from forecasting import (
     GapPolicy,
     SeriesUnit,
@@ -123,7 +123,11 @@ def _render_data_tab() -> None:
         help="Leading and trailing gaps are never filled; every fill is reported.",
     )
     if st.button("Parse supplied CSV", key=PARSE_KEY):
-        result = parse_csv(text, gap_policy=GapPolicy(gap_value))
+        try:
+            result = parse_csv(text, gap_policy=GapPolicy(gap_value))
+        except InputError as error:
+            st.error(str(error), title="CSV input rejected")
+            return
         for finding in result.findings:
             if finding.severity.value == "error":
                 st.error(f"{finding.code.value}: {finding.message}")

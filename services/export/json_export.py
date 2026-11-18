@@ -13,7 +13,9 @@ import json
 
 from pydantic import ValidationError
 
-from core.exceptions import ReportExportError
+from config.limits import MAX_REPORT_BYTES
+from core.exceptions import InputError, ReportExportError
+from core.inputs import parse_json_text
 from services.reporting.models import REPORT_SCHEMA_VERSION, ReportDocument
 
 from .common import enforce_size
@@ -38,10 +40,12 @@ def from_json(data: bytes | str) -> ReportDocument:
     except UnicodeDecodeError as error:
         raise ReportExportError("The JSON export is not valid UTF-8.") from error
     try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError as error:
+        parsed = parse_json_text(
+            text, label="Report JSON", max_bytes=MAX_REPORT_BYTES
+        )
+    except InputError as error:
         raise ReportExportError(
-            f"The JSON export is not valid JSON: {error.msg}."
+            f"The JSON export was rejected: {error}"
         ) from error
     if not isinstance(parsed, dict):
         raise ReportExportError("The JSON export must contain one object.")

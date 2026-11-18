@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 from pydantic import ValidationError
 
+from core.csv_safe import neutralize_cell
 from core.schemas.validation import Finding, Severity
 
 SEVERITY_ORDER = {
@@ -62,8 +63,9 @@ def format_error(error: Exception) -> str:
 
 
 def csv_bytes(frame: pd.DataFrame) -> bytes:
-    """Serialize a table for a download button."""
-    return frame.to_csv(index=False).encode("utf-8")
+    """Serialize a table for a download button, neutralizing formula cells."""
+    safe = frame.map(neutralize_cell)
+    return safe.to_csv(index=False).encode("utf-8")
 
 
 def findings_frame(findings: Sequence[Finding]) -> pd.DataFrame:
