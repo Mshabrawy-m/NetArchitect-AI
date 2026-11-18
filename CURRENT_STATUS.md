@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 12 - Frontend Integration and User Experience (complete)
-- Current task: Phase 12c - UI consistency and navigation (complete)
-- Overall status: Phase 12 complete on `feature/phase12-polish`
+- Current phase: Phase 13 - Predictive Capacity Planning (in progress)
+- Current task: Phase 13a - Forecasting engine (complete)
+- Overall status: Phase 12 complete on `main` (`97cc88c`); Phase 13a complete on `feature/phase13-capacity`
 - Last updated: 2026-11-18
-- Branch: `feature/phase12-polish` (based on `main` commit `bdbb64a`)
+- Branch: `feature/phase13-capacity` (based on `main` commit `97cc88c`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -20,7 +20,7 @@
 - [x] Phase 10: Specialized AI Agents
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
-- [ ] Phase 13: Predictive Capacity Planning
+- [ ] Phase 13: Predictive Capacity Planning (13a complete)
 - [ ] Phase 14: Testing, Security, and Deployment
 
 ## Task 0 evidence (verification and version control)
@@ -1437,9 +1437,9 @@ Digital Twin, Dashboard, and Topology Editor.
 - Phase 12 verification is AppTest- and service-test-only. Browser rendering,
   responsive behavior at narrow widths, and the PDF viewer were not inspected
   manually; no screenshots were taken.
-- The Capacity Planning page is deliberately a read-only inventory. It does not
-  forecast future demand, recommend link upgrades, or predict failures; those
-  belong to a later phase.
+- The Capacity Planning page is still the Phase 12 read-only inventory. The
+  forecasting engine now exists, but page integration, capacity evaluation, and
+  recommendations arrive in Phase 13b/13c.
 - The profiler's flagged search rows are user-triggered searches bounded by
   `MAX_OPTIMIZATION_RUNTIME_SECONDS=60`, not page-background work. Tracemalloc
   measures Python allocations, not total process RSS, and adds time overhead.
@@ -1447,5 +1447,49 @@ Digital Twin, Dashboard, and Topology Editor.
   fingerprints in the session map). A later twin revision changes the cache key
   and therefore the timestamp.
 
+## Phase 13a delivered - forecasting engine
+Location: `forecasting/` (NumPy only; no ML, no new dependencies, no network I/O).
+
+- `models.py`: frozen typed schemas for `Observation`, `TimeSeries`,
+  `ParseResult`, `Finding`, `FillReport`, `HistorySummary`, `ModelEvaluation`,
+  `ForecastPoint`, `ForecastResult`, and `ForecastRun`; provenance is either
+  `user_supplied` or `synthetic` and is carried into every result.
+- `parsing.py`: strict `timestamp,series_id,value,unit` CSV reader. Unsorted rows,
+  duplicate timestamps within a series, non-numeric/negative values, bad units,
+  mixed units within a series, missing/unknown columns, empty input, and too-short
+  series produce typed `Finding` records (no exceptions on bad input). Gap policies
+  are `reject`, `linear interpolate`, and `carry forward`; leading/trailing gaps
+  remain unfilled and every fill is reported, never silent.
+- `synthetic.py`: deterministic NumPy PCG64 generator seeded by the caller. The
+  formula (base × (1+growth)^step + seasonality·sin + normal noise, clamped at
+  zero, rounded to 6 decimals) is documented in the docstring and surfaced in
+  `SyntheticSpec.assumptions()`. Every generated series is labeled `SYNTHETIC`.
+- `forecast.py`: naive, moving average, OLS linear trend, Holt additive with a
+  documented `{0.05..0.95}` grid, and seasonal naive (requires at least two full
+  periods). One chronological holdout (last 20%, minimum 2 points) is used for all
+  models; MAE is primary, the naive baseline is always computed and reported, and
+  a non-naive model wins only on strictly lower MAE with a documented simpler-model
+  tie-break. Approximate residual intervals are `±1.96·σ·√h`, lower-clamped at zero.
+  Horizons are refused above `MAX_FORECAST_HORIZON_RATIO` (0.5) or
+  `MAX_FORECAST_HORIZON_STEPS` (24), and forecasts under `MIN_FORECAST_POINTS` (8)
+  are refused with typed `ForecastLimitError`/`ForecastValidationError`.
+- `export.py`: byte-stable CSV/JSON export of results, including provenance,
+  assumptions, interval caveat, and naive baseline note.
+- `config/limits.py`: added bounded forecast limits (`MIN_FORECAST_POINTS`,
+  `MAX_FORECAST_POINTS`, `MAX_FORECAST_SERIES`, `MAX_FORECAST_HORIZON_RATIO`,
+  `MAX_FORECAST_HORIZON_STEPS`) plus reserved Phase 13 capacity limits.
+- `core/exceptions`: added `ForecastError`, `ForecastValidationError`,
+  `ForecastLimitError`, `CapacityError`, `CapacityValidationError`,
+  `CapacityLimitError`.
+- Tests: `tests/unit/forecasting` (18 tests) cover hand-computed naive/linear/Holt
+  and sMAPE values, chronological selection with naive retained, strict parsing
+  findings and gap policies, synthetic determinism/labels, horizon refusal, and
+  deterministic exports.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q tests/unit/forecasting`
+  -> `18 passed in 0.71s`;
+  `& ".venv\Scripts\python.exe" -m ruff check forecasting tests/unit/forecasting
+  config/limits.py core/exceptions/__init__.py` -> `All checks passed!`.
+
 ## Next task
-- Phase 13: Predictive Capacity Planning (not started).
+- Phase 13b: map forecasts to twin demand, evaluate projected scenarios, rank
+  bottlenecks, and recommend tier upgrades with cost proxies.

@@ -193,3 +193,27 @@ class ReportExportError(ReportError):
 
 class ReportLimitError(ReportError):
     """A report or export exceeded a configured size or row limit."""
+
+
+class ForecastError(NetArchitectError):
+    """Base class for capacity-forecasting failures."""
+
+
+class ForecastValidationError(ForecastError):
+    """A forecast input is malformed or insufficient for the requested model."""
+
+
+class ForecastLimitError(ForecastError):
+    """A forecast request exceeds a documented size or horizon limit."""
+
+
+class CapacityError(NetArchitectError):
+    """Base class for capacity-projection and recommendation failures."""
+
+
+class CapacityValidationError(CapacityError):
+    """A demand mapping, threshold, or projection input is invalid."""
+
+
+class CapacityLimitError(CapacityError):
+    """A capacity analysis exceeds a documented evaluation or runtime limit."""

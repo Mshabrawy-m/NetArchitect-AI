@@ -138,3 +138,35 @@ MAX_REPORT_TABLE_ROWS: int = 500
 # PDF). Exports are built in memory, so this bounds session memory on the
 # Streamlit Community Cloud free tier.
 MAX_REPORT_BYTES: int = 5_000_000
+
+# Minimum observations required in one time series before it can be forecast.
+# A chronological evaluation split needs at least this many points so the
+# training and held-out portions are both non-trivial.
+MIN_FORECAST_POINTS: int = 8
+
+# Maximum observations accepted across all uploaded or generated series in one
+# capacity-planning session. Bounds CSV parsing and chart payload size.
+MAX_FORECAST_POINTS: int = 2_000
+
+# Maximum number of separate series accepted in one capacity-planning session.
+MAX_FORECAST_SERIES: int = 20
+
+# A forecast may cover at most this fraction of the observed history. For
+# example, eight observations allow at most four projected steps.
+MAX_FORECAST_HORIZON_RATIO: float = 0.5
+
+# Absolute ceiling on projected steps, independent of the history ratio.
+MAX_FORECAST_HORIZON_STEPS: int = 24
+
+# Maximum number of modeled network evaluations in one capacity analysis. This
+# is distinct from simulation/optimization limits because each step evaluates a
+# newly projected demand set.
+MAX_CAPACITY_EVALUATIONS: int = 240
+
+# Maximum horizon steps in one capacity analysis. Each step is one full
+# simulation evaluation and one row in the utilization-over-time result.
+MAX_CAPACITY_HORIZON_STEPS: int = 12
+
+# Maximum wall-clock seconds for one complete capacity analysis, including all
+# projected-step and upgrade evaluations.
+MAX_CAPACITY_RUNTIME_SECONDS: float = 30.0

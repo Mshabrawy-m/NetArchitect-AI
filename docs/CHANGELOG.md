@@ -2,6 +2,25 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 13a: forecasting engine
+
+### Added
+- `forecasting/`: strict typed CSV parsing with explicit findings and non-silent
+  gap policies; deterministic labeled SYNTHETIC generator; NumPy-only naive,
+  moving-average, OLS linear, Holt additive, and seasonal-naive models with one
+  chronological split, naive baseline comparison, approximate intervals, and
+  horizon refusal; deterministic CSV/JSON export carrying provenance.
+- `config/limits.py`: bounded forecast inputs/horizons and reserved capacity
+  evaluation limits.
+- `core/exceptions`: typed forecast and capacity error classes.
+- `tests/unit/forecasting`: 18 tests including hand-computed forecast/metric
+  values, chronological selection, parsing/gap behavior, synthetic determinism,
+  horizon refusal, and exports.
+
+### Changed
+- No public schema was removed or renamed; new forecasting schemas are additive.
+  Statistical baselines only: no machine learning and no new dependencies.
+
 ## 2026-11-18 - Phase 12c: UI consistency and navigation
 
 ### Added
