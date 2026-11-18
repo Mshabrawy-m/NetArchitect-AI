@@ -1,4 +1,10 @@
-"""Visible, deterministic modeled-risk arithmetic and overall posture."""
+"""Visible, deterministic modeled-risk arithmetic and overall posture.
+
+Asset/zone criticality is deliberately not a numeric term in the risk formula.
+It is only a gate for the ``SEC-DW-009`` segmentation rule (criticality >= 4).
+The score itself is computed from finding severities and the modeled default
+action, so a reader can reproduce it from the displayed terms alone.
+"""
 
 from __future__ import annotations
 
