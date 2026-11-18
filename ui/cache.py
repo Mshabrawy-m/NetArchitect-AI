@@ -152,6 +152,7 @@ def cached_report(
     generated_at_iso: str,
     title: str = "",
     capacity_payload: str = "",
+    optimization_source_fingerprint: str = "",
 ) -> ReportDocument:
     """Build one report document once per twin revision and source selection."""
     return build_report(
@@ -172,6 +173,7 @@ def cached_report(
                 if capacity_payload
                 else None
             ),
+            optimization_source_fingerprint=optimization_source_fingerprint,
             generated_at=datetime.fromisoformat(generated_at_iso),
             title=title,
         )

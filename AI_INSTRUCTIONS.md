@@ -10,7 +10,9 @@ Before coding:
 
 Project mission:
 Build a pure-software, agentic network architecture design,
-simulation, and optimization platform.
+simulation, optimization, and design-time security analysis platform.
+The roadmap has 15 phases: Phase 13 Capacity, Phase 14 Security Analysis,
+and Phase 15 Testing, Security review and Deployment.
 
 Development method:
 - This project is built through human-directed Vibe Coding.
@@ -38,7 +40,12 @@ Non-negotiable constraints:
 - No local persistent storage dependency.
 - No mandatory paid API or database.
 - No NetPilot monitoring/administration features.
-- No Pentesting or SOC features.
+- Design-time security analysis of the modeled twin is included.
+- No live scanning, probing, pentesting, SOC operations, or device access.
+- No CVE or vulnerability database lookups, exploit content, or attack steps.
+- Security code performs no network I/O.
+- Every security result carries the label "Modeled design-time assessment.
+  Not a vulnerability scan, penetration test or audit."
 
 Engineering rules:
 - Keep UI, application, agent, and network-engineering layers separate.
@@ -48,6 +55,9 @@ Engineering rules:
 - Bound all loops, simulations, optimization runs, and retries.
 - Provide a structured-form fallback (no demo mode) so core deterministic functionality works without an LLM API key.
 - Introduce UI pages progressively per phase, not as bulk disconnected mockups.
+- Include the Security Analysis page and the fifth Security Agent in the product
+  design; the agent uses typed IO, a strict tool allowlist, and LLM output only
+  for AI-labeled explanations.
 - The Network Digital Twin is the single source of truth for the modeled network.
 - Add tests for every meaningful behavior.
 - Do not claim completion without passing tests.

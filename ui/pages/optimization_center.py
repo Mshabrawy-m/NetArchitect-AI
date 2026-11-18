@@ -22,6 +22,7 @@ from pydantic import ValidationError
 
 import config.limits
 from config.limits import (
+    DEFAULT_OPTIMIZATION_RUNTIME_SECONDS,
     MAX_EVALUATIONS,
     MAX_OPTIMIZATION_RUNS,
     MAX_OPTIMIZATION_RUNTIME_SECONDS,
@@ -51,6 +52,7 @@ from optimization import (
     run_to_csv,
     run_to_json_bytes,
 )
+from simulation import twin_fingerprint
 from ui import state
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
 from ui.components.editors import bump_editor_key, editor_key
@@ -562,7 +564,7 @@ def _render_search_controls() -> tuple[Algorithm, int, int, int, int, float]:
             "Runtime limit (seconds)",
             min_value=1.0,
             max_value=float(MAX_OPTIMIZATION_RUNTIME_SECONDS),
-            value=30.0,
+            value=float(DEFAULT_OPTIMIZATION_RUNTIME_SECONDS),
             step=5.0,
             key="optimization_runtime",
         )
@@ -762,7 +764,7 @@ def _run_and_store(twin: DigitalTwin, settings: OptimizationSettings, algorithm:
         )
 
     try:
-        state.add_optimization_run(run)
+        state.add_optimization_run(run, twin_fingerprint(twin))
     except NetArchitectError as error:
         st.error(format_error(error), title="History limit reached")
         return

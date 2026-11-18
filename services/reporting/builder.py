@@ -63,6 +63,9 @@ class ReportSources:
     scenario_run: ScenarioRun | None = None
     optimization_run: OptimizationRun | None = None
     capacity_run: CapacityRun | None = None
+    # OptimizationRun has no persisted twin fingerprint. The UI records the
+    # fingerprint of its source twin when the run is created and passes it here.
+    optimization_source_fingerprint: str | None = None
     generated_at: datetime | None = None
 
 
@@ -168,6 +171,7 @@ class _Builder:
         self.workflow = sources.workflow
         self.scenario_run = sources.scenario_run
         self.optimization_run = sources.optimization_run
+        self.optimization_source_fingerprint = sources.optimization_source_fingerprint
         self.capacity_run = sources.capacity_run
         self.fingerprint = fingerprint
         self.numbers = _Collector(fingerprint)
@@ -232,6 +236,43 @@ class _Builder:
             status=SectionStatus.not_run,
             unavailable_reason=reason,
             producer_page=producer_page,
+        )
+
+    def stale_source_note(
+        self,
+        key_prefix: str,
+        label: str,
+        source_fingerprint: str,
+        *,
+        step: str,
+        tool: str,
+    ) -> NoteBlock | None:
+        """Return a visible warning when a run has a different source twin."""
+        if source_fingerprint == self.fingerprint:
+            return None
+        if source_fingerprint:
+            text = (
+                f"Source twin mismatch: this {label} run used fingerprint "
+                f"{source_fingerprint}, while the current twin fingerprint is "
+                f"{self.fingerprint}. Re-run it before relying on these values."
+            )
+        else:
+            text = (
+                f"Source twin unavailable: the selected {label} run has no "
+                "recorded source fingerprint, so freshness against the current "
+                "twin cannot be verified."
+            )
+        return NoteBlock(
+            text=self.numbers.text(
+                f"{key_prefix}.source_warning",
+                f"{label} source warning",
+                text,
+                step=step,
+                tool=tool,
+                twin_version=source_fingerprint or None,
+            ),
+            severity="warning",
+            provenance=self.prov(step, tool, source_fingerprint or None),
         )
 
     # ------------------------------------------------------------------
@@ -1215,6 +1256,13 @@ class _Builder:
         values = self.numbers
         base_version = run.baseline_twin.fingerprint
         scenario_version = run.scenario_twin.fingerprint
+        stale_note = self.stale_source_note(
+            "simulation",
+            "simulation",
+            base_version,
+            step="simulation",
+            tool="simulation.run_scenario",
+        )
         baseline = run.baseline_state
         scenario = run.scenario_state
         comparison = run.comparison
@@ -1665,6 +1713,8 @@ class _Builder:
             comparison_table,
             utilization_table,
         ]
+        if stale_note is not None:
+            blocks.insert(0, stale_note)
         if path_rows:
             blocks.append(path_table)
         blocks.extend([summary_note, model_note])
@@ -1705,6 +1755,13 @@ class _Builder:
         values = self.numbers
         source_version = run.twin_fingerprint
         step_tool = "capacity.engine.evaluate_capacity"
+        stale_note = self.stale_source_note(
+            "capacity",
+            "capacity",
+            source_version,
+            step="capacity",
+            tool=step_tool,
+        )
         data_labels = sorted(
             {demand.data_label for demand in run.projection.demands}
         )
@@ -1837,47 +1894,50 @@ class _Builder:
             f"cost units, and {gap_text} gaps without a sufficient tier. The run "
             f"stopped because of {stop_reason}."
         )
-        blocks: list[Any] = [
-            ParagraphBlock(
-                text=summary,
-                provenance=self.prov("capacity", step_tool, source_version),
-            ),
-            KeyValueBlock(
-                title="Capacity source and scope",
-                items=(
-                    KeyValueItem(
-                        key="twin_fingerprint",
-                        value=source_fingerprint,
-                        provenance=self.prov("capacity", step_tool, source_version),
-                    ),
-                    KeyValueItem(
-                        key="data_label",
-                        value=data_label,
-                        provenance=self.prov("capacity", step_tool, source_version),
-                    ),
-                    KeyValueItem(
-                        key="forecast_models",
-                        value=model_text,
-                        provenance=self.prov("capacity", step_tool, source_version),
-                    ),
-                    KeyValueItem(
-                        key="stop_reason",
-                        value=stop_reason,
-                        provenance=self.prov("capacity", step_tool, source_version),
+        blocks: list[Any] = [stale_note] if stale_note is not None else []
+        blocks.extend(
+            [
+                ParagraphBlock(
+                    text=summary,
+                    provenance=self.prov("capacity", step_tool, source_version),
+                ),
+                KeyValueBlock(
+                    title="Capacity source and scope",
+                    items=(
+                        KeyValueItem(
+                            key="twin_fingerprint",
+                            value=source_fingerprint,
+                            provenance=self.prov("capacity", step_tool, source_version),
+                        ),
+                        KeyValueItem(
+                            key="data_label",
+                            value=data_label,
+                            provenance=self.prov("capacity", step_tool, source_version),
+                        ),
+                        KeyValueItem(
+                            key="forecast_models",
+                            value=model_text,
+                            provenance=self.prov("capacity", step_tool, source_version),
+                        ),
+                        KeyValueItem(
+                            key="stop_reason",
+                            value=stop_reason,
+                            provenance=self.prov("capacity", step_tool, source_version),
+                        ),
                     ),
                 ),
-            ),
-            NoteBlock(
-                text=run.note,
-                severity="info",
-                provenance=self.prov("capacity", step_tool, source_version),
-            ),
-            NoteBlock(
-                text=run.method_note,
-                severity="limitation",
-                provenance=self.prov("capacity", step_tool, source_version),
-            ),
-        ]
+                NoteBlock(
+                    text=run.note,
+                    severity="info",
+                    provenance=self.prov("capacity", step_tool, source_version),
+                ),
+                NoteBlock(
+                    text=run.method_note,
+                    severity="limitation",
+                    provenance=self.prov("capacity", step_tool, source_version),
+                ),
+            ]
+        )
 
         bottleneck_rows: list[tuple[str, ...]] = []
         for index, item in enumerate(run.bottlenecks):
@@ -2027,6 +2087,14 @@ class _Builder:
                 "Optimization Center",
             )
         values = self.numbers
+        source_version = self.optimization_source_fingerprint or ""
+        stale_note = self.stale_source_note(
+            "optimization",
+            "optimization",
+            source_version,
+            step="optimization",
+            tool="optimization.run_optimization",
+        )
         best = run.best
         algorithm = values.text(
             "optimization.algorithm",
@@ -2401,6 +2469,8 @@ class _Builder:
         )
 
         blocks: list[Any] = [paragraph, kv, settings_table, comparison_table]
+        if stale_note is not None:
+            blocks.insert(0, stale_note)
         if candidate_rows:
             blocks.append(candidate_table)
         blocks.append(

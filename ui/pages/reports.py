@@ -482,6 +482,11 @@ def render() -> None:
 
     workflow, scenario_run, optimization_run, capacity_run = _render_sources()
     generated_at = state.report_generated_at(twin_fingerprint(twin))
+    optimization_source_fingerprint = (
+        state.get_optimization_source_fingerprint(optimization_run)
+        if optimization_run is not None
+        else ""
+    )
     try:
         if workflow is None:
             document = cached_report(
@@ -490,6 +495,7 @@ def render() -> None:
                 source_payload(optimization_run),
                 generated_at.isoformat(),
                 capacity_payload=capacity_source_payload(capacity_run),
+                optimization_source_fingerprint=optimization_source_fingerprint,
             )
         else:
             # WorkflowState holds a live accessor and is not serializable, so it
@@ -501,6 +507,7 @@ def render() -> None:
                     scenario_run=scenario_run,
                     optimization_run=optimization_run,
                     capacity_run=capacity_run,
+                    optimization_source_fingerprint=optimization_source_fingerprint,
                     generated_at=generated_at,
                 )
             )

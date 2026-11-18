@@ -70,6 +70,7 @@ or operate real networking equipment.
 -   Bounded network scenario simulation.
 -   Multi-objective optimization.
 -   Capacity planning and forecasting.
+-   Design-time network security analysis of the modeled twin.
 -   Multi-agent orchestration and explainability.
 -   Reports, CSV exports, and configuration templates.
 
@@ -78,7 +79,8 @@ or operate real networking equipment.
 -   Physical routers, switches, or other networking equipment.
 -   Real network monitoring or administration.
 -   Real packet forwarding or live traffic capture.
--   Penetration testing, vulnerability scanning, or SOC operations.
+-   Live scanning, probing, penetration testing, SOC operations, or device
+    access. Design-time security analysis of the modeled twin is included.
 -   Device configuration over SSH, Telnet, SNMP, or vendor APIs.
 -   Docker, Containerlab, GNS3, or EVE-NG as runtime dependencies.
 -   Privileged processes, port opening, or host network access.
@@ -286,6 +288,22 @@ affected entities, explanation, and suggested remediation.
     device-applied configurations.
 -   PDF and CSV exports.
 
+### 3.11 Security Analysis
+
+-   Deterministic modeling of zones, services, and firewall policy.
+-   First-match policy evaluation and end-to-end routing plus policy checks.
+-   Typed findings for policy weaknesses and fixed design weakness rules.
+-   Modeled risk classification with visible inputs and arithmetic.
+-   Proposed policy changes that are applied only to a NEW twin on explicit
+    user acceptance.
+-   Vendor-neutral templates that are never applied to a device.
+
+Security analysis is a design aid, not a vulnerability scan, penetration
+test, audit, or source of live host information. It uses no network I/O,
+vulnerability database, or attack content. Every result must carry the
+label: "Modeled design-time assessment. Not a vulnerability scan,
+penetration test or audit."
+
 Reports must be generated from validated application data, not directly
 from unverified LLM prose.
 
@@ -376,24 +394,36 @@ Responsibilities:
 -   Avoid approving a design solely because another agent says it is
     valid.
 
-### 4.10 Documentation Agent
+### 4.10 Security Agent
+
+-   Invoke only deterministic design-time security tools and read-only
+    twin, routing, and analysis tools.
+-   Treat the security engine's findings, verdict, and risk levels as
+    authoritative; an LLM may add only an AI-labeled explanation.
+-   Reject model-written numbers that are absent from computed data.
+-   Never scan, probe, contact a device, or execute shell or Python code.
+-   Return structured findings and proposed policy changes for user review.
+
+### 4.11 Documentation Agent
 
 -   Collect validated results.
 -   Explain design choices and trade-offs.
 -   Generate reports and export-ready content.
 -   Preserve provenance of values and assumptions.
 
-### 4.11 Agent workflow
+### 4.12 Agent workflow
 
 Requirements → Planning → Topology generation → IP and VLAN planning →
-Routing design → Validation → Simulation → Optimization → Re-validation
-→ Documentation → Final Network Blueprint
+Routing design → Optional security review → Validation → Simulation →
+Optimization → Re-validation → Documentation → Final Network Blueprint
 
 Conditional branches are required. For example, if validation detects an
 IP overlap, the workflow should return the relevant issue to the IP
-Planning Agent, not restart every stage unnecessarily.
+Planning Agent, not restart every stage unnecessarily. A blocking policy
+finding returns only to the security step; a security gate may reject the
+design on High-level findings.
 
-### 4.12 Agent engineering requirements
+### 4.13 Agent engineering requirements
 
 -   Typed input and output schemas.
 -   Tool registry with explicit contracts.
@@ -519,14 +549,16 @@ not be the source of truth for calculations.
     redundancy.
 7.  **Network Analytics** --- graph metrics and critical components.
 8.  **Digital Twin** --- modeled network state and snapshots.
-9.  **Simulation Lab** --- what-if scenarios and result comparisons.
-10. **Optimization Center** --- objectives, constraints, algorithms, and
+9.  **Security Analysis** --- zones, firewall policy, flow checks, findings,
+    and templates.
+10. **Simulation Lab** --- what-if scenarios and result comparisons.
+11. **Optimization Center** --- objectives, constraints, algorithms, and
     Pareto results.
-11. **Capacity Planning** --- demand projections and expansion planning.
-12. **Agent Control Center** --- workflow steps, agent results, errors,
+12. **Capacity Planning** --- demand projections and expansion planning.
+13. **Agent Control Center** --- workflow steps, agent results, errors,
     and trace.
-13. **Reports & Documentation** --- report generation and exports.
-14. **Settings** --- API configuration, demo mode, and resource limits.
+14. **Reports & Documentation** --- report generation and exports.
+15. **Settings** --- API configuration, demo mode, and resource limits.
 
 Pages should be introduced progressively. Do not build all pages as
 disconnected mockups before the underlying services work.
@@ -623,7 +655,7 @@ NetArchitect-AI/
     └── CHANGELOG.md
 ```
 
-## 9. Fourteen-phase development roadmap
+## 9. Fifteen-phase development roadmap
 
 Every phase must have a scope, small tasks, acceptance criteria, tests,
 and a documented handoff. A phase is complete only when its exit
@@ -813,40 +845,54 @@ Exit criteria: - Reports match validated computed results. - Assumptions
 and estimates are clearly labeled. - Exports are downloadable without
 persistent server storage.
 
-### Phase 13 --- Frontend Integration and User Experience
+### Phase 13 --- Capacity planning and forecasting
 
-Tasks: - Build the dashboard. - Integrate AI Network Designer. -
-Integrate Topology Editor. - Integrate IP and VLAN planners. - Integrate
-Routing Analysis. - Integrate Network Analytics. - Integrate Digital
-Twin. - Integrate Simulation Lab. - Integrate Optimization Center. -
-Integrate Capacity Planning. - Integrate Agent Control Center. -
-Integrate Reports and Settings. - Add navigation, validation messages,
-loading states, and error handling. - Verify responsive layouts and
-session behavior.
+Tasks: - Define accepted historical data. - Implement a deterministic
+statistical baseline. - Forecast demand and estimate capacity. - Identify
+projected bottlenecks and expansion options. - Integrate the Capacity
+Planning page, reports, and bounded run history.
 
-Deliverable: Complete integrated application.
+Deliverable: Predictive Capacity Planning module.
 
-Exit criteria: - UI pages use real application services. - No critical
-feature is only a mockup. - User workflows are understandable and
-consistent. - Session state and downloads work as expected.
+Exit criteria: - Forecast provenance is explicit. - No historical
+measurements are invented. - Bounded runs pass tests and report checks.
 
-### Phase 14 --- Testing, Security, and Deployment
+### Phase 14 --- Design-time Network Security Analysis
+
+Tasks: - Add bounded zone, service, and firewall-policy models with an
+optional twin field. - Implement deterministic policy evaluation, typed
+policy findings, and a fixed design weakness catalog. - Add modeled risk
+classification, proposed rules, and vendor-neutral templates. - Add a
+strictly allowlisted Security Agent, optional orchestrator step, report
+section, and design-health category. - Integrate the Security Analysis
+page and tests.
+
+Deliverable: Design-time security analysis integrated with the twin,
+agents, reports, and UI.
+
+Exit criteria: - Every result is labeled as a modeled design-time
+assessment. - No scanning, probing, live host data, vulnerability
+database, attack content, or device access is used. - Policy and design
+findings are reproducible and traceable. - Proposed changes never mutate
+the baseline twin silently. - All tests and lint checks pass.
+
+### Phase 15 --- Testing, security review, and deployment
 
 Tasks: - Run all unit tests. - Run integration tests. - Run agent
-workflow tests. - Verify network calculation correctness. - Verify
-simulation correctness. - Verify optimization constraints. - Test
-invalid and adversarial inputs. - Test missing API keys and provider
-outages. - Review secrets handling and logs. - Measure memory and
-execution time. - Enforce resource limits. - Test a clean deployment
-build. - Deploy to Streamlit Community Cloud Free. - Document setup and
-known limitations. - Tag a release.
+workflow tests. - Review design-time security findings. - Verify
+simulation, optimization, and capacity correctness. - Test invalid and
+adversarial inputs. - Test missing API keys and provider outages. -
+Review secrets handling and logs. - Measure memory and execution time. -
+Enforce resource limits. - Test a clean deployment build. - Deploy to
+Streamlit Community Cloud Free. - Document setup and known limitations. -
+Tag a release.
 
 Deliverable: Tested and deployable graduation project.
 
 Exit criteria: - Critical test suites pass. - No secrets are exposed. -
-Demo Mode works. - App starts on the target deployment. - Memory and
-execution remain within observed free-tier limits. - Known limitations
-are documented.
+Structured fallback works without an LLM. - App starts on the target
+deployment. - Memory and execution remain within observed free-tier
+limits. - Known limitations are documented.
 
 ## 10. Streamlit Community Cloud Free constraints
 
@@ -1095,6 +1141,7 @@ Maintain `CURRENT_STATUS.md` in the repository using this template:
 - [ ] Phase 12:
 - [ ] Phase 13:
 - [ ] Phase 14:
+- [ ] Phase 15:
 
 ## Current task
 - Objective:

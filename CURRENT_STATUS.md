@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 13 - Predictive Capacity Planning (complete)
-- Current task: Phase 13c - UI and report integration (complete)
-- Overall status: Phase 12 complete on `main` (`97cc88c`); Phase 13a/13b/13c complete on `feature/phase13-capacity`
+- Current phase: Phase 14 - Design-time Network Security Analysis (in progress)
+- Current task: Phase 14.0 - housekeeping and report source freshness (complete)
+- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0 complete on `feature/phase14-security`
 - Last updated: 2026-11-18
-- Branch: `feature/phase13-capacity` (based on `main` commit `97cc88c`)
+- Branch: `feature/phase14-security` (based on updated `main` commit `7b33b74`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -21,7 +21,8 @@
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
 - [x] Phase 13: Predictive Capacity Planning (13a/13b/13c complete)
-- [ ] Phase 14: Testing, Security, and Deployment
+- [ ] Phase 14: Design-time Network Security Analysis (14.0 complete)
+- [ ] Phase 15: Testing, Security review, and Deployment
 
 ## Task 0 evidence (verification and version control)
 - `python --version`: `Python 3.11.15` (system interpreter and `.venv`).
@@ -1569,6 +1570,36 @@ Location: `ui/pages/capacity_planning.py`, `ui/pages/reports.py`, `ui/cache.py`,
   passed!`. Browser rendering, real-network CSV upload, and live device
   verification were not performed.
 
+## Phase 14.0 delivered - housekeeping and report source freshness
+Location: root blueprint, `AI_INSTRUCTIONS.md`, `docs/CHANGELOG.md`,
+`config/limits.py`, `services/reporting/builder.py`, `ui/state.py`,
+`ui/cache.py`, `ui/pages/reports.py`, `ui/pages/optimization_center.py`,
+`optimization/models.py`, and new/updated tests.
+
+- The owner decision is recorded: 15 phases; Phase 14 is design-time security
+  analysis only; design-time security is in scope while live scanning, probing,
+  pentesting, SOC operations, vulnerability database lookups, exploit content,
+  attack steps, and device access remain excluded. The owner explicitly approved
+  the 14a security models and optional twin field.
+- Blueprint section 2 now includes design-time security analysis, module 3.11,
+  the Security Agent in section 4, the Security Analysis page in section 7, and
+  the 13/14/15 roadmap. `AI_INSTRUCTIONS.md` mirrors the scope and roadmap.
+- Reports now show a warning note when the selected simulation or capacity run's
+  source fingerprint differs from the current twin. Optimization runs have no
+  persisted fingerprint, so the Optimization Center records the source twin
+  fingerprint in a bounded session map when the run is created; reports pass it
+  through `ReportSources.optimization_source_fingerprint`. No run schema changed.
+- Free-tier defaults: `MAX_SCENARIOS` is 20; optimization default runtime is 20
+  seconds; the hard runtime cap remains 60 seconds so users can raise it.
+- Changed existing assertions: none. No existing test pinned 50 scenarios or a
+  30/60 default. The test helper literal 30 was replaced with the new default
+  constant, and new assertions pin 20 scenarios, 20-second default, and 60-second
+  cap.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `847 passed in
+  20.74s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified.
+
 ## Next task
-- None in this work item. The next backlog item is Phase 14 (testing, security,
-  and deployment); it was not started here.
+- Phase 14a: add the pure Pydantic security model, deterministic default zone
+  derivation, bounded operations returning NEW twins, and backward-compatible
+  optional `DigitalTwin.security` with schema/fingerprint tests.

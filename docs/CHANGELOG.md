@@ -2,6 +2,45 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 14.0: housekeeping and report source freshness
+
+### Owner decision
+- The project now has 15 phases: Phase 13 Capacity, Phase 14 Security Analysis,
+  and Phase 15 Testing, Security review and Deployment.
+- Design-time security analysis of the modeled twin is in scope. Live scanning,
+  probing, penetration testing, SOC operations, vulnerability database lookups,
+  exploit content, attack steps, and device access remain excluded. Security
+  code performs no network I/O.
+- The owner explicitly approved the new security models and the optional
+  `DigitalTwin.security` field planned for 14a; this approval overrides the
+  ask-before-schema-change rule only for those additions. All other public
+  schemas remain unchanged.
+
+### Added
+- Root blueprint and `AI_INSTRUCTIONS.md` document the 15-phase roadmap, module
+  3.11 Security Analysis, the fifth Security Agent, and the Security Analysis
+  page. The blueprint's blanket pentest/vulnerability-scanning exclusion was
+  replaced with the design-time inclusion and live-operation exclusions.
+- Report sections for simulation, capacity, and optimization now include a
+  visible warning note when the selected run's source twin fingerprint differs
+  from the current twin. Optimization has no persisted fingerprint, so
+  `ui/state.py` records its source fingerprint in a bounded session map at run
+  creation and `ReportSources` carries it into the builder; no run schema changed.
+- Tests for all three source-mismatch warnings, free-tier default limits, and a
+  content-keyed state accessor for optimization source fingerprints.
+
+### Changed
+- `config/limits.py`: `MAX_SCENARIOS` lowered from 50 to 20 for free-tier safety.
+  `DEFAULT_OPTIMIZATION_RUNTIME_SECONDS=20` was added and used by
+  `OptimizationSettings` and the UI; `MAX_OPTIMIZATION_RUNTIME_SECONDS` remains
+  60 as the hard cap, so users can still raise the budget.
+- `tests/unit/optimization/helpers.py` now uses the new default constant instead
+  of a literal 30 seconds. No existing assertion pinned the old 50/30 defaults;
+  the 14.0 tests add explicit 20/20/60 assertions instead.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `847 passed in
+  20.74s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified.
+
 ## 2026-11-18 - Phase 13c: capacity UI and report integration
 
 ### Added

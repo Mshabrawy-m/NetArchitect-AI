@@ -472,7 +472,7 @@ class OptimizationSettings(BaseModel):
         description="Maximum full candidate evaluations in the search phase.",
     )
     max_runtime_seconds: float = Field(
-        default=30.0,
+        default=config.limits.DEFAULT_OPTIMIZATION_RUNTIME_SECONDS,
         gt=0,
         le=config.limits.MAX_OPTIMIZATION_RUNTIME_SECONDS,
         description="Search-phase wall-clock budget, in seconds.",

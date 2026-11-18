@@ -10,12 +10,14 @@ removed so the model never exists twice.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from typing import Any
 
 import streamlit as st
 
 from capacity import CapacityHistory, CapacityRun
+from config.limits import MAX_OPTIMIZATION_RUNS
 from core.schemas.addressing import AddressingPlan, DhcpScope
 from core.schemas.network import Topology
 from core.schemas.routing import TrafficDemand
@@ -50,6 +52,9 @@ TWIN_KEY = "digital_twin"
 SNAPSHOTS_KEY = "digital_twin_snapshots"
 SIMULATION_HISTORY_KEY = "simulation_history"
 OPTIMIZATION_HISTORY_KEY = "optimization_history"
+# OptimizationRun has no persisted twin fingerprint. This bounded map records
+# the source fingerprint at run creation, keyed by the run's canonical content.
+OPTIMIZATION_SOURCE_FINGERPRINTS_KEY = "optimization_source_fingerprints"
 CAPACITY_SERIES_KEY = "capacity_series"
 CAPACITY_FORECAST_KEY = "capacity_forecast"
 CAPACITY_HISTORY_KEY = "capacity_history"
@@ -336,19 +341,56 @@ def peek_optimization_runs() -> tuple[OptimizationRun, ...]:
     return history.runs if isinstance(history, OptimizationHistory) else ()
 
 
-def add_optimization_run(run: OptimizationRun) -> OptimizationRun:
-    """Append an optimization run to the bounded session history."""
+def _optimization_run_key(run: OptimizationRun) -> str:
+    """Return a stable content key for one optimization run."""
+    return hashlib.sha256(run.model_dump_json().encode("utf-8")).hexdigest()
+
+
+def set_optimization_source_fingerprint(run: OptimizationRun, fingerprint: str) -> str:
+    """Remember which twin revision produced one optimization run."""
+    mapping = st.session_state.get(OPTIMIZATION_SOURCE_FINGERPRINTS_KEY)
+    if not isinstance(mapping, dict):
+        mapping = {}
+    mapping[_optimization_run_key(run)] = fingerprint
+    while len(mapping) > MAX_OPTIMIZATION_RUNS:
+        del mapping[next(iter(mapping))]
+    st.session_state[OPTIMIZATION_SOURCE_FINGERPRINTS_KEY] = mapping
+    return fingerprint
+
+
+def get_optimization_source_fingerprint(run: OptimizationRun) -> str:
+    """Return the recorded source fingerprint, or an empty string if unknown."""
+    mapping = st.session_state.get(OPTIMIZATION_SOURCE_FINGERPRINTS_KEY)
+    if not isinstance(mapping, dict):
+        return ""
+    value = mapping.get(_optimization_run_key(run), "")
+    return value if isinstance(value, str) else ""
+
+
+def add_optimization_run(
+    run: OptimizationRun,
+    source_fingerprint: str = "",
+) -> OptimizationRun:
+    """Append an optimization run and record its source twin fingerprint."""
     get_optimization_history().add(run)
+    if source_fingerprint:
+        set_optimization_source_fingerprint(run, source_fingerprint)
     return run
 
 
 def remove_optimization_run(index: int) -> OptimizationRun:
     """Remove one retained optimization run by index."""
+    runs = get_optimization_runs()
+    if 0 <= index < len(runs):
+        mapping = st.session_state.get(OPTIMIZATION_SOURCE_FINGERPRINTS_KEY)
+        if isinstance(mapping, dict):
+            mapping.pop(_optimization_run_key(runs[index]), None)
     return get_optimization_history().remove(index)
 
 
 def clear_optimization_history() -> None:
-    """Remove every retained optimization run."""
+    """Remove every retained optimization run and source fingerprint."""
+    st.session_state.pop(OPTIMIZATION_SOURCE_FINGERPRINTS_KEY, None)
     get_optimization_history().clear()
 
 

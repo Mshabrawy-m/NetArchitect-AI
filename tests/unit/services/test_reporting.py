@@ -41,7 +41,7 @@ from services.reporting import (
     generate_ai_explanation,
     numeric_tokens,
 )
-from simulation import run_scenario
+from simulation import run_scenario, twin_fingerprint
 from simulation.scenarios import ScenarioRun
 from tests.unit.agents.helpers import sample_requirements
 from tests.unit.capacity.helpers import constant_run, line_capacity_twin
@@ -70,6 +70,24 @@ SECTION_IDS = (
 def value(document: ReportDocument, key: str):
     """Return one sourced value record by key."""
     return next(record for record in document.values if record.key == key)
+
+
+def warning_texts(section: ReportSection) -> list[str]:
+    """Return visible warning-note text from one report section."""
+    return [
+        block.text
+        for block in section.blocks
+        if getattr(block, "kind", "") == "note"
+        and getattr(block, "severity", "") == "warning"
+    ]
+
+
+def renamed_twin(twin: DigitalTwin) -> DigitalTwin:
+    """Return a twin with one metadata change, so its fingerprint differs."""
+    # A metadata name change is a new twin revision (different SHA-256 input)
+    # without changing any topology, demand, or engine result.
+    metadata = twin.metadata.model_copy(update={"name": "Current revised twin"})
+    return twin.model_copy(update={"metadata": metadata})
 
 
 @pytest.fixture(scope="module")
@@ -435,6 +453,89 @@ def test_optimization_values_equal_the_run() -> None:
     )
     assert value(document, "optimization.best_score").numeric == pytest.approx(
         optimization_run.best.evaluation.weighted_score
+    )
+    assert check_consistency(document).ok
+
+
+def test_simulation_report_warns_on_source_fingerprint_mismatch(
+    scenario_case: tuple[DigitalTwin, ScenarioRun],
+) -> None:
+    source_twin, scenario_run = scenario_case
+    current_twin = renamed_twin(source_twin)
+    # The run was produced from source_twin; reporting it against current_twin
+    # is a revision mismatch even though the modeled topology is unchanged.
+    source_fingerprint = scenario_run.baseline_twin.fingerprint
+    current_fingerprint = twin_fingerprint(current_twin)
+    assert source_fingerprint != current_fingerprint
+
+    document = build_report(
+        ReportSources(
+            twin=current_twin,
+            scenario_run=scenario_run,
+            generated_at=GENERATED_AT,
+        )
+    )
+    warnings = warning_texts(document.section("simulation"))
+    assert any(
+        "Source twin mismatch" in text
+        and source_fingerprint in text
+        and current_fingerprint in text
+        for text in warnings
+    )
+    assert check_consistency(document).ok
+
+
+def test_capacity_report_warns_on_source_fingerprint_mismatch(
+    capacity_case: tuple[DigitalTwin, CapacityRun],
+) -> None:
+    source_twin, capacity_run = capacity_case
+    current_twin = renamed_twin(source_twin)
+    # Same arithmetic as above: the stored run identifies its original twin.
+    source_fingerprint = capacity_run.twin_fingerprint
+    current_fingerprint = twin_fingerprint(current_twin)
+    assert source_fingerprint != current_fingerprint
+
+    document = build_report(
+        ReportSources(
+            twin=current_twin,
+            capacity_run=capacity_run,
+            generated_at=GENERATED_AT,
+        )
+    )
+    warnings = warning_texts(document.section("capacity"))
+    assert any(
+        "Source twin mismatch" in text
+        and source_fingerprint in text
+        and current_fingerprint in text
+        for text in warnings
+    )
+    assert check_consistency(document).ok
+
+
+def test_optimization_report_warns_on_source_fingerprint_mismatch() -> None:
+    source_twin = tiny_twin()
+    current_twin = renamed_twin(source_twin)
+    optimization_run = run_optimization(source_twin, settings(), Algorithm.greedy)
+    # OptimizationRun has no persisted fingerprint, so the UI records it when
+    # the run is created and supplies it to the report builder.
+    source_fingerprint = twin_fingerprint(source_twin)
+    current_fingerprint = twin_fingerprint(current_twin)
+    assert source_fingerprint != current_fingerprint
+
+    document = build_report(
+        ReportSources(
+            twin=current_twin,
+            optimization_run=optimization_run,
+            optimization_source_fingerprint=source_fingerprint,
+            generated_at=GENERATED_AT,
+        )
+    )
+    warnings = warning_texts(document.section("optimization"))
+    assert any(
+        "Source twin mismatch" in text
+        and source_fingerprint in text
+        and current_fingerprint in text
+        for text in warnings
     )
     assert check_consistency(document).ok
 

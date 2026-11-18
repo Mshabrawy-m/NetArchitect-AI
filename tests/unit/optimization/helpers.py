@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from config.limits import DEFAULT_OPTIMIZATION_RUNTIME_SECONDS
 from core.schemas.network import Link
 from digital_twin import DigitalTwin
 from optimization import (
@@ -80,7 +81,7 @@ def settings(
     cost_multiplier_options: tuple[float, ...] = (),
     max_iterations: int = 10,
     max_evaluations: int = 200,
-    max_runtime_seconds: float = 30.0,
+    max_runtime_seconds: float = DEFAULT_OPTIMIZATION_RUNTIME_SECONDS,
 ) -> OptimizationSettings:
     return OptimizationSettings(
         candidate_pool=pool_links() if pool is None else pool,

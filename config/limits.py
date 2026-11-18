@@ -24,10 +24,11 @@ MAX_HOSTS_PER_SUBNET: int = 1_000_000
 # pair. Keeps k-shortest-path enumeration bounded on the deployment target.
 MAX_ALTERNATIVE_PATHS: int = 10
 
-# Maximum number of what-if scenarios retained for comparison. A scenario run on
-# the 500-device profile twin serializes to about 0.75 MiB, so the worst case is
-# roughly 37 MiB of session data.
-MAX_SCENARIOS: int = 50
+# Maximum number of what-if scenarios retained for comparison. The previous
+# value of 50 could reserve roughly 37 MiB of session data for the largest twin.
+# The default is lowered to 20 for free-tier safety; this is a retained-history
+# cap, not an interactive work budget.
+MAX_SCENARIOS: int = 20
 
 # Maximum number of entities (links, devices, demands, or expansion records) a
 # single what-if scenario may name or add.
@@ -53,11 +54,15 @@ MAX_POPULATION: int = 200
 # candidate is a full modeled evaluation, so this bounds CPU and memory.
 MAX_EVALUATIONS: int = 20_000
 
-# Maximum wall-clock seconds for the search phase of one optimization run.
-# Baseline evaluation is performed first and is not counted against this
-# search budget. The deadline is checked before each candidate evaluation. This
-# is a user-triggered search, not a page-rerun cost, so it is intentionally
-# longer than the 5-second interactive target.
+# Default wall-clock seconds for the search phase of one optimization run. The
+# previous default of 30 seconds was lowered to 20 for free-tier safety. Users
+# may still raise the value to the hard cap below.
+DEFAULT_OPTIMIZATION_RUNTIME_SECONDS: int = 20
+
+# Hard cap on the search-phase wall-clock budget. Baseline evaluation is
+# performed first and is not counted against this budget. The deadline is checked
+# before each candidate evaluation. This is a user-triggered search, not a
+# page-rerun cost, so the cap remains above the 5-second interactive target.
 MAX_OPTIMIZATION_RUNTIME_SECONDS: int = 60
 
 # Maximum number of optimization runs retained in one session history. A
