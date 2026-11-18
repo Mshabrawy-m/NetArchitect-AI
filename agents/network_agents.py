@@ -538,6 +538,24 @@ class ReportAgent(BaseAgent):
                     status="ok" if revalidation.is_valid else "error",
                 )
             )
+        security = context.result("security")
+        if security is not None and hasattr(security, "analysis"):
+            sections.append(
+                ReportSection(
+                    title="Design-time security",
+                    body=(
+                        f"posture={security.posture.value}; "
+                        f"risk={security.risk_score} ({security.risk_level.value}); "
+                        f"gate={security.gate.value}; "
+                        f"findings={len(security.analysis.findings)}."
+                    ),
+                    status=(
+                        "ok"
+                        if security.gate.value != "REJECTED"
+                        else "error"
+                    ),
+                )
+            )
         critic = context.result("critic")
         if critic is not None and hasattr(critic, "verdict"):
             blocking = [finding for finding in critic.findings if finding.blocking]
@@ -592,6 +610,7 @@ def default_agents() -> dict[str, BaseAgent]:
     """Return one instance of every standard agent, keyed by name."""
     from .critic import CriticAgent
     from .documentation import DocumentationAgent
+    from .security_agent import SecurityAgent
 
     agents: list[BaseAgent] = [
         RequirementsAgent(),
@@ -602,6 +621,7 @@ def default_agents() -> dict[str, BaseAgent]:
         SimulationAgent(),
         OptimizationAgent(),
         RevalidationAgent(),
+        SecurityAgent(),
         CriticAgent(),
         DocumentationAgent(),
         ReportAgent(),

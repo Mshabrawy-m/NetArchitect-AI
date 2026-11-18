@@ -26,6 +26,7 @@ class ValidationCategory(str, Enum):
     routing = "routing"
     capacity = "capacity"
     redundancy = "redundancy"
+    security = "security"
     constraints = "constraints"
     references = "references"
 
@@ -40,6 +41,7 @@ CATEGORY_ORDER: tuple[ValidationCategory, ...] = (
     ValidationCategory.routing,
     ValidationCategory.capacity,
     ValidationCategory.redundancy,
+    ValidationCategory.security,
     ValidationCategory.constraints,
     ValidationCategory.references,
 )
@@ -53,6 +55,7 @@ CATEGORY_LABELS: dict[ValidationCategory, str] = {
     ValidationCategory.routing: "Routing reachability",
     ValidationCategory.capacity: "Capacity and utilization",
     ValidationCategory.redundancy: "Redundancy",
+    ValidationCategory.security: "Design-time security",
     ValidationCategory.constraints: "User-defined constraints",
     ValidationCategory.references: "Stale references",
 }
@@ -70,7 +73,8 @@ CATEGORY_INDEX: dict[ValidationCategory, int] = {
 
 BASIC_CHECK_NOTE = (
     "Basic checks cover schema and references, addressing, VLAN, DHCP, "
-    "per-demand routing, and one capacity evaluation."
+    "per-demand routing, one capacity evaluation, and supplied design-time "
+    "security findings."
 )
 EXPENSIVE_CHECK_NOTE = (
     "Expensive checks add all-pairs reachability (one Dijkstra search per "

@@ -23,6 +23,7 @@ from config.limits import MAX_REPORT_TABLE_ROWS
 from digital_twin import DigitalTwin, failed_entities
 from network.analysis import METRIC_DEFINITIONS, AnalysisReport, analyze_topology
 from network.routing import reachability_matrix, routing_table
+from security import SECURITY_DISCLAIMER, SecurityAnalysis
 from simulation import MODEL_NOTE, twin_reference
 
 from . import templates
@@ -63,6 +64,7 @@ class ReportSources:
     scenario_run: ScenarioRun | None = None
     optimization_run: OptimizationRun | None = None
     capacity_run: CapacityRun | None = None
+    security_analysis: SecurityAnalysis | None = None
     # OptimizationRun has no persisted twin fingerprint. The UI records the
     # fingerprint of its source twin when the run is created and passes it here.
     optimization_source_fingerprint: str | None = None
@@ -173,6 +175,7 @@ class _Builder:
         self.optimization_run = sources.optimization_run
         self.optimization_source_fingerprint = sources.optimization_source_fingerprint
         self.capacity_run = sources.capacity_run
+        self.security_analysis = sources.security_analysis
         self.fingerprint = fingerprint
         self.numbers = _Collector(fingerprint)
         self._analysis_report: AnalysisReport | None = None
@@ -2502,7 +2505,167 @@ class _Builder:
         return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
 
     # ------------------------------------------------------------------
-    # 9. Assumptions
+    # 9. Design-time security analysis
+    # ------------------------------------------------------------------
+    def security(self) -> ReportSection:
+        section_id = "security"
+        title = "Design-time security analysis"
+        analysis = self.security_analysis
+        if analysis is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No security analysis was selected. Run one on the Security Analysis page.",
+                "Security Analysis",
+            )
+
+        values = self.numbers
+        step_tool = "security.analyze_design"
+        posture = values.text(
+            "security.posture",
+            "Modeled security posture",
+            analysis.summary.posture.value,
+            step="security",
+            tool=step_tool,
+        )
+        risk_level = values.text(
+            "security.risk_level",
+            "Modeled risk level",
+            analysis.risk.level.value,
+            step="security",
+            tool=step_tool,
+        )
+        score = values.number(
+            "security.risk_score",
+            "Modeled risk score",
+            analysis.risk.score,
+            step="security",
+            tool=step_tool,
+            digits=0,
+        )
+        finding_count = values.number(
+            "security.finding_count",
+            "Security finding count",
+            len(analysis.findings),
+            step="security",
+            tool=step_tool,
+            digits=0,
+        )
+        flow_count = values.number(
+            "security.flow_check_count",
+            "Modeled flow check count",
+            len(analysis.flow_checks),
+            step="security",
+            tool=step_tool,
+            digits=0,
+        )
+        paragraph = ParagraphBlock(
+            text=(
+                f"Modeled posture is {posture}, modeled risk is {score} "
+                f"({risk_level}), with {finding_count} finding(s) and "
+                f"{flow_count} flow check(s)."
+            ),
+            provenance=self.prov("security", step_tool),
+        )
+        disclaimer = NoteBlock(
+            text=SECURITY_DISCLAIMER,
+            severity="info",
+            provenance=self.prov("security", step_tool),
+        )
+        formula = NoteBlock(
+            text=values.scan(
+                "security.risk_formula",
+                "Modeled risk formula",
+                analysis.risk.formula,
+                step="security",
+                tool=step_tool,
+            ),
+            severity="info",
+            provenance=self.prov("security", step_tool),
+        )
+        finding_rows = [
+            (
+                finding.severity.value,
+                finding.code,
+                finding.category.value,
+                ", ".join(finding.affected_entities) or "-",
+                values.scan(
+                    f"security.finding.{index}",
+                    f"Security finding {finding.code}",
+                    finding.explanation,
+                    step="security",
+                    tool=step_tool,
+                ),
+                values.scan(
+                    f"security.remediation.{index}",
+                    f"Security remediation {finding.code}",
+                    finding.remediation,
+                    step="security",
+                    tool=step_tool,
+                ),
+            )
+            for index, finding in enumerate(analysis.findings)
+        ]
+        findings_table = self.table(
+            "security_findings",
+            "Security findings",
+            ("Severity", "Code", "Category", "Entities", "Explanation", "Remediation"),
+            finding_rows,
+            step="security",
+            tool=step_tool,
+        )
+        flow_rows = [
+            (
+                check.request.id,
+                check.verdict.value,
+                values.scan(
+                    f"security.flow.{index}",
+                    f"Flow check {check.request.id}",
+                    check.reason,
+                    step="security",
+                    tool=step_tool,
+                ),
+            )
+            for index, check in enumerate(analysis.flow_checks)
+        ]
+        flow_table = self.table(
+            "security_flow_checks",
+            "Modeled flow checks",
+            ("Check", "Verdict", "Explanation"),
+            flow_rows,
+            step="security",
+            tool=step_tool,
+        )
+        blocks: list[Any] = [disclaimer, paragraph, formula]
+        if finding_rows:
+            blocks.append(findings_table)
+        if flow_rows:
+            blocks.append(flow_table)
+        if analysis.proposals.rules:
+            blocks.append(
+                NoteBlock(
+                    text=(
+                        f"{len(analysis.proposals.rules)} inert proposed rule(s) "
+                        "require explicit acceptance; the baseline twin is unchanged."
+                    ),
+                    severity="info",
+                    provenance=self.prov("security", step_tool),
+                )
+            )
+        blocks.append(
+            NoteBlock(
+                text=(
+                    "Security templates are vendor-neutral data records only; no "
+                    "device syntax or commands are produced."
+                ),
+                severity="info",
+                provenance=self.prov("security", step_tool),
+            )
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    # ------------------------------------------------------------------
+    # 10. Assumptions
     # ------------------------------------------------------------------
     def assumptions(self) -> ReportSection:
         section_id = "assumptions"
@@ -2949,6 +3112,7 @@ class _Builder:
             self.simulation(),
             self.capacity(),
             self.optimization(),
+            self.security(),
             self.assumptions(),
             self.limitations(),
             self.agent_trace(),

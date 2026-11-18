@@ -17,6 +17,7 @@ from .engine import analyze_design
 from .models import (
     SECURITY_DISCLAIMER,
     CatalogRule,
+    DisclosedModel,
     FindingCategory,
     FirewallRule,
     FlowCheckResult,
@@ -73,6 +74,7 @@ __all__ = [
     "TEMPLATE_HEADER",
     "UNASSIGNED_ZONE",
     "CatalogRule",
+    "DisclosedModel",
     "FindingCategory",
     "FirewallRule",
     "FlowCheckResult",

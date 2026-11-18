@@ -66,19 +66,23 @@ ISSUE_TASK_POLICY: dict[str, str] = {
 
 def build_standard_plan(
     requirements: NetworkRequirements | None = None,
+    *,
+    include_security: bool = False,
 ) -> WorkflowPlan:
-    """Return the deterministic eleven-step structured-form plan.
+    """Return the deterministic structured-form plan.
 
-    The order is requirements -> topology -> IP/VLAN -> routing -> validation
-    -> simulation -> optimization -> re-validation -> critic -> documentation
-    -> report. When ``requirements`` is supplied it is embedded in the tasks
-    that need it, so :meth:`Orchestrator.run` can execute the plan without extra
-    inputs.
+    The default order is requirements -> topology -> IP/VLAN -> routing ->
+    validation -> simulation -> optimization -> re-validation -> critic ->
+    documentation -> report (eleven steps). With ``include_security=True`` one
+    offline security step is inserted after re-validation and before the critic,
+    making twelve steps. When ``requirements`` is supplied it is embedded in the
+    tasks that need it, so :meth:`Orchestrator.run` can execute the plan without
+    extra inputs.
     """
     base_payload: dict[str, Any] = (
         {} if requirements is None else {"requirements": requirements}
     )
-    tasks = (
+    tasks: list[WorkflowTask] = [
         WorkflowTask(
             id="requirements",
             agent="requirements",
@@ -129,34 +133,52 @@ def build_standard_plan(
             description="Re-validate the final working twin.",
             dependencies=("optimization",),
         ),
-        WorkflowTask(
-            id="critic",
-            agent="critic",
-            description=(
-                "Independently critique topology, addressing, routing, capacity, "
-                "and redundancy."
+    ]
+    critic_dependencies = ("revalidation",)
+    if include_security:
+        tasks.append(
+            WorkflowTask(
+                id="security",
+                agent="security",
+                description=(
+                    "Run the offline design-time security analysis on the final "
+                    "working twin."
+                ),
+                dependencies=("revalidation",),
+            )
+        )
+        critic_dependencies = ("revalidation", "security")
+    tasks.extend(
+        (
+            WorkflowTask(
+                id="critic",
+                agent="critic",
+                description=(
+                    "Independently critique topology, addressing, routing, capacity, "
+                    "redundancy, and optional security findings."
+                ),
+                dependencies=critic_dependencies,
+                payload=base_payload,
             ),
-            dependencies=("revalidation",),
-            payload=base_payload,
-        ),
-        WorkflowTask(
-            id="documentation",
-            agent="documentation",
-            description=(
-                "Assemble validated results into a traceable report with "
-                "provenance, assumptions, and limitations."
+            WorkflowTask(
+                id="documentation",
+                agent="documentation",
+                description=(
+                    "Assemble validated results into a traceable report with "
+                    "provenance, assumptions, and limitations."
+                ),
+                dependencies=("critic",),
+                payload=base_payload,
             ),
-            dependencies=("critic",),
-            payload=base_payload,
-        ),
-        WorkflowTask(
-            id="report",
-            agent="report",
-            description="Summarize the plan, assumptions, and results.",
-            dependencies=("documentation",),
-        ),
+            WorkflowTask(
+                id="report",
+                agent="report",
+                description="Summarize the plan, assumptions, and results.",
+                dependencies=("documentation",),
+            ),
+        )
     )
-    return WorkflowPlan(name="Structured design plan", tasks=tasks)
+    return WorkflowPlan(name="Structured design plan", tasks=tuple(tasks))
 
 
 def structured_inputs(requirements: NetworkRequirements) -> dict[str, BaseModel]:
@@ -241,9 +263,12 @@ class Orchestrator:
         requirements: NetworkRequirements,
         *,
         plan: WorkflowPlan | None = None,
+        include_security: bool = False,
     ) -> WorkflowState:
         """Build and run the standard structured-form plan for requirements."""
-        resolved = plan or build_standard_plan(requirements)
+        resolved = plan or build_standard_plan(
+            requirements, include_security=include_security
+        )
         return self.run(resolved, inputs=structured_inputs(requirements))
 
     def run(
@@ -672,9 +697,12 @@ def run_structured_design(
     requirements: NetworkRequirements,
     *,
     orchestrator: Orchestrator | None = None,
+    include_security: bool = False,
 ) -> WorkflowState:
     """Run the standard deterministic plan end-to-end without any LLM."""
-    return (orchestrator or Orchestrator()).run_structured(requirements)
+    return (orchestrator or Orchestrator()).run_structured(
+        requirements, include_security=include_security
+    )
 
 
 __all__ = [

@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: Phase 14 - Design-time Network Security Analysis (in progress)
-- Current task: Phase 14b - deterministic security engine (complete)
-- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0/14a/14b complete on `feature/phase14-security`
+- Current task: Phase 14c - Security Agent and integration (complete)
+- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0/14a/14b/14c complete on `feature/phase14-security`
 - Last updated: 2026-11-18
 - Branch: `feature/phase14-security` (based on updated `main` commit `7b33b74`)
 
@@ -21,7 +21,7 @@
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
 - [x] Phase 13: Predictive Capacity Planning (13a/13b/13c complete)
-- [ ] Phase 14: Design-time Network Security Analysis (14.0/14a/14b complete)
+- [ ] Phase 14: Design-time Network Security Analysis (14.0/14a/14b/14c complete)
 - [ ] Phase 15: Testing, Security review, and Deployment
 
 ## Task 0 evidence (verification and version control)
@@ -1659,7 +1659,43 @@ Location: `security/models.py`, `security/policy.py`, `security/catalog.py`,
   passed!`. Browser rendering and live LLM behavior were not verified. The
   catalog is a modeling aid, not an audit standard.
 
+## Phase 14c delivered - Security Agent and integration
+Location: `agents/security_agent.py`, `agents/tools.py`, `agents/critic.py`,
+`agents/orchestrator.py`, `agents/network_agents.py`, `agents/documentation.py`,
+`agents/__init__.py`, `config/limits.py`, `services/reporting/builder.py`,
+`services/validation/`, and new agent/service tests.
+
+- The Security Agent has exactly one allowlisted tool, `security_analysis`.
+  Verdict, risk, findings, and posture come from the deterministic engine. An
+  optional LLM explanation is labelled as non-authoritative; numeric tokens that
+  are absent from the assessment, out-of-scope terms, overlong text, and provider
+  failures cannot change any engineering result. The agent has no network I/O
+  and declines automatic re-plans.
+- The default workflow remains 11 steps and has no security result. Passing
+  `include_security=True` inserts one offline security step after re-validation
+  and before the critic, making 12 steps. The critic re-runs the security tool,
+  maps `SEC-*`/`POLICY-*` codes to `security`, emits a nonblocking
+  `security_high_risk` warning in the high band, and rejects blocking security
+  findings. The Security Agent's `replan()` returns `None`, so a security
+  rejection stops the workflow instead of silently applying a proposed rule.
+- Reports include a `security` section between `optimization` and `assumptions`
+  with the exact disclaimer, provenance, finding and flow tables, and explicit
+  inert-proposal/vendor-neutral-template notes. Documentation and workflow
+  reports include the same section when the optional step runs. Design health
+  gained a basic `security` category for supplied findings; expensive checks
+  remain opt-in.
+- Changed existing assertions (disclosed): the critic allowlist test now includes
+  `security_analysis`; the registry-name test asserts the new tool; report
+  `SECTION_IDS` includes `security`; and the not-run pointer table includes
+  `("security", "Security Analysis")`. No assertion was weakened.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `925 passed in
+  22.03s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified. The
+  catalog is a modeling aid, not an audit standard.
+
 ## Next task
-- Phase 14c: add the strictly allowlisted Security Agent with AI-labeled
-  explanations only, ToolRegistry validation, orchestrator/critic/report and
-  design-health integration, and a security gate with no network I/O.
+- Phase 14d: add the Security Analysis UI as the 15th page with the twin-required
+  empty state, Zones/Policy/Flow check/Findings/Templates tabs, exact disclaimer,
+  versioned editor keys, rejected-edit reset, bounded session accessors,
+  content-keyed caches, shared helpers, AppTest coverage, and 15-page navigation
+  tests.

@@ -59,6 +59,7 @@ from network.topology import (
 from network.vlan import VlanPlanResult, VlanRequest, plan_vlans
 from optimization import Algorithm, OptimizationRun, OptimizationSettings
 from optimization import run_optimization as run_optimization_engine
+from security import FlowRequest, SecurityAnalysis, SecurityModel, analyze_design
 from simulation import NetworkState, ScenarioRun, SimulationAssumptions
 from simulation import evaluate as evaluate_network_state
 from simulation import run_scenario as run_scenario_engine
@@ -196,6 +197,12 @@ class WorkingTwinInput(BaseModel):
     name: str | None = None
 
 
+class SecurityAnalysisInput(BaseModel):
+    twin: DigitalTwin
+    model: SecurityModel | None = None
+    flows: tuple[FlowRequest, ...] = Field(default_factory=tuple)
+
+
 ToolImplementation = Callable[[Any], Any]
 
 _GENERATORS = {
@@ -320,6 +327,10 @@ def _optimization(payload: OptimizationRunInput) -> OptimizationRun:
         payload.settings,
         payload.algorithm,
     )
+
+
+def _security_analysis(payload: SecurityAnalysisInput) -> SecurityAnalysis:
+    return analyze_design(payload.twin, model=payload.model, flows=payload.flows)
 
 
 def default_tools() -> tuple[Tool, ...]:
@@ -479,6 +490,16 @@ def default_tools() -> tuple[Tool, ...]:
                 name=payload.name,
             ),
         ),
+        Tool(
+            name="security_analysis",
+            description=(
+                "Analyze modeled zones, policy, flows, and design findings "
+                "without contacting any device."
+            ),
+            input_model=SecurityAnalysisInput,
+            output_model=SecurityAnalysis,
+            implementation=_security_analysis,
+        ),
     )
 
 
@@ -583,6 +604,7 @@ __all__ = [
     "RequirementsValidation",
     "RoutingPathInput",
     "RoutingTableInput",
+    "SecurityAnalysisInput",
     "SimulationRunInput",
     "SpofInput",
     "Tool",

@@ -2,6 +2,46 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 14c: Security Agent and integration
+
+### Added
+- `agents/security_agent.py`: fifth, strictly allowlisted Security Agent. It may
+  call only `security_analysis`; the verdict, risk, findings, and posture are
+  copied from that deterministic result. Optional model prose carries the label
+  `AI-generated text; not a source of design data.`, and invented numeric tokens
+  or out-of-scope terms cause the prose to be rejected in favor of the
+  deterministic explanation. The agent never proposes changes silently.
+- `agents/tools.py`: registered, schema-validated `security_analysis` tool with a
+  `SecurityAnalysisInput` model. `config/limits.py` bounds prose to 1,200
+  characters and flow checks to 20.
+- Optional 12-step workflow via `include_security=True`; the default remains
+  11 steps. The security step runs after re-validation and before the critic.
+  The critic independently re-runs the security tool, maps `SEC-*`/`POLICY-*`
+  findings to that step, adds a nonblocking `security_high_risk` warning for the
+  high band, and treats blocking security findings as a critic rejection. The
+  Security Agent declines automatic re-plans so fixes require user acceptance.
+- Report Security section with the exact disclaimer, typed values, provenance,
+  findings/flow tables, and explicit notes that proposals are inert and templates
+  are vendor-neutral data. Documentation and workflow reports include the
+  Security section when the optional step runs. The unified design-health pass
+  gained a basic `security` category for supplied findings; expensive checks
+  remain opt-in.
+- Tests for the one-tool allowlist, ToolRegistry validation, determinism,
+  AI-label/numeric rejection/provider failure behavior, forbidden imports,
+  optional workflow/critic gating, report provenance, and design-health grouping.
+
+### Changed
+- Changed existing assertions (disclosed): `test_tool_allowlist_is_exactly_the_independent_checks`
+  now includes `security_analysis`; `test_registry_names_are_deterministic`
+  asserts the new tool name; `tests/unit/services/test_reporting.py::SECTION_IDS`
+  includes `security` between `optimization` and `assumptions`, and the not-run
+  section pointer table includes `("security", "Security Analysis")`. No
+  assertion was weakened.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q` -> `925 passed in
+  22.03s`; `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks
+  passed!`. Browser rendering and live LLM behavior were not verified. The
+  catalog is a modeling aid, not an audit standard.
+
 ## 2026-11-18 - Phase 14b: deterministic security engine
 
 ### Added

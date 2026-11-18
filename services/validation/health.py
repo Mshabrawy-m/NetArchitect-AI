@@ -77,6 +77,13 @@ def categorize_twin_finding(finding: Finding) -> ValidationCategory:
     return ValidationCategory.references
 
 
+def categorize_security_finding(finding: Finding) -> ValidationCategory:
+    """Return the design-health category for a supplied security finding."""
+    if finding.code.startswith(("SEC-", "POLICY-")):
+        return ValidationCategory.security
+    return categorize_twin_finding(finding)
+
+
 def _check_failure(check: str, error: Exception) -> Finding:
     return Finding(
         severity=Severity.warning,
@@ -250,13 +257,17 @@ def build_design_health(
     *,
     include_expensive: bool = False,
     constraints: Sequence[str] | Iterable[str] = (),
+    security_findings: Sequence[Finding] | Iterable[Finding] = (),
 ) -> DesignHealth:
     """Run every deterministic design check and return one categorized report.
 
     ``include_expensive`` adds all-pairs reachability and redundancy analysis.
     Those checks cost one Dijkstra search per device and one removal analysis
-    per device and link, so they are opt-in. ``constraints`` accepts free-form
-    requirement text; only the documented forms are machine-checked.
+    per device and link, so they are opt-in. ``security_findings`` accepts
+    findings copied from a design-time security analysis; they are basic checks
+    and are included whether or not expensive checks run. ``constraints``
+    accepts free-form requirement text; only the documented forms are
+    machine-checked.
     """
     started = perf_counter()
     groups: dict[ValidationCategory, list[Finding]] = {
@@ -283,6 +294,8 @@ def build_design_health(
             include_expensive=include_expensive,
         )
     )
+    for finding in security_findings:
+        groups[categorize_security_finding(finding)].append(finding)
 
     items: list[tuple[ValidationCategory, Finding]] = [
         (category, finding)
@@ -318,4 +331,8 @@ def build_design_health(
     )
 
 
-__all__ = ["build_design_health", "categorize_twin_finding"]
+__all__ = [
+    "build_design_health",
+    "categorize_security_finding",
+    "categorize_twin_finding",
+]

@@ -22,6 +22,7 @@ from core.exceptions import LLMError
 from core.schemas.requirements import NetworkRequirements
 from core.schemas.validation import Finding, Severity
 from digital_twin import DigitalTwin, addressing_subnets
+from security import RiskLevel, SecurityAnalysis
 from services.llm.models import LLMMessage, MessageRole
 from services.llm.provider import LLMProvider
 from simulation import CongestionLevel
@@ -60,7 +61,14 @@ RESPONSIBLE_STEPS: dict[str, str] = {
 
 def responsible_step_for(code: str) -> str:
     """Return the workflow task that owns a finding code."""
-    return RESPONSIBLE_STEPS.get(code, "revalidation")
+    known = RESPONSIBLE_STEPS.get(code)
+    if known is not None:
+        return known
+    if code.startswith(("SEC-", "POLICY-")):
+        return "security"
+    if code == "security_high_risk":
+        return "security"
+    return "revalidation"
 
 
 class CriticVerdict(str, Enum):
@@ -120,6 +128,7 @@ class CriticAgent(BaseAgent):
             "routing_path",
             "twin_load_state",
             "spof_analysis",
+            "security_analysis",
         }
     )
 
@@ -189,6 +198,7 @@ class CriticAgent(BaseAgent):
             self._check_routing(twin, context, add_finding)
             self._check_load(twin, context, add_finding)
             self._check_redundancy(payload, twin, context, add_finding)
+            self._check_security(twin, context, add_engine_finding, add_finding)
 
         blocking = [finding for finding in findings if finding.blocking]
         warnings = [
@@ -387,6 +397,46 @@ class CriticAgent(BaseAgent):
             entities=entities,
             responsible_step="topology",
         )
+
+    @staticmethod
+    def _check_security(
+        twin: DigitalTwin,
+        context: AgentContext,
+        add_engine_finding,
+        add_finding,
+    ) -> None:
+        """Re-run the offline security tool when an optional result exists."""
+        security = context.result("security")
+        previous = getattr(security, "analysis", None)
+        if not isinstance(previous, SecurityAnalysis):
+            return
+        report = context.call_tool(
+            "security_analysis",
+            {
+                "twin": twin,
+                "model": previous.model,
+                "flows": tuple(check.request for check in previous.flow_checks),
+            },
+        )
+        if not isinstance(report, SecurityAnalysis):
+            return
+        for finding in report.findings:
+            add_engine_finding(finding)
+        if report.risk.level is RiskLevel.high:
+            add_finding(
+                code="security_high_risk",
+                severity=Severity.warning,
+                explanation=(
+                    "The reproducible modeled risk score is in the high band "
+                    f"({report.risk.score}): {report.risk.formula}"
+                ),
+                remediation=(
+                    "Review the security findings and accept proposed rules only "
+                    "after a design decision. This is a modeled assessment."
+                ),
+                entities=[finding.code for finding in report.findings],
+                responsible_step="security",
+            )
 
     # ------------------------------------------------------------------
     # Optional, non-authoritative model note

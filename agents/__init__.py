@@ -105,6 +105,13 @@ from .requirements_agent import (
     RequirementsUnderstandingAgent,
     understand_requirements,
 )
+from .security_agent import (
+    SECURITY_EXPLANATION_PROMPT,
+    SecurityAgent,
+    SecurityAgentInput,
+    SecurityAgentOutput,
+    SecurityGate,
+)
 from .tools import Tool, ToolRegistry, default_tools, registry_with_defaults
 
 __all__ = [
@@ -113,6 +120,7 @@ __all__ = [
     "EXTRACTION_SYSTEM_PROMPT",
     "ISSUE_TASK_POLICY",
     "RESPONSIBLE_STEPS",
+    "SECURITY_EXPLANATION_PROMPT",
     "AgentContext",
     "BaseAgent",
     "ClarificationQuestion",
@@ -159,6 +167,10 @@ __all__ = [
     "RoutingAgent",
     "RoutingInput",
     "RoutingOutput",
+    "SecurityAgent",
+    "SecurityAgentInput",
+    "SecurityAgentOutput",
+    "SecurityGate",
     "SimulationAgent",
     "SimulationInput",
     "SimulationOutput",

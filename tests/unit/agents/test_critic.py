@@ -279,6 +279,7 @@ def test_tool_allowlist_is_exactly_the_independent_checks() -> None:
             "routing_path",
             "twin_load_state",
             "spof_analysis",
+            "security_analysis",
         }
     )
 

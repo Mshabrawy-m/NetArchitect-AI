@@ -119,6 +119,13 @@ MAX_CRITIC_SUMMARY_CHARS: int = 1_500
 # model-written explanation. It is never treated as a source of design data.
 MAX_DOCUMENTATION_EXPLANATION_CHARS: int = 2_000
 
+# Maximum characters accepted from the security agent's optional model-written
+# explanation. It is never treated as a source of security data.
+MAX_SECURITY_EXPLANATION_CHARS: int = 1_200
+
+# Maximum number of modeled flow checks one security agent run may request.
+MAX_SECURITY_FLOW_CHECKS: int = 20
+
 # Maximum number of selective re-plans (re-running the responsible task and its
 # dependents) allowed in one workflow. Prevents a validation/re-plan loop.
 MAX_AGENT_REPLANS: int = 2

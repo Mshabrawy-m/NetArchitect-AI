@@ -61,6 +61,7 @@ SECTION_IDS = (
     "simulation",
     "capacity",
     "optimization",
+    "security",
     "assumptions",
     "limitations",
     "agent_trace",
@@ -140,6 +141,7 @@ def test_sections_without_inputs_are_marked_not_run_with_a_pointer(
         ("simulation", "Simulation Lab"),
         ("capacity", "Capacity Planning"),
         ("optimization", "Optimization Center"),
+        ("security", "Security Analysis"),
         ("agent_trace", "AI Network Designer"),
     ):
         section = base_report.section(section_id)

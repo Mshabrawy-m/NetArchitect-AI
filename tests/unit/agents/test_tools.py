@@ -143,5 +143,6 @@ def test_registry_names_are_deterministic() -> None:
     registry = registry_with_defaults()
     assert registry.names() == tuple(sorted(registry.names()))
     assert "topology_generate" in registry.names()
+    assert "security_analysis" in registry.names()
     assert isinstance(registry.get("topology_generate").input_model, type)
     assert TopologyGenerateInput(family="star").family == "star"

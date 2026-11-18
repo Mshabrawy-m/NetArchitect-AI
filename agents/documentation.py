@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from config.limits import MAX_DOCUMENTATION_EXPLANATION_CHARS
 from core.exceptions import LLMError
 from core.schemas.requirements import NetworkRequirements
+from security import SECURITY_DISCLAIMER
 from services.llm.models import LLMMessage, MessageRole
 from services.llm.provider import LLMProvider
 from simulation import MODEL_NOTE
@@ -205,6 +206,7 @@ class DocumentationAgent(BaseAgent):
         self._simulation_section(context, sections, tables)
         self._optimization_section(context, sections, tables)
         self._findings_section(context, sections, tables)
+        self._security_section(context, sections, tables)
         critic = context.result("critic")
         verdict = (
             critic.verdict.value
@@ -616,6 +618,73 @@ class DocumentationAgent(BaseAgent):
             )
 
     @staticmethod
+    def _security_section(
+        context: AgentContext,
+        sections: list[DocumentSection],
+        tables: list[DocumentTable],
+    ) -> None:
+        security = context.result("security")
+        if security is None or not hasattr(security, "analysis"):
+            return
+        sections.append(
+            DocumentSection(
+                title="Design-time security",
+                body=(
+                    "The Security Agent copied a deterministic modeled assessment. "
+                    + SECURITY_DISCLAIMER
+                ),
+                step="security",
+                tool="security_analysis",
+                values=[
+                    DocumentValue(
+                        label="Security gate",
+                        value=security.gate.value,
+                        step="security",
+                        tool="security_analysis",
+                    ),
+                    DocumentValue(
+                        label="Modeled risk score",
+                        value=str(security.risk_score),
+                        step="security",
+                        tool="security_analysis",
+                    ),
+                    DocumentValue(
+                        label="Modeled risk level",
+                        value=security.risk_level.value,
+                        step="security",
+                        tool="security_analysis",
+                    ),
+                    DocumentValue(
+                        label="Modeled posture",
+                        value=security.posture.value,
+                        step="security",
+                        tool="security_analysis",
+                    ),
+                ],
+            )
+        )
+        rows = [
+            [
+                finding.code,
+                finding.severity.value,
+                finding.explanation,
+                finding.remediation,
+            ]
+            for finding in security.analysis.findings
+        ]
+        if rows:
+            tables.append(
+                DocumentTable(
+                    title="Security findings",
+                    columns=["Code", "Severity", "Explanation", "Remediation"],
+                    rows=rows,
+                    step="security",
+                    tool="security_analysis",
+                    note=SECURITY_DISCLAIMER,
+                )
+            )
+
+    @staticmethod
     def _simulation_section(
         context: AgentContext,
         sections: list[DocumentSection],
@@ -823,6 +892,8 @@ class DocumentationAgent(BaseAgent):
                 "candidate is the best found within the configured limits, not a "
                 "proof of a global optimum."
             )
+        if context.result("security") is not None:
+            limitations.append(SECURITY_DISCLAIMER)
         return limitations
 
     def _explain(
