@@ -2,6 +2,38 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - v1.0.0-rc1: Release preparation (Phase 15)
+
+### Added
+- `tests/unit/release/test_phase15_acceptance.py`: 18 Blueprint acceptance tests covering IP overlap/duplicates, graph-walk route validity, failure exclusion, reproducible simulation and optimization, hard constraints, invalid LLM output, report/computed-value consistency, no-key rendering of all 15 pages, and the security criticality decision.
+- `tests/unit/release/test_phase15_hardening.py`: 14 adversarial-input and secret-containment tests covering guarded JSON/CSV/text/identifiers, formula neutralization, prompt-injection tool allowlisting, no dynamic execution or runtime disk writes, gitignore/secrets safety, and exact dependency pins.
+- `tests/unit/release/test_phase15_deployment.py`: 5 tests for headless/bounded Streamlit config, CI workflow contents, deployment docs and secrets placeholder, in-app release limitations with no key, and About-menu scope.
+- Release documentation: `README.md`, `docs/ARCHITECTURE.md`, `docs/API_CONTRACTS.md`, `docs/AGENT_SPECIFICATIONS.md`, `docs/TEST_STRATEGY.md`, `docs/DEPLOYMENT.md`, `docs/RELEASE_AUDIT.md`, `docs/ROADMAP.md`, and `KNOWN_LIMITATIONS.md`.
+- `.github/workflows/ci.yml`: Python 3.11/3.12 matrix running install, lint, full tests, smoke tests, and a deployment-config assertion. Remote execution was not performed.
+- In-app Settings > Release limitations and an About menu that identifies `v1.0.0-rc1` and the design-time scope.
+- `pytest.ini` defines the optional `smoke` marker.
+
+### Changed
+- `requirements.txt` pins exactly ten direct packages and references `constraints.txt`; `constraints.txt` pins the transitive `pyarrow==23.0.1` wheel. No direct runtime dependency was added.
+- `core/inputs.py` and `core/csv_safe.py` add bounded, typed parsing and spreadsheet-formula neutralization before Pydantic validation and CSV export.
+- Untrusted import/export paths across twin, simulation, forecasting, optimization, security, reporting, and documentation modules use the guarded parsers and neutralizer.
+- `.streamlit/config.toml` sets `headless = true`, `maxUploadSize = 2`, and disables usage stats.
+- `CURRENT_STATUS.md` records Phase 15 evidence and the remaining owner deployment action.
+- Security criticality is documented as a gate for `SEC-DW-009`, not a numeric risk-formula term.
+
+### Evidence
+- `pytest -q`: `975 passed in 33.79s`.
+- `pytest -q -m smoke`: `12 passed, 963 deselected in 8.55s`.
+- `ruff check .`: `All checks passed!`.
+- Clean Python 3.11 venv: `975 passed in 38.79s`; `All checks passed!`.
+- Clean Python 3.12 venv: `975 passed in 44.79s`; `All checks passed!`.
+- `pip-audit -r requirements.txt --progress-spinner off`: `No known vulnerabilities found`.
+- Local headless startup: `health: ok`, `agent status: ready`, root title `Dashboard`, `exceptions: 0`.
+- Profile rerun: peak traced allocation 8.7 MiB; maximum optimization searches are wall-clock bounded by 60 s.
+
+### Not verified
+- Streamlit Community Cloud deployment, real-browser rendering, live Groq requests, PDF visual layout, and remote GitHub Actions execution.
+
 ## 2026-11-18 - Phase 14d: Security Analysis UI
 
 ### Added

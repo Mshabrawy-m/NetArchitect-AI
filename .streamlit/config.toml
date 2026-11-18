@@ -4,8 +4,8 @@
 [server]
 headless = true
 # Application-level caps are 2,000,000 bytes for JSON and 1,000,000 for CSV.
-# Keep the widget below the smaller in-app cap so large uploads are rejected
-# by Streamlit before a script rerun.
+# The widget is an outer guard; the in-app guarded parsers still enforce the
+# smaller per-format caps and return typed errors before engine work begins.
 maxUploadSize = 2
 
 [browser]

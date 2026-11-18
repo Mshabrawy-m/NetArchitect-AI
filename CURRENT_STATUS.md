@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 14 - Design-time Network Security Analysis (in progress)
-- Current task: Phase 14d - Security Analysis UI (complete)
-- Overall status: Phase 13 merged and pushed to `main` (`7b33b74`); Phase 14.0/14a/14b/14c/14d complete on `feature/phase14-security`
+- Current phase: Phase 15 - Testing, security review, and deployment (release candidate prepared locally)
+- Current task: Phase 15d - release documentation, criterion audit, and annotated `v1.0.0-rc1`
+- Overall status: Phase 14 merged and pushed to `main` (`11c6f6e`); Phase 15a/b/c/d complete on `feature/phase15-release`; annotated `v1.0.0-rc1` created locally. Community Cloud deployment remains an owner action.
 - Last updated: 2026-11-18
-- Branch: `feature/phase14-security` (based on updated `main` commit `7b33b74`)
+- Branch: `feature/phase15-release` (based on `main` commit `11c6f6e`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -21,8 +21,8 @@
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
 - [x] Phase 13: Predictive Capacity Planning (13a/13b/13c complete)
-- [ ] Phase 14: Design-time Network Security Analysis (14.0/14a/14b/14c/14d complete)
-- [ ] Phase 15: Testing, Security review, and Deployment
+- [x] Phase 14: Design-time Network Security Analysis (14.0/14a/14b/14c/14d complete)
+- [x] Phase 15: Testing, Security review, and Deployment (15a/15b/15c/15d prepared locally; Cloud deployment pending owner action)
 
 ## Task 0 evidence (verification and version control)
 - `python --version`: `Python 3.11.15` (system interpreter and `.venv`).
@@ -1721,6 +1721,92 @@ and new/updated UI tests.
   passed!`. Browser rendering and live LLM behavior were not verified. The
   catalog is a modeling aid, not an audit standard.
 
+## Phase 15a delivered - release acceptance verification and gap-closing tests
+Commit: `7cb4995`
+
+- Added 18 acceptance tests in `tests/unit/release/test_phase15_acceptance.py`.
+  They verify IP plan overlap/duplicate checks, valid graph walks across four
+  topology generators, failure exclusion, reproducible simulation and
+  optimization, hard-constraint behavior, invalid LLM rejection, report values
+  against computed engines, all 15 pages with no API key, and the security
+  criticality decision.
+- Added the optional `smoke` marker in `pytest.ini`.
+- Decision recorded: asset/zone criticality is a gate for `SEC-DW-009`, not a
+  numeric risk-formula term. Implemented in `security/risk.py`.
+- Evidence: baseline before Phase 15 `938 passed in 26.66s`; after 15a
+  `& ".venv\Scripts\python.exe" -m pytest -q` -> `955 passed in 25.65s`;
+  `& ".venv\Scripts\python.exe" -m pytest -q -m smoke` -> `11 passed, 944 deselected in 4.49s`;
+  `& ".venv\Scripts\python.exe" -m ruff check .` -> `All checks passed!`.
+
+## Phase 15b delivered - adversarial hardening and dependency audit
+Commit: `bf4c220`
+
+- Added guarded JSON/CSV/text/identifier parsing (`core/inputs.py`) and
+  spreadsheet-formula neutralization (`core/csv_safe.py`), wired through all
+  untrusted import/export paths.
+- Added typed errors and compiled caps; see `docs/RUNTIME_LIMITS.md`.
+- Added 14 hardening tests: payload/depth/width/identifier bounds, malformed and
+  non-finite values, duplicate keys, hidden controls, CSV findings, formula
+  neutralization, prompt-injection tool allowlisting, secret containment in
+  logs/traces/reports/exports/session dumps, no runtime dynamic execution or
+  disk writes, gitignore/secrets safety, and exact dependency pins.
+- Pinned ten direct packages in `requirements.txt` and the transitive
+  `pyarrow==23.0.1` wheel in `constraints.txt`. No direct runtime dependency was
+  added. The vulnerable `17.0.0` pin and the locally blocked `26.0.1` wheel were
+  replaced after auditing and clean-install checks.
+- Secret scan: tree and full history contain no live secret patterns; no
+  tracked `.env`, `.streamlit/secrets.toml`, or key/certificate files.
+- Evidence: clean Python 3.11 venv -> `970 passed in 30.23s` and
+  `All checks passed!`; `pip-audit -r requirements.txt --progress-spinner off`
+  -> `No known vulnerabilities found`.
+
+## Phase 15c delivered - deployment artifacts and headless evidence
+Commit: `50008ab`
+
+- `.streamlit/config.toml` sets `headless = true`, `maxUploadSize = 2`, and
+  `gatherUsageStats = false`. The 2 MB widget is an outer guard; guarded parsers
+  still enforce smaller per-format caps.
+- Added `.github/workflows/ci.yml` with a Python 3.11/3.12 matrix for install,
+  lint, full suite, smoke subset, and deployment-config assertion. Remote GitHub
+  Actions execution was not performed.
+- Added Settings > Release limitations and About-menu scope text identifying
+  `v1.0.0-rc1`.
+- Added 5 deployment tests in `tests/unit/release/test_phase15_deployment.py`.
+- Headless evidence from the clean Python 3.11 venv with all `GROQ_*` variables
+  removed: `health: ok`, `agent status: ready`, root title `Dashboard`,
+  `exceptions: 0`, `actions: 1`; Streamlit log showed only startup lines.
+- Profile rerun: peak traced allocation 8.7 MiB; no-memory maximum optimization
+  searches are bounded by the 60 s hard cap and flagged by the script's 5 s
+  threshold.
+- Final local evidence: `pytest -q` -> `975 passed in 33.79s`;
+  `pytest -q -m smoke` -> `12 passed, 963 deselected in 8.55s`;
+  `ruff check .` -> `All checks passed!`; clean Python 3.11 -> `975 passed in 38.79s`;
+  clean Python 3.12 -> `975 passed in 44.79s`, both with `All checks passed!`.
+
+## Phase 15d delivered - documentation, audit, and release tag
+- Added the full release documentation set: `README.md`, `docs/ARCHITECTURE.md`,
+  `docs/API_CONTRACTS.md`, `docs/AGENT_SPECIFICATIONS.md`,
+  `docs/TEST_STRATEGY.md`, `docs/DEPLOYMENT.md`, `docs/RELEASE_AUDIT.md`,
+  `docs/ROADMAP.md`, and `KNOWN_LIMITATIONS.md`; updated `docs/CHANGELOG.md`.
+- `docs/RELEASE_AUDIT.md` contains the criterion-by-criterion
+  `criterion | evidence | status` table for Blueprint §11 and §16, plus §15 exit
+  criteria and §10 supporting constraints. Deployment criteria are marked
+  `UNVERIFIED (remote)` rather than assumed.
+- Corrected the 15c upload-comment wording without changing the tested value:
+  the 2 MB widget is an outer guard, not a claim of being below the 1 MB CSV
+  parser cap.
+- Created annotated tag `v1.0.0-rc1` pointing at this release commit.
+- No new feature, public schema change, runtime dependency, security-scanning
+  functionality, or license decision was added in Phase 15.
+
 ## Next task
-- Phase 15 Testing is not started and remains outside the approved Phase 14
-  scope. It requires its own owner-approved task before implementation.
+- Owner action: push `feature/phase15-release` and `v1.0.0-rc1` if they should be
+  available on GitHub.
+- Owner action: follow `docs/DEPLOYMENT.md` to deploy from
+  `feature/phase15-release` (or `main` after merge) on Streamlit Community Cloud
+  Free with Python 3.12 and no secrets.
+- Owner action: verify the deployed app's 15 pages, no-key state, in-app
+  limitations, and clean logs; optionally add a Groq secret through Community
+  Cloud App settings.
+- Remaining unverified items: real browser, deployed free tier, live Groq,
+  PDF visual layout, and remote GitHub Actions execution.
