@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: Phase 13 - Predictive Capacity Planning (in progress)
-- Current task: Phase 13a - Forecasting engine (complete)
-- Overall status: Phase 12 complete on `main` (`97cc88c`); Phase 13a complete on `feature/phase13-capacity`
+- Current task: Phase 13b - Capacity projection and evaluation (complete)
+- Overall status: Phase 12 complete on `main` (`97cc88c`); Phase 13a/13b complete on `feature/phase13-capacity`
 - Last updated: 2026-11-18
 - Branch: `feature/phase13-capacity` (based on `main` commit `97cc88c`)
 
@@ -20,7 +20,7 @@
 - [x] Phase 10: Specialized AI Agents
 - [x] Phase 11: Reports and Explainability
 - [x] Phase 12: Frontend Integration and User Experience
-- [ ] Phase 13: Predictive Capacity Planning (13a complete)
+- [ ] Phase 13: Predictive Capacity Planning (13a/13b complete)
 - [ ] Phase 14: Testing, Security, and Deployment
 
 ## Task 0 evidence (verification and version control)
@@ -1490,6 +1490,45 @@ Location: `forecasting/` (NumPy only; no ML, no new dependencies, no network I/O
   `& ".venv\Scripts\python.exe" -m ruff check forecasting tests/unit/forecasting
   config/limits.py core/exceptions/__init__.py` -> `All checks passed!`.
 
+## Phase 13b delivered - capacity projection and evaluation
+Location: `capacity/` (reuses `forecasting`, `simulation.evaluator`, and
+`optimization.models.CostModel`; no new dependencies).
+
+- `models.py`: typed `DemandMapping`, projected-demand points, `Crossing`,
+  `Bottleneck`, `UpgradeRecommendation`, `CapacityGap`, `CapacityBounds`,
+  `CapacityStopReason`, and `CapacityRun`. Provenance and the modeling caveat
+  travel into every run.
+- `demand.py`: maps `series_id` to an existing twin demand name. User-count
+  series require a user-supplied `per_user_mbps`; Mbps series use the forecast
+  value directly. Unmapped series, unknown demand names, missing assumptions,
+  short forecasts, and unused assumptions are reported as typed findings. No
+  demand, endpoint, or historical measurement is invented.
+- `engine.py`: builds one scenario twin per projected step by copying the
+  baseline and replacing only mapped demand bandwidths; evaluates each copy with
+  `simulation.evaluator.evaluate`. The baseline twin is never mutated and is
+  verified by fingerprint in tests. Produces first-step crossings for warning,
+  critical, and overloaded bands, ranks bottlenecks by peak utilization, reports
+  signed horizon-end headroom, and selects the smallest configured tier whose
+  horizon-end utilization is strictly below the warning threshold. Cost deltas
+  are proxies from `CostModel`; links with no sufficient tier are reported as
+  gaps for the Optimization Center.
+- Bounds: at most `MAX_CAPACITY_EVALUATIONS=240` evaluations,
+  `MAX_CAPACITY_HORIZON_STEPS=12` projected steps, and
+  `MAX_CAPACITY_RUNTIME_SECONDS=30.0`. Runs record `completed`,
+  `runtime_limit`, `evaluation_limit`, `no_projection`, or
+  `incomplete_projection` as a typed stop reason; oversized requests raise
+  `CapacityLimitError`.
+- Tests: `tests/unit/capacity` (12 tests) cover hand-computed 50% baseline to
+  150% projected utilization, crossing bands, unchanged twin fingerprint,
+  tier/cost delta hand values, insufficient-tier gaps, evaluation and runtime
+  stop reasons, horizon clipping, mapping findings, synthetic labels, and JSON
+  provenance.
+- Evidence: `& ".venv\Scripts\python.exe" -m pytest -q tests/unit/capacity`
+  -> `12 passed in 0.52s`;
+  `& ".venv\Scripts\python.exe" -m ruff check capacity tests/unit/capacity`
+  -> `All checks passed!`.
+
 ## Next task
-- Phase 13b: map forecasts to twin demand, evaluate projected scenarios, rank
-  bottlenecks, and recommend tier upgrades with cost proxies.
+- Phase 13c: replace the read-only Capacity Planning page with the four-tab
+  Data/Forecast/Capacity/Downloads workflow and add a provenance-aware Capacity
+  section to reports.

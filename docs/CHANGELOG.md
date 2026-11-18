@@ -2,6 +2,22 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-18 - Phase 13b: capacity projection and evaluation
+
+### Added
+- `capacity/`: typed demand mapping (user-count forecasts require a supplied
+  `per_user_mbps`), scenario copies of the baseline twin evaluated with the
+  existing simulation flow model, congestion-band crossings, ranked bottlenecks,
+  horizon-end headroom, smallest-tier upgrade recommendations with `CostModel`
+  proxy deltas, insufficient-tier gaps, and bounded typed stop reasons.
+- `tests/unit/capacity`: 12 tests covering hand-computed utilization/cost
+  values, crossings, twin immutability, mapping findings, synthetic labels,
+  evaluation/runtime limits, and JSON provenance.
+
+### Changed
+- No existing twin, simulation, or optimization schema changed; the new capacity
+  result schemas are additive. Baseline twins are never mutated.
+
 ## 2026-11-18 - Phase 13a: forecasting engine
 
 ### Added
