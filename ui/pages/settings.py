@@ -220,6 +220,32 @@ def _render_documentation() -> None:
     )
 
 
+def _render_limitations() -> None:
+    """State the release scope and verification limits in the app itself."""
+    st.markdown("**Release limitations**")
+    st.warning(
+        "NetArchitect AI is a design-time engineering workspace. It does not "
+        "connect to devices, scan or probe networks, run pentests, or apply "
+        "configuration. Templates are inert design intent."
+    )
+    st.markdown(
+        "- **Modeled, not measured:** simulation, forecasting, capacity, and "
+        "security results come from the current twin and stated assumptions. "
+        "They are not measurements or guarantees.\n"
+        "- **Session-only state:** twins, runs, traces, and session keys live "
+        "in this browser session only. Download what you need before closing "
+        "it.\n"
+        "- **Optional AI:** the deterministic engines work with no API key. "
+        "The optional provider may interpret requirements or write explanatory "
+        "text, but it cannot change computed values or call unlisted tools.\n"
+        "- **Free-tier bounds:** the compiled caps are shown in the read-only "
+        "limits table above and documented in `docs/RUNTIME_LIMITS.md`.\n"
+        "- **Verification scope:** release checks are headless and in-process. "
+        "Real-browser rendering, a deployed free-tier instance, live provider "
+        "responses, and PDF visual layout are not verified here."
+    )
+
+
 def render() -> None:
     """Render the Settings page."""
     page_header(
@@ -253,6 +279,7 @@ def render() -> None:
 
     _render_limits()
     _render_documentation()
+    _render_limitations()
 
     st.divider()
     render_requirements_form()

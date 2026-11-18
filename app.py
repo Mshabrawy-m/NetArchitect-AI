@@ -174,8 +174,10 @@ def main() -> None:
         layout="wide",
         menu_items={
             "About": (
-                "NetArchitect AI - agentic network architecture, digital "
-                "twin, and multi-objective optimization platform."
+                "NetArchitect AI v1.0.0-rc1 - deterministic, design-time "
+                "network engineering. Results are modeled from the current "
+                "twin and stated assumptions. No device access, live scanning, "
+                "or guaranteed outcomes. See Settings > Release limitations."
             ),
         },
     )

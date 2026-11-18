@@ -56,6 +56,7 @@ rejections are explicit rather than silent truncation.
 | Untrusted numbers | Magnitude | 1e12 | NaN, infinity, and oversized values are rejected before models see them. |
 | Reports | Rows per table | 500 | Longer results are truncated with an explicit "showing first N of M rows" note. |
 | Reports | Export size | 5,000,000 bytes | Markdown, JSON, CSV bundle, and PDF exports are built in memory under this cap. |
+| Streamlit upload widget | File size | 2 MB | `.streamlit/config.toml` sets `server.maxUploadSize`, below the in-app CSV cap. |
 
 ## Execution and injection surface
 
