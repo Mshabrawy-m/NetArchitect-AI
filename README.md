@@ -91,7 +91,7 @@ These checks were run locally on Windows. A real browser, a deployed Community C
 
 ## Dependencies
 
-Ten direct pinned packages are declared in `requirements.txt`; `constraints.txt` pins the transitive `pyarrow==23.0.1` wheel used by Streamlit. No new runtime dependency was introduced for Phase 15. No `packages.txt` is needed.
+Eleven pinned packages are declared inline in `requirements.txt`. `pyarrow==23.0.1` is listed directly so Community Cloud installs need no separate constraints file; it is already required by Streamlit, so this is not a new runtime dependency. No `packages.txt` is needed.
 
 ## License
 

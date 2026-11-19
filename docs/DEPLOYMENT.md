@@ -24,8 +24,7 @@ This document contains the exact manual steps for the repository owner. The rele
 4. Required files are already at the repository root:
 
    - `app.py`
-   - `requirements.txt`
-   - `constraints.txt`
+   - `requirements.txt` (includes the inline `pyarrow==23.0.1` pin)
    - `.streamlit/config.toml`
 
    No `packages.txt` is needed. `.streamlit/secrets.toml` must **not** be committed.

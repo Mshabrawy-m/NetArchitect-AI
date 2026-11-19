@@ -1,5 +1,0 @@
-# Transitive dependency pins for reproducible Streamlit Community Cloud installs.
-# Streamlit 1.67.0 already requires pyarrow. Pinning its wheel keeps clean-clone
-# installs on the version verified by the release suite; this is not an
-# additional direct runtime dependency.
-pyarrow==23.0.1

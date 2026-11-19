@@ -74,7 +74,7 @@ Verbatim final outputs are reproduced in the final release report and summarized
 
 ## Clean-clone note
 
-A fresh 3.11 environment initially resolved `pyarrow==26.0.1`, whose wheel was blocked on this Windows host by an application-control policy. `pyarrow==17.0.0` loaded but was vulnerable (`PYSEC-2026-113`, fix `23.0.1`). The final `constraints.txt` pins `pyarrow==23.0.1`, which is a transitive Streamlit dependency, not an eleventh direct package. Clean 3.11 and 3.12 installs then passed the full suite, lint, and audit. Community Cloud uses Linux; that platform was not exercised locally.
+A fresh 3.11 environment initially resolved `pyarrow==26.0.1`, whose wheel was blocked on this Windows host by an application-control policy. `pyarrow==17.0.0` loaded but was vulnerable (`PYSEC-2026-113`, fix `23.0.1`). The release tag used a `constraints.txt` pin; a post-release change inlined `pyarrow==23.0.1` into `requirements.txt` and removed the constraints file so Community Cloud needs only one dependency file. `pyarrow` is already required by Streamlit, so this is not a new runtime dependency. Clean 3.11 and 3.12 installs passed the full suite, lint, and audit under both layouts. Community Cloud uses Linux; that platform was not exercised locally.
 
 ## Performance profile
 

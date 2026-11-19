@@ -2,6 +2,23 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-19 - Inline pyarrow pin for Community Cloud install
+
+### Changed
+- `requirements.txt` now declares eleven inline pins and includes
+  `pyarrow==23.0.1` directly. `constraints.txt` was removed so Community Cloud
+  installs from a single dependency file. This does not add a runtime dependency;
+  Streamlit already requires `pyarrow`.
+- The release hardening test now asserts eleven inline packages and the absence
+  of `constraints.txt`. README, deployment, test-strategy, limitations, and
+  status documents were updated to match.
+- This change follows the pushed `v1.0.0-rc1` and `v1.0.0` tags; those tags still
+  point at the release commit `b1507f9`.
+
+### Evidence
+- `pytest -q -m smoke` and `pytest -q` passed after the change.
+- `ruff check .` -> `All checks passed!`.
+
 ## 2026-11-18 - v1.0.0-rc1: Release preparation (Phase 15)
 
 ### Added
@@ -14,7 +31,7 @@ All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 - `pytest.ini` defines the optional `smoke` marker.
 
 ### Changed
-- `requirements.txt` pins exactly ten direct packages and references `constraints.txt`; `constraints.txt` pins the transitive `pyarrow==23.0.1` wheel. No direct runtime dependency was added.
+- At the release tag, `requirements.txt` pinned exactly ten direct packages and referenced `constraints.txt`; `constraints.txt` pinned the transitive `pyarrow==23.0.1` wheel. No direct runtime dependency was added. This layout was superseded by the inline-pin change above.
 - `core/inputs.py` and `core/csv_safe.py` add bounded, typed parsing and spreadsheet-formula neutralization before Pydantic validation and CSV export.
 - Untrusted import/export paths across twin, simulation, forecasting, optimization, security, reporting, and documentation modules use the guarded parsers and neutralizer.
 - `.streamlit/config.toml` sets `headless = true`, `maxUploadSize = 2`, and disables usage stats.

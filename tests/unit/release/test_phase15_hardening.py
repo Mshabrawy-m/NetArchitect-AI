@@ -352,14 +352,15 @@ def test_gitignore_and_secret_example_are_deployment_safe() -> None:
     assert "groq_api_key" not in example
 
 
-def test_requirements_pin_exactly_the_ten_allowed_packages() -> None:
+def test_requirements_pin_all_allowed_packages_inline() -> None:
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     lines = [
         line.strip()
-        for line in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        for line in requirements.splitlines()
         if line.strip() and not line.lstrip().startswith(("#", "-"))
     ]
     names = [line.split("==", 1)[0] for line in lines]
-    assert len(lines) == 10
+    assert len(lines) == 11
     assert all("==" in line for line in lines)
     assert names == [
         "streamlit",
@@ -372,7 +373,8 @@ def test_requirements_pin_exactly_the_ten_allowed_packages() -> None:
         "reportlab",
         "pytest",
         "ruff",
+        "pyarrow",
     ]
 
-    constraints = (ROOT / "constraints.txt").read_text(encoding="utf-8")
-    assert "pyarrow==23.0.1" in constraints
+    assert "-c " not in requirements
+    assert not (ROOT / "constraints.txt").exists()

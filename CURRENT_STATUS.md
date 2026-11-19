@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: Phase 15 - Testing, security review, and deployment (release candidate prepared locally)
-- Current task: Phase 15d - release documentation, criterion audit, and annotated `v1.0.0-rc1`
-- Overall status: Phase 14 merged and pushed to `main` (`11c6f6e`); Phase 15a/b/c/d complete on `feature/phase15-release`; annotated `v1.0.0-rc1` created locally. Community Cloud deployment remains an owner action.
-- Last updated: 2026-11-18
-- Branch: `feature/phase15-release` (based on `main` commit `11c6f6e`)
+- Current phase: v1.0.0 released; post-release dependency layout change applied on `main`
+- Current task: Owner deployment on Streamlit Community Cloud Free
+- Overall status: Phase 15a/b/c/d merged to `main` (`b1507f9`); annotated `v1.0.0-rc1` and `v1.0.0` pushed. A post-release commit inlines `pyarrow==23.0.1` in `requirements.txt` and removes `constraints.txt` for a single-file Cloud install.
+- Last updated: 2026-11-19
+- Branch: `main` (tracks `origin/main`)
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
@@ -1750,10 +1750,11 @@ Commit: `bf4c220`
   neutralization, prompt-injection tool allowlisting, secret containment in
   logs/traces/reports/exports/session dumps, no runtime dynamic execution or
   disk writes, gitignore/secrets safety, and exact dependency pins.
-- Pinned ten direct packages in `requirements.txt` and the transitive
-  `pyarrow==23.0.1` wheel in `constraints.txt`. No direct runtime dependency was
-  added. The vulnerable `17.0.0` pin and the locally blocked `26.0.1` wheel were
-  replaced after auditing and clean-install checks.
+- At the release tag, pinned ten direct packages in `requirements.txt` and the
+  transitive `pyarrow==23.0.1` wheel in `constraints.txt`. No direct runtime
+  dependency was added. The vulnerable `17.0.0` pin and the locally blocked
+  `26.0.1` wheel were replaced after auditing and clean-install checks. This
+  layout was later changed to inline pins; see the post-release section below.
 - Secret scan: tree and full history contain no live secret patterns; no
   tracked `.env`, `.streamlit/secrets.toml`, or key/certificate files.
 - Evidence: clean Python 3.11 venv -> `970 passed in 30.23s` and
@@ -1799,12 +1800,23 @@ Commit: `50008ab`
 - No new feature, public schema change, runtime dependency, security-scanning
   functionality, or license decision was added in Phase 15.
 
+## Post-release dependency layout change
+- `requirements.txt` now contains eleven inline pins, including
+  `pyarrow==23.0.1`; `constraints.txt` was removed. This is a deployment-packaging
+  change only. `pyarrow` is already required by Streamlit, so no new runtime
+  dependency was introduced.
+- The release hardening test was updated from ten packages plus a constraints
+  file to eleven inline packages and asserts that no constraints file exists.
+- `README.md`, `docs/DEPLOYMENT.md`, `docs/TEST_STRATEGY.md`,
+  `KNOWN_LIMITATIONS.md`, and `docs/CHANGELOG.md` were updated to match.
+- The annotated tags `v1.0.0-rc1` and `v1.0.0` still point to the release commit
+  `b1507f9`; this packaging change is a subsequent commit on `main`.
+- Evidence: `pytest -q -m smoke` and full `pytest -q` passed after the change;
+  `ruff check .` -> `All checks passed!`.
+
 ## Next task
-- Owner action: push `feature/phase15-release` and `v1.0.0-rc1` if they should be
-  available on GitHub.
-- Owner action: follow `docs/DEPLOYMENT.md` to deploy from
-  `feature/phase15-release` (or `main` after merge) on Streamlit Community Cloud
-  Free with Python 3.12 and no secrets.
+- Owner action: follow `docs/DEPLOYMENT.md` to deploy from `main` on Streamlit
+  Community Cloud Free with Python 3.12 and no secrets.
 - Owner action: verify the deployed app's 15 pages, no-key state, in-app
   limitations, and clean logs; optionally add a Groq secret through Community
   Cloud App settings.
