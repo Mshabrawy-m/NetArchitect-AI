@@ -24,7 +24,7 @@ This document contains the exact manual steps for the repository owner. The rele
 4. Required files are already at the repository root:
 
    - `app.py`
-   - `requirements.txt` (includes the inline `pyarrow==23.0.1` pin)
+   - `requirements.txt` (nine inline pins, including `pyarrow==23.0.1`; Cloud does not install `requirements-dev.txt`)
    - `.streamlit/config.toml`
 
    No `packages.txt` is needed. `.streamlit/secrets.toml` must **not** be committed.
@@ -82,6 +82,22 @@ Add this only after the no-key deployment is healthy.
 - light theme colors
 
 In-app parsers still enforce the smaller per-format caps, including 1,000,000 bytes for CSV and 2,000,000 bytes for JSON. See `docs/RUNTIME_LIMITS.md`.
+
+## Development verification (not part of Cloud install)
+
+CI and developers install `requirements-dev.txt`; Cloud installs only
+`requirements.txt`. To prove the runtime file is sufficient without pytest:
+
+```bash
+python -m venv .verify-runtime
+. .verify-runtime/bin/activate
+python -m pip install -r requirements.txt
+python scripts/verify_runtime_only.py
+```
+
+The script starts a headless Streamlit server, checks `/_stcore/health` and the
+root page, renders all 15 pages with `AppTest`, and refuses to run if pytest is
+installed. It uses stdlib HTTP only and needs no test dependencies.
 
 ## Verification matrix
 

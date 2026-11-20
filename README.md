@@ -29,6 +29,12 @@ python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
+For development and CI, install the tools separately (Cloud does **not** install this file):
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
 Open the URL printed by Streamlit. The **Dashboard** is the root page and the sidebar lists all 15 pages:
 
 1. Dashboard
@@ -72,6 +78,7 @@ At `v1.0.0-rc1`:
 - Clean Python 3.12 venv: **975 passed**
 - `pip-audit -r requirements.txt`: **No known vulnerabilities found**
 - Headless local startup: health `ok`, root title `Dashboard`, `exceptions: 0`
+- Runtime-only fresh venv: `pytest` absent, health `ok`, root status 200, all 15 pages rendered by `scripts/verify_runtime_only.py`
 
 These checks were run locally on Windows. A real browser, a deployed Community Cloud instance, live Groq responses, PDF visual layout, and remote GitHub Actions execution were **not** verified. See [docs/TEST_STRATEGY.md](docs/TEST_STRATEGY.md).
 
@@ -91,7 +98,9 @@ These checks were run locally on Windows. A real browser, a deployed Community C
 
 ## Dependencies
 
-Eleven pinned packages are declared inline in `requirements.txt`. `pyarrow==23.0.1` is listed directly so Community Cloud installs need no separate constraints file; it is already required by Streamlit, so this is not a new runtime dependency. No `packages.txt` is needed.
+Nine pinned runtime packages are declared inline in `requirements.txt`. `pyarrow==23.0.1` is listed directly so Community Cloud installs need no separate constraints file; it is already required by Streamlit, so this is not a new runtime dependency. No `packages.txt` is needed.
+
+Development-only tools (`pytest`, `ruff`, `hypothesis`) live in `requirements-dev.txt`, which starts with `-r requirements.txt`. `scripts/verify_runtime_only.py` checks that a fresh runtime-only install starts Streamlit headless and renders all 15 pages without pytest.
 
 ## License
 

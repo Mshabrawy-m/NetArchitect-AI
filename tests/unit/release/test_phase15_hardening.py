@@ -360,7 +360,7 @@ def test_requirements_pin_all_allowed_packages_inline() -> None:
         if line.strip() and not line.lstrip().startswith(("#", "-"))
     ]
     names = [line.split("==", 1)[0] for line in lines]
-    assert len(lines) == 11
+    assert len(lines) == 9
     assert all("==" in line for line in lines)
     assert names == [
         "streamlit",
@@ -371,10 +371,16 @@ def test_requirements_pin_all_allowed_packages_inline() -> None:
         "pandas",
         "plotly",
         "reportlab",
-        "pytest",
-        "ruff",
         "pyarrow",
     ]
 
     assert "-c " not in requirements
+    assert "-r " not in requirements
     assert not (ROOT / "constraints.txt").exists()
+
+    dev = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+    dev_lines = [line.strip() for line in dev.splitlines() if line.strip()]
+    assert dev_lines[0] == "-r requirements.txt"
+    dev_names = [line.split("==", 1)[0] for line in dev_lines[1:]]
+    assert dev_names == ["pytest", "ruff", "hypothesis"]
+    assert all("==" in line for line in dev_lines[1:])

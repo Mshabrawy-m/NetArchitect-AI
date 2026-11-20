@@ -8,6 +8,17 @@ All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 - `docs/V2_SPEC.md`: short shared reference for the 2.0-2.5 roadmap and the
   non-negotiable Community Cloud Free rules. This package adds no features, UI,
   schema changes, or runtime dependencies.
+- `requirements-dev.txt` with pytest, ruff, and Hypothesis; it is the only file
+  CI and developers install for tools. `scripts/verify_runtime_only.py` proves a
+  runtime-only install starts headless Streamlit and renders all 15 pages
+  without pytest.
+
+### Changed
+- `requirements.txt` now has nine flat inline pins (pytest and ruff removed).
+  README, deployment docs, release pin tests, and CI install the dev file for
+  tooling. Cloud still installs only the runtime file.
+- Evidence: `pytest -q` 975 passed; `pytest -q -m smoke` 12 passed/963 deselected;
+  `ruff check .` clean; fresh runtime-only venv health `ok`, root 200, 15 pages.
 
 ## 2026-11-19 - Inline pyarrow pin for Community Cloud install
 

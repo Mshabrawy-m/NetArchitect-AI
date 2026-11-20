@@ -12,7 +12,14 @@
 - Scope: free-tier-safe speed, install-size, and verification work only. No
   features, UI changes, schema changes, or new runtime dependencies.
 - T0: `docs/V2_SPEC.md` created as the shared roadmap and free-tier reference.
-- T1-T5: in progress; evidence will be recorded here per task.
+- T1: runtime/dev dependency split complete. `requirements.txt` has nine flat
+  inline pins; `requirements-dev.txt` adds pytest, ruff, and Hypothesis. Clean
+  venv runtime-only install proved headless health `ok`, root 200, and all 15
+  pages via `scripts/verify_runtime_only.py` with pytest absent. Local Windows
+  install: 254.6 s / 568.6 MiB before vs 262.1 s / 556.3 MiB after
+  (`--no-cache-dir`; network time varied). `pytest -q` 975 passed;
+  `pytest -q -m smoke` 12 passed, 963 deselected; `ruff check .` clean.
+- T2-T5: in progress; evidence will be recorded here per task.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

@@ -6,6 +6,4 @@ scipy==1.17.1
 pandas==2.2.3
 plotly==7.1.0
 reportlab==5.1.0
-pytest==9.2.0
-ruff==0.17.4
 pyarrow==23.0.1

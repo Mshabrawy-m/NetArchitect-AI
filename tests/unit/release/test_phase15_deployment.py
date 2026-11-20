@@ -47,7 +47,7 @@ def test_ci_workflow_pins_the_same_commands_and_no_secrets() -> None:
     text = path.read_text(encoding="utf-8")
     for fragment in (
         'python-version: ["3.11", "3.12"]',
-        "python -m pip install -r requirements.txt",
+        "python -m pip install -r requirements-dev.txt",
         "python -m ruff check .",
         "python -m pytest -q",
         "python -m pytest -q -m smoke",
