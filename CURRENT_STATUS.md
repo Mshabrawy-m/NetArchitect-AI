@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: v1.0.0 released; V2 design package on `feature/v2-design`
-- Current task: D1 design system and navigation complete; D2-D5 pending
-- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, and shared presentation components. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
+- Current task: D2 guided progress and samples complete; D3-D5 pending
+- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, and confirmation-gated sample projects. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
 - Last updated: 2026-11-21
 - Branch: `feature/v2-design` (created from updated `main`)
 
@@ -55,6 +55,24 @@
   selectbox order; it now asserts the specified group contents and Dashboard
   first/Settings last. Navigation tests switch pages through registered
   `st.Page` files instead of `page_nav`.
+- D2: `ui/progress.py` renders Design -> Addressing -> Validate -> Simulate ->
+  Optimize -> Report above every page. Each step links to its engineering page
+  and reports Done, Incomplete, or Stale from read-only `state.peek_*` accessors.
+  Stale means a retained result's twin fingerprint differs from the current
+  twin. Bounded source-fingerprint maps for subnet checks and optimization runs
+  keep the evidence in session state without creating empty histories. The
+  Dashboard quick start offers three clearly labeled `SAMPLE - ...` projects
+  built through the existing generators, VLSM/VLAN/DHCP engines, and twin model.
+  Selection only records a pending key; the twin is replaced only by an explicit
+  confirm action, and cancel leaves the current twin untouched.
+- D2 evidence: focused UI tests 50 passed; `pytest -q` 1020 passed/3 deselected;
+  `pytest -q -m smoke` 12 passed/1011 deselected; `ruff check .` clean; fresh
+  runtime-only venv health `ok`, root 200, 15 pages rendered, pytest absent.
+  No existing assertion was changed in D2; the new tests cover progress states,
+  ordered page links, sample validity/determinism, and no-overwrite confirmation.
+  The optimizer fixture in the progress tests uses the matching a-b-c-d pool
+  twin because the default pool links are not endpoints of the campus fixture;
+  source fingerprint assertions remain explicit in the crafted session data.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

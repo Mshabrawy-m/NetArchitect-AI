@@ -18,6 +18,7 @@ from __future__ import annotations
 import streamlit as st
 
 from ui.navigation import PAGE_SPECS, build_navigation
+from ui.progress import render_progress
 
 # Page modules are imported by app_pages/ when selected. The Dashboard is the
 # default page, so cold start must not import the report, export, agent, or
@@ -46,6 +47,7 @@ def main() -> None:
     page = st.navigation(build_navigation(), position="sidebar")
     with st.sidebar:
         st.caption("NetArchitect AI - deterministic network engineering first.")
+    render_progress()
     page.run()
 
 

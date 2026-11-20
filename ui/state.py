@@ -22,6 +22,7 @@ from config.limits import MAX_OPTIMIZATION_RUNS, MAX_SECURITY_FLOW_CHECKS
 from core.schemas.addressing import AddressingPlan, DhcpScope
 from core.schemas.network import Topology
 from core.schemas.routing import TrafficDemand
+from core.schemas.validation import ValidationReport
 from digital_twin import (
     DigitalTwin,
     Snapshot,
@@ -44,6 +45,7 @@ from digital_twin import (
     set_vlan_plan as twin_set_vlan_plan,
 )
 from forecasting import ForecastRun, TimeSeries
+from network.addressing import VlsmResult
 from network.vlan.plan import VlanPlanResult
 from optimization import OptimizationHistory, OptimizationRun
 from security import FlowRequest
@@ -70,6 +72,11 @@ LLM_BUDGET_KEY = "llm_request_budget"
 CIDR_KEY = "ip_cidr_result"
 VLSM_KEY = "addressing_result"
 CHECK_KEY = "addressing_check_report"
+
+# The subnet check result is a plain ValidationReport, so the UI keeps a bounded
+# map from report content to the twin fingerprint it was checked against.
+CHECK_FINGERPRINT_KEY = "addressing_check_source_fingerprints"
+CHECK_FINGERPRINT_ENTRIES = 4
 
 REPORT_TIME_KEY = "report_generated_at"
 REPORT_TIME_ENTRIES = 4
@@ -129,6 +136,12 @@ def get_twin() -> DigitalTwin | None:
         session_delete(LEGACY_TOPOLOGY_KEY)
         return migrated
     return None
+
+
+def peek_twin() -> DigitalTwin | None:
+    """Return the baseline twin without migrating or creating session state."""
+    twin = st.session_state.get(TWIN_KEY)
+    return twin if isinstance(twin, DigitalTwin) else None
 
 
 def replace_twin(twin: DigitalTwin) -> DigitalTwin:
@@ -235,6 +248,51 @@ def set_planning(
     if dhcp_scopes is not _UNSET:
         twin = twin_set_dhcp_scopes(twin, dhcp_scopes)  # type: ignore[arg-type]
     return replace_twin(twin)
+
+
+def peek_addressing_result() -> VlsmResult | None:
+    """Return the last VLSM result without creating an empty session key."""
+    value = st.session_state.get(VLSM_KEY)
+    return value if isinstance(value, VlsmResult) else None
+
+
+def peek_vlsm_result() -> VlsmResult | None:
+    """Alias for :func:`peek_addressing_result`."""
+    return peek_addressing_result()
+
+
+def peek_addressing_check() -> ValidationReport | None:
+    """Return the last subnet check report without creating a session key."""
+    value = st.session_state.get(CHECK_KEY)
+    return value if isinstance(value, ValidationReport) else None
+
+
+def _check_report_key(report: ValidationReport) -> str:
+    return hashlib.sha256(report.model_dump_json().encode("utf-8")).hexdigest()
+
+
+def set_addressing_check_source_fingerprint(
+    report: ValidationReport,
+    fingerprint: str,
+) -> str:
+    """Remember which twin revision produced one subnet check report."""
+    mapping = st.session_state.get(CHECK_FINGERPRINT_KEY)
+    if not isinstance(mapping, dict):
+        mapping = {}
+    mapping[_check_report_key(report)] = fingerprint
+    while len(mapping) > CHECK_FINGERPRINT_ENTRIES:
+        del mapping[next(iter(mapping))]
+    st.session_state[CHECK_FINGERPRINT_KEY] = mapping
+    return fingerprint
+
+
+def peek_addressing_check_fingerprint(report: ValidationReport) -> str:
+    """Return the recorded source fingerprint, or an empty string if unknown."""
+    mapping = st.session_state.get(CHECK_FINGERPRINT_KEY)
+    if not isinstance(mapping, dict):
+        return ""
+    value = mapping.get(_check_report_key(report), "")
+    return value if isinstance(value, str) else ""
 
 
 def get_snapshot_store() -> SnapshotStore:
@@ -368,6 +426,11 @@ def get_optimization_source_fingerprint(run: OptimizationRun) -> str:
         return ""
     value = mapping.get(_optimization_run_key(run), "")
     return value if isinstance(value, str) else ""
+
+
+def peek_optimization_source_fingerprint(run: OptimizationRun) -> str:
+    """Read-only alias used by progress reporting; creates no session state."""
+    return get_optimization_source_fingerprint(run)
 
 
 def add_optimization_run(
@@ -518,6 +581,18 @@ def remove_security_flow(index: int) -> FlowRequest:
 def clear_security_flows() -> None:
     """Remove every modeled flow check from this session."""
     session_delete(SECURITY_FLOWS_KEY)
+
+
+def peek_report_times() -> dict[str, datetime]:
+    """Return a copy of the prepared report timestamps, creating no session key."""
+    timestamps = st.session_state.get(REPORT_TIME_KEY)
+    if not isinstance(timestamps, dict):
+        return {}
+    return {
+        key: value
+        for key, value in timestamps.items()
+        if isinstance(key, str) and isinstance(value, datetime)
+    }
 
 
 def report_generated_at(fingerprint: str) -> datetime:

@@ -23,6 +23,7 @@ from network.addressing import (
     cidr_rows,
     validate_addressing,
 )
+from simulation import twin_fingerprint
 from ui import state
 from ui.components import (
     csv_bytes,
@@ -330,7 +331,13 @@ def _render_check() -> None:
     if submitted:
         try:
             subnets = _to_subnets(frame)
-            state.session_set(state.CHECK_KEY, validate_addressing(subnets))
+            report = validate_addressing(subnets)
+            state.session_set(state.CHECK_KEY, report)
+            twin = state.peek_twin()
+            if twin is not None:
+                state.set_addressing_check_source_fingerprint(
+                    report, twin_fingerprint(twin)
+                )
         except (ValidationError, ValueError) as error:
             bump_editor_key("subnet_check_editor")
             queue_notice("error", format_error(error), title="Check failed")

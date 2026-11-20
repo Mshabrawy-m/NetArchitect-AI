@@ -9,7 +9,76 @@ from __future__ import annotations
 import streamlit as st
 
 from ui import state
-from ui.components import empty_state, page_header, render_design_health
+from ui.components import (
+    callout,
+    empty_state,
+    page_header,
+    render_design_health,
+    section_header,
+)
+from ui.sample_projects import (
+    SAMPLE_PROJECTS,
+    cancel_sample,
+    load_sample,
+    pending_sample,
+    request_sample,
+)
+
+
+def _render_quick_start() -> None:
+    """Render labeled samples; load one only after an explicit confirmation."""
+    with st.container(border=True):
+        section_header(
+            "Quick start",
+            description=(
+                "Load a labeled sample to explore the workflow. Each sample is "
+                "built with the same deterministic engines as a working design."
+            ),
+        )
+        columns = st.columns(len(SAMPLE_PROJECTS))
+        for column, sample in zip(columns, SAMPLE_PROJECTS, strict=True):
+            with column:
+                st.markdown(f"**{sample.name}**")
+                st.caption(sample.description)
+                st.caption(sample.summary)
+                st.button(
+                    "Select sample",
+                    key=f"sample_select_{sample.key}",
+                    help="Select only; the current twin is not changed yet.",
+                    on_click=request_sample,
+                    args=(sample.key,),
+                )
+
+        pending = pending_sample()
+        if pending is None:
+            return
+
+        current = state.peek_twin()
+        target = (
+            f"replace the current twin '{current.metadata.name}'"
+            if current is not None
+            else "load a new twin"
+        )
+        callout(
+            f"{pending.name} will {target} in this browser session. No file is "
+            "written and no existing run history is deleted.",
+            kind="warn",
+            title="Confirm sample load",
+        )
+        confirm, cancel = st.columns(2)
+        confirm.button(
+            "Confirm and load sample",
+            key="sample_confirm_load",
+            type="primary",
+            on_click=load_sample,
+            args=(pending.key,),
+            kwargs={"confirmed": True},
+        )
+        cancel.button(
+            "Cancel",
+            key="sample_cancel",
+            on_click=cancel_sample,
+        )
 
 
 def render_dashboard() -> None:
@@ -19,6 +88,7 @@ def render_dashboard() -> None:
         "Current state of the digital twin and the engineering runs retained in "
         "this session.",
     )
+    _render_quick_start()
 
     twin = state.get_twin()
     if twin is None:

@@ -2,6 +2,40 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - D2: guided workflow and sample projects
+
+### Added
+- `ui/progress.py`: a six-step Project progress strip (Design, Addressing,
+  Validate, Simulate, Optimize, Report) rendered above the selected page. Each
+  step links to its page and shows Done, Incomplete, or Stale; Stale means the
+  retained result fingerprint differs from the current twin.
+- `ui/sample_projects.py` and Dashboard quick start: three labeled sample
+  twins (small office, campus, spine-leaf DC) built from existing generators,
+  VLSM/VLAN/DHCP engines, and the twin model. A select action stores a pending
+  key only; a confirm action replaces the twin with a new one, and cancel
+  leaves the current twin unchanged.
+- Read-only session accessors and bounded source-fingerprint maps in
+  `ui/state.py`; subnet checks record their twin fingerprint in
+  `ui/pages/ip_addressing.py`.
+
+### Changed
+- `app.py` renders the progress strip before `page.run()` so Dashboard and the
+  main engineering pages share the same workflow context.
+- No existing test assertion was changed in D2. New tests cover Done,
+  Incomplete, and Stale progress states with crafted session data, six ordered
+  page links, deterministic/valid samples, and rejection of unconfirmed loads.
+  The optimizer fixture in the progress tests uses the a-b-c-d pool twin so the
+  candidate links have valid endpoints; source fingerprints are still supplied
+  explicitly by the crafted session data.
+
+### Evidence
+- Focused UI tests: 50 passed.
+- `pytest -q`: 1020 passed/3 deselected.
+- `pytest -q -m smoke`: 12 passed/1011 deselected.
+- `ruff check .`: All checks passed!
+- Fresh runtime-only venv: health `ok`, root status 200, 15 pages rendered by
+  `scripts/verify_runtime_only.py`, pytest absent.
+
 ## 2026-11-21 - D1: design system and navigation
 
 ### Added
