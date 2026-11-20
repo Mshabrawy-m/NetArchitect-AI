@@ -10,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 
 from config import settings as settings_module
 from tests.unit.ui.nav_helpers import open_page
+from ui import i18n
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_PATH = ROOT / "app.py"
@@ -89,7 +90,7 @@ def test_settings_page_states_release_limitations_with_no_api_key(monkeypatch) -
 
 
 def test_about_menu_states_design_time_scope() -> None:
-    source = APP_PATH.read_text(encoding="utf-8")
-    assert "design-time" in source
-    assert "No device access, live scanning," in source
-    assert "v1.0.0-rc1" in source
+    about = i18n.EN["app.about"]
+    assert "design-time" in about
+    assert "No device access, live scanning," in about
+    assert "v1.0.0-rc1" in about

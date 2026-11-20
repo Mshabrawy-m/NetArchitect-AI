@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: v1.0.0 released; V2 design package on `feature/v2-design`
-- Current task: D3 topology UX complete; D4-D5 pending
-- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, confirmation-gated sample projects, and a deterministic layered topology diagram with click/keyboard inspection. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
+- Current task: D4 ar/en i18n and RTL complete; D5 pending
+- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, confirmation-gated sample projects, a deterministic layered topology diagram with click/keyboard inspection, and session-scoped ar/en interface text with RTL support. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
 - Last updated: 2026-11-21
 - Branch: `feature/v2-design` (created from updated `main`)
 
@@ -91,6 +91,24 @@
   topology, showed Color by / Inspect entity / Clear selection controls, and
   reported no exceptions or server warnings. No engine, schema, or editor table
   behavior was changed.
+- D4: `ui/i18n.py` is the single ar/en UI catalog. Language is a session-only
+  key (`ui_language`) with a segmented control on Settings; no file, secret,
+  export, or PDF behavior was changed. Navigation labels/help, progress strip,
+  shared components, Dashboard, Settings, and the layered topology view use
+  catalog keys. Engineering terms (VLAN, CIDR, OSPF), identifiers, numbers, IPs,
+  and CIDRs are isolated with Unicode direction marks so they stay LTR in
+  Arabic. A scoped stylesheet sets RTL direction only when Arabic is active;
+  widget internals are not restyled. Missing keys and malformed placeholder
+  substitutions fall back to English.
+- D4 evidence: `i18n.catalog_parity()` `True`, `missing_translation_keys()`
+  `()`; focused UI tests 81 passed; `pytest -q` 1038 passed/3 deselected;
+  `pytest -q -m smoke` 12 passed/1029 deselected; `ruff check .` clean; fresh
+  runtime-only venv health `ok`, root 200, 15 pages rendered, pytest absent.
+  AppTest set Arabic before first render and confirmed the RTL stylesheet,
+  localized Dashboard/navigation/progress text, LTR-isolated VLAN, and Settings
+  toggle back to English. One existing release test was updated: the About-menu
+  source scan now reads `i18n.EN["app.about"]` because the wording moved from
+  `app.py` into the catalog. English defaults preserve existing test wording.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

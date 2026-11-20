@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from core.csv_safe import neutralize_cell
 from core.schemas.validation import Finding, Severity
+from ui import i18n
 
 SEVERITY_ORDER = {
     Severity.critical: "critical",
@@ -26,9 +27,9 @@ SEVERITY_ORDER = {
 
 def page_header(title: str, description: str = "") -> None:
     """Render the standard page title and optional one-line description."""
-    st.title(title)
+    st.title(i18n.tx(title))
     if description:
-        st.caption(description)
+        st.caption(i18n.tx(description))
 
 
 def empty_state(
@@ -38,12 +39,13 @@ def empty_state(
     hint: str = "",
 ) -> None:
     """Render the standard empty state for a page or section."""
+    translated = i18n.tx(message)
     if title:
-        st.info(message, title=title)
+        st.info(translated, title=i18n.tx(title))
     else:
-        st.info(message)
+        st.info(translated)
     if hint:
-        st.caption(hint)
+        st.caption(i18n.tx(hint))
 
 
 def metric_tile(
@@ -54,7 +56,13 @@ def metric_tile(
     delta: str | float | None = None,
 ) -> None:
     """Render one metric using the shared bordered-tile treatment."""
-    st.metric(label, value, delta=delta, help=help, border=True)
+    st.metric(
+        i18n.tx(label),
+        value,
+        delta=delta,
+        help=i18n.tx(help) if help else None,
+        border=True,
+    )
 
 
 def status_badge(status: str, *, label: str | None = None) -> None:
@@ -72,7 +80,7 @@ def status_badge(status: str, *, label: str | None = None) -> None:
         "info": "blue",
     }
     normalized = status.lower()
-    text = label or status.replace("_", " ").capitalize()
+    text = i18n.tx(label) if label else i18n.status_label(normalized)
     st.badge(text, color=colors.get(normalized, "blue"))
 
 
@@ -83,9 +91,9 @@ def section_header(
     divider: bool = False,
 ) -> None:
     """Render a consistent section heading and optional one-line description."""
-    st.subheader(title, divider=divider)
+    st.subheader(i18n.tx(title), divider=divider)
     if description:
-        st.caption(description)
+        st.caption(i18n.tx(description))
 
 
 def callout(
@@ -95,12 +103,13 @@ def callout(
     title: str | None = None,
 ) -> None:
     """Render an information, warning, or model-estimate callout."""
+    translated = i18n.tx(text)
     if kind == "warn":
-        st.warning(text, title=title or "Review required")
+        st.warning(translated, title=i18n.tx(title or i18n.t("common.review_required")))
     elif kind == "model_estimate":
-        st.info(text, title=title or "Model estimate")
+        st.info(translated, title=i18n.tx(title or i18n.t("common.model_estimate")))
     elif kind == "info":
-        st.info(text, title=title or "Note")
+        st.info(translated, title=i18n.tx(title or i18n.t("common.note")))
     else:
         raise ValueError(f"Unsupported callout kind: {kind!r}")
 
@@ -108,12 +117,17 @@ def callout(
 def key_value_list(
     values: Sequence[tuple[str, object]],
     *,
-    key_header: str = "Field",
-    value_header: str = "Value",
+    key_header: str | None = None,
+    value_header: str | None = None,
 ) -> None:
     """Render key/value properties as a full-width, readable table."""
+    first_header = i18n.tx(key_header) if key_header else i18n.t("common.field")
+    second_header = i18n.tx(value_header) if value_header else i18n.t("common.value")
     rows = [
-        {key_header: key, value_header: "" if value is None else str(value)}
+        {
+            first_header: i18n.tx(key),
+            second_header: "" if value is None else i18n.tx(str(value)),
+        }
         for key, value in values
     ]
     st.dataframe(rows, hide_index=True, width="stretch")
@@ -121,7 +135,7 @@ def key_value_list(
 
 def model_estimate_note(text: str, *, title: str = "Model scope") -> None:
     """Render the standard note that separates modeled estimates from measurements."""
-    st.info(text, title=title)
+    st.info(i18n.tx(text), title=i18n.tx(title))
 
 
 def format_error(error: Exception) -> str:
@@ -161,7 +175,7 @@ def findings_frame(findings: Sequence[Finding]) -> pd.DataFrame:
 def render_findings(findings: Sequence[Finding], empty_message: str) -> None:
     """Render a findings table or a success message when there are none."""
     if not findings:
-        st.success(empty_message)
+        st.success(i18n.tx(empty_message))
         return
     st.dataframe(
         findings_frame(findings),

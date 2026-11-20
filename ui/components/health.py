@@ -9,6 +9,7 @@ import streamlit as st
 from core.schemas.validation import Severity
 from digital_twin import DigitalTwin
 from services.validation import CATEGORY_LABELS, DesignHealth
+from ui import i18n
 from ui.cache import cached_design_health, twin_payload
 
 from . import findings_frame
@@ -29,14 +30,14 @@ def render_design_health(
     )
 
     with st.container(border=True):
-        st.subheader("Design health")
+        st.subheader(i18n.t("dashboard.design_health"))
         counts = st.columns(4)
         for column, severity in zip(
             counts,
             (Severity.critical, Severity.error, Severity.warning, Severity.info),
             strict=True,
         ):
-            column.metric(severity.value.capitalize(), health.count(severity))
+            column.metric(i18n.tx(severity.value.capitalize()), health.count(severity))
 
         if health.is_valid:
             st.success(health.summary)

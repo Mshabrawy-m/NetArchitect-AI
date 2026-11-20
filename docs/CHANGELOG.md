@@ -2,6 +2,35 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - D4: ar/en interface and RTL
+
+### Added
+- `ui/i18n.py`: one ar/en catalog with parity checks, English fallback,
+  normalized session language codes, RTL detection, a scoped direction
+  stylesheet, and Unicode isolates for Latin engineering terms and numerics.
+- Settings language segmented control persisted to the session only. Dashboard,
+  navigation, progress, shared components, health, and topology wording now
+  come from catalog keys.
+- `tests/unit/ui/test_i18n.py`: catalog parity, missing-key and malformed-
+  placeholder fallback, engineering-term LTR isolation, RTL direction helpers,
+  Arabic first render in AppTest, and Settings toggle back to English.
+
+### Changed
+- Raw English UI defaults were kept where tests depend on exact wording, so
+  D1-D3 assertions still pass in the default English session.
+- The About-menu release test now checks `i18n.EN["app.about"]` instead of
+  scanning `app.py`; the wording moved into the catalog without changing it.
+- PDF, export, engine, schema, and dependency behavior was not changed.
+
+### Evidence
+- `i18n.catalog_parity()` True; `i18n.missing_translation_keys()` empty.
+- Focused UI tests: 81 passed.
+- `pytest -q`: 1038 passed/3 deselected.
+- `pytest -q -m smoke`: 12 passed/1029 deselected.
+- `ruff check .`: All checks passed!
+- Fresh runtime-only venv: health `ok`, root status 200, 15 pages rendered by
+  `scripts/verify_runtime_only.py`, pytest absent.
+
 ## 2026-11-21 - D3: layered topology UX
 
 ### Added

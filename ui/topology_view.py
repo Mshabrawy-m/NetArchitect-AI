@@ -20,7 +20,7 @@ import streamlit as st
 
 from core.schemas.network import Device, DeviceType, Topology
 from simulation import ScenarioRun, twin_fingerprint
-from ui import state, theme
+from ui import i18n, state, theme
 from ui.components import key_value_list, section_header
 from ui.navigation import PAGE_FILES
 
@@ -156,8 +156,25 @@ def utilization_token(value: float | None) -> str:
 
 
 def utilization_label(token: str) -> str:
-    """Return the text label for one utilization color token."""
-    return UTILIZATION_LABELS.get(token, "No data")
+    """Return the translated text label for one utilization color token."""
+    suffix = token.removeprefix("util_")
+    return i18n.t(
+        f"topology.utilization.{suffix}",
+        default=UTILIZATION_LABELS.get(token, "No data"),
+    )
+
+
+def role_label(role: str) -> str:
+    """Return the translated label for a device role."""
+    return i18n.t(
+        f"topology.role.{role}", default=role.replace("_", " ").capitalize()
+    )
+
+
+def zone_label(token: str) -> str:
+    """Return the translated label for a stable zone token."""
+    number = token.rsplit("_", 1)[-1]
+    return i18n.t("topology.zone", number=number)
 
 
 def device_color(
@@ -168,10 +185,10 @@ def device_color(
     """Return the legend label and color token for one device."""
     if mode == "Role":
         token = theme.ROLE_TOKEN_NAMES.get(device.role.value, "role_access")
-        return device.role.value.replace("_", " ").title(), token
+        return role_label(device.role.value), token
     if mode == "Zone":
         token = zone_token(device.site)
-        return token.replace("_", " ").title(), token
+        return zone_label(token), token
     if mode == "Utilization":
         token = utilization_token(utilization_percent)
         return utilization_label(token), token
@@ -198,13 +215,11 @@ def current_utilization(
 def _legend_labels(color_mode: str) -> tuple[tuple[str, str], ...]:
     if color_mode == "Role":
         return tuple(
-            (name.replace("_", " ").title(), token)
+            (role_label(name), token)
             for name, token in sorted(theme.ROLE_TOKEN_NAMES.items())
         )
     if color_mode == "Zone":
-        return tuple(
-            (token.replace("_", " ").title(), token) for token in ZONE_TOKENS
-        )
+        return tuple((zone_label(token), token) for token in ZONE_TOKENS)
     if color_mode == "Utilization":
         return tuple(
             (label, token) for token, label in UTILIZATION_LABELS.items()
@@ -313,7 +328,7 @@ def build_topology_figure(
             label = utilization_label(token)
         else:
             token = "link_undirected"
-            label = "Link"
+            label = i18n.t("common.link")
         link_groups[(label, token)].append(link)
     for (label, token), links in link_groups.items():
         x_values = []
@@ -332,8 +347,8 @@ def build_topology_figure(
                     f"{link.endpoints[0]} - {link.endpoints[1]}",
                     f"{link.capacity_mbps:.1f} Mbps",
                     f"{link.cost:.2f}",
-                    "Directed" if link.directed else "Undirected",
-                    "n/a" if value is None else f"{value:.1f}%",
+                    i18n.t("common.directed") if link.directed else i18n.t("common.undirected"),
+                    i18n.t("common.na") if value is None else f"{value:.1f}%",
                 ]
             )
         figure.add_trace(
@@ -349,13 +364,15 @@ def build_topology_figure(
                 },
                 customdata=customdata,
                 hovertemplate=(
-                    "<b>Link %{customdata[1]}</b><br>Endpoints: %{customdata[2]}"
-                    "<br>Capacity: %{customdata[3]}"
-                    "<br>Routing cost: %{customdata[4]}"
-                    "<br>Style: %{customdata[5]}"
-                    "<br>Utilization: %{customdata[6]}<extra></extra>"
+                    f"<b>{i18n.t('common.link')} %{{customdata[1]}}</b>"
+                    f"<br>{i18n.t('topology.hover.endpoints')}: %{{customdata[2]}}"
+                    f"<br>{i18n.t('common.capacity')}: %{{customdata[3]}}"
+                    f"<br>{i18n.t('common.routing_cost')}: %{{customdata[4]}}"
+                    f"<br>{i18n.t('common.style')}: %{{customdata[5]}}"
+                    f"<br>{i18n.t('common.utilization')}: %{{customdata[6]}}"
+                    "<extra></extra>"
                 ),
-                name=f"Link: {label}",
+                name=f"{i18n.t('topology.legend.link')}: {label}",
                 showlegend=False,
             )
         )
@@ -379,7 +396,7 @@ def build_topology_figure(
                     device.role.value,
                     str(layout.tiers[device.id]),
                     label,
-                    "n/a" if value is None else f"{value:.1f}%",
+                    i18n.t("common.na") if value is None else f"{value:.1f}%",
                 ]
             )
         figure.add_trace(
@@ -398,13 +415,16 @@ def build_topology_figure(
                 },
                 customdata=customdata,
                 hovertemplate=(
-                    "<b>%{customdata[1]}</b><br>Type: %{customdata[2]}"
-                    "<br>Site: %{customdata[3]}<br>Role: %{customdata[4]}"
-                    "<br>Tier: %{customdata[5]}<br>Color: %{customdata[6]}"
-                    "<br>Max link utilization: %{customdata[7]}"
+                    "<b>%{customdata[1]}</b>"
+                    f"<br>{i18n.t('common.type')}: %{{customdata[2]}}"
+                    f"<br>{i18n.t('topology.hover.site')}: %{{customdata[3]}}"
+                    f"<br>{i18n.t('common.role')}: %{{customdata[4]}}"
+                    f"<br>{i18n.t('common.tier')}: %{{customdata[5]}}"
+                    f"<br>{i18n.t('topology.hover.color')}: %{{customdata[6]}}"
+                    f"<br>{i18n.t('topology.hover.max_utilization')}: %{{customdata[7]}}"
                     "<extra></extra>"
                 ),
-                name=f"Device: {label}",
+                name=f"{i18n.t('common.device')}: {label}",
                 showlegend=False,
             )
         )
@@ -431,7 +451,10 @@ def build_topology_figure(
     for device_type in sorted(DEVICE_SYMBOLS):
         figure.add_trace(
             _legend_trace(
-                name=f"Type: {device_type.replace('_', ' ').title()}",
+                name=(
+                    f"{i18n.t('topology.legend.type')}: "
+                    f"{i18n.tx(device_type.replace('_', ' ').title())}"
+                ),
                 symbol=DEVICE_SYMBOLS[device_type],
                 color=theme.color("muted", palette=palette),
             )
@@ -439,11 +462,16 @@ def build_topology_figure(
     for label, token in _legend_labels(color_mode):
         figure.add_trace(
             _legend_trace(
-                name=f"{color_mode}: {label}",
+                name=(
+                    f"{i18n.t(f'topology.color.{color_mode.lower()}')}: {label}"
+                ),
                 color=theme.color(token, palette=palette),
             )
         )
-    for label, dash in (("Undirected link", "solid"), ("Directed link", "dash")):
+    for label, dash in (
+        (i18n.t("topology.legend.undirected"), "solid"),
+        (i18n.t("topology.legend.directed"), "dash"),
+    ):
         figure.add_trace(
             _legend_trace(
                 name=label,
@@ -589,15 +617,23 @@ def _queue_device_failure(device_id: str) -> None:
     state.session_set(SIMULATION_NODE_KEY, [device_id])
 
 
+def _entity_option_label(option: object) -> str:
+    """Render one entity-picker option in the active language."""
+    text = str(option)
+    if text == NONE_OPTION:
+        return i18n.t("topology.none_option")
+    return i18n.ltr(text)
+
+
 def _render_inspector(
     topology: Topology,
     selection: Mapping[str, str] | None,
     utilization: Mapping[str, float],
 ) -> None:
     with st.container(border=True):
-        st.subheader("Inspector")
+        st.subheader(i18n.t("topology.inspector"))
         st.button(
-            "Clear selection",
+            i18n.t("topology.clear_selection"),
             key="topology_view_clear_selection",
             on_click=_clear_selection,
             disabled=selection is None,
@@ -609,18 +645,16 @@ def _render_inspector(
         if ENTITY_SELECT_KEY not in st.session_state:
             state.session_set(ENTITY_SELECT_KEY, option)
         st.selectbox(
-            "Inspect entity",
+            i18n.t("topology.inspect_entity"),
             options,
             key=ENTITY_SELECT_KEY,
             on_change=_selection_widget_changed,
-            help="Keyboard-accessible alternative to clicking the diagram.",
+            format_func=_entity_option_label,
+            help=i18n.t("topology.inspect_help"),
         )
 
         if selection is None:
-            st.info(
-                "Click a device or a link midpoint to inspect it. The picker "
-                "above provides the same selection without a pointer."
-            )
+            st.info(i18n.t("topology.inspect_empty"))
             return
 
         entity_id = selection["id"]
@@ -640,28 +674,34 @@ def _render_inspector(
                     "",
                 )
             )
-            st.markdown(f"**Device: {device.id}**")
+            st.markdown(
+                f"**{i18n.t('common.device')}: {i18n.ltr(device.id)}**"
+            )
             key_value_list(
                 [
-                    ("Type", device.type.value),
-                    ("Site / zone", device.site),
-                    ("Role", device.role.value),
-                    ("Tier", layered_layout(topology).tiers[device.id]),
-                    ("Attached links", sum(
-                        entity_id in link.endpoints for link in topology.links
-                    )),
-                    ("Link utilization", "n/a" if value is None else f"{value:.1f}%"),
+                    (i18n.t("common.type"), device.type.value),
+                    (i18n.t("common.site_zone"), device.site),
+                    (i18n.t("common.role"), device.role.value),
+                    (i18n.t("common.tier"), layered_layout(topology).tiers[device.id]),
+                    (
+                        i18n.t("common.attached_links"),
+                        sum(entity_id in link.endpoints for link in topology.links),
+                    ),
+                    (
+                        i18n.t("common.link_utilization"),
+                        i18n.t("common.na") if value is None else f"{value:.1f}%",
+                    ),
                 ]
             )
             st.button(
-                "Queue node failure",
+                i18n.t("topology.queue_node_failure"),
                 key="topology_view_queue_device_failure",
                 on_click=_queue_device_failure,
                 args=(device.id,),
             )
             st.page_link(
                 PAGE_FILES["Simulation Lab"],
-                label="Open Simulation Lab",
+                label=i18n.t("common.open_simulation"),
                 icon=":material/bolt:",
             )
             return
@@ -670,25 +710,33 @@ def _render_inspector(
         if link is None:
             return
         value = utilization.get(link.id)
-        st.markdown(f"**Link: {link.id}**")
+        st.markdown(f"**{i18n.t('common.link')}: {i18n.ltr(link.id)}**")
         key_value_list(
             [
-                ("Endpoints", " - ".join(link.endpoints)),
-                ("Capacity", f"{link.capacity_mbps:.1f} Mbps"),
-                ("Routing cost", f"{link.cost:.2f}"),
-                ("Style", "Directed" if link.directed else "Undirected"),
-                ("Utilization", "n/a" if value is None else f"{value:.1f}%"),
+                (i18n.t("topology.hover.endpoints"), " - ".join(link.endpoints)),
+                (i18n.t("common.capacity"), f"{link.capacity_mbps:.1f} Mbps"),
+                (i18n.t("common.routing_cost"), f"{link.cost:.2f}"),
+                (
+                    i18n.t("common.style"),
+                    i18n.t("common.directed")
+                    if link.directed
+                    else i18n.t("common.undirected"),
+                ),
+                (
+                    i18n.t("common.utilization"),
+                    i18n.t("common.na") if value is None else f"{value:.1f}%",
+                ),
             ]
         )
         st.button(
-            "Queue link failure",
+            i18n.t("topology.queue_link_failure"),
             key="topology_view_queue_link_failure",
             on_click=_queue_link_failure,
             args=(link.id,),
         )
         st.page_link(
             PAGE_FILES["Simulation Lab"],
-            label="Open Simulation Lab",
+            label=i18n.t("common.open_simulation"),
             icon=":material/bolt:",
         )
 
@@ -696,20 +744,17 @@ def _render_inspector(
 def render_topology_view(topology: Topology) -> None:
     """Render the diagram and inspector for the current topology."""
     section_header(
-        "Diagram",
-        description=(
-            "Deterministic left-to-right tiers. Marker shape shows device type; "
-            "color shows the selected dimension. Click a device or link midpoint "
-            "to inspect it."
-        ),
+        i18n.t("topology.diagram"),
+        description=i18n.t("topology.diagram.description"),
     )
     if not topology.devices:
-        st.info("The topology has no devices to display.")
+        st.info(i18n.t("topology.empty"))
         return
 
     color_mode = st.selectbox(
-        "Color by",
+        i18n.t("topology.color_by"),
         COLOR_MODES,
+        format_func=lambda mode: i18n.t(f"topology.color.{mode.lower()}"),
         key=COLOR_MODE_KEY,
     )
     twin = state.peek_twin()
@@ -730,9 +775,10 @@ def render_topology_view(topology: Topology) -> None:
             on_select="rerun",
             selection_mode="points",
             key=_active_chart_key(),
-            alt=(
-                f"Layered topology diagram with {len(topology.devices)} devices and "
-                f"{len(topology.links)} links"
+            alt=i18n.t(
+                "topology.alt",
+                devices=len(topology.devices),
+                links=len(topology.links),
             ),
         )
 
@@ -762,8 +808,10 @@ __all__ = [
     "device_tier",
     "layered_layout",
     "render_topology_view",
+    "role_label",
     "selection_from_event",
     "should_show_labels",
     "utilization_token",
+    "zone_label",
     "zone_token",
 ]

@@ -181,16 +181,18 @@ PAGE_FILES: MappingProxyType[str, str] = MappingProxyType(
 def build_navigation(
     *,
     label_for: Callable[[PageSpec], str] | None = None,
+    help_for: Callable[[PageSpec], str] | None = None,
 ) -> dict[str, list[st.Page]]:
     """Build the grouped page mapping for ``st.navigation``."""
     label = label_for or (lambda spec: spec.label)
+    help_text = help_for or (lambda spec: spec.help)
     return {
         group: [
             st.Page(
                 spec.path,
                 title=label(spec),
                 icon=spec.icon,
-                help=spec.help,
+                help=help_text(spec),
             )
             for spec in specs
         ]

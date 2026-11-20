@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ui import state
+from ui import i18n, state
 from ui.components import (
     callout,
     empty_state,
@@ -18,6 +18,7 @@ from ui.components import (
 )
 from ui.sample_projects import (
     SAMPLE_PROJECTS,
+    SampleProject,
     cancel_sample,
     load_sample,
     pending_sample,
@@ -25,26 +26,36 @@ from ui.sample_projects import (
 )
 
 
+def _sample_summary(sample: SampleProject) -> str:
+    """Render a sample summary from its stable display counts."""
+    counts = [int(part.strip().split(" ", 1)[0]) for part in sample.summary.split("|")]
+    return i18n.t(
+        "sample.summary",
+        devices=counts[0],
+        links=counts[1],
+        demands=counts[2],
+    )
+
+
 def _render_quick_start() -> None:
     """Render labeled samples; load one only after an explicit confirmation."""
     with st.container(border=True):
         section_header(
-            "Quick start",
-            description=(
-                "Load a labeled sample to explore the workflow. Each sample is "
-                "built with the same deterministic engines as a working design."
-            ),
+            i18n.t("dashboard.quick_start"),
+            description=i18n.t("dashboard.quick_start.description"),
         )
         columns = st.columns(len(SAMPLE_PROJECTS))
         for column, sample in zip(columns, SAMPLE_PROJECTS, strict=True):
             with column:
-                st.markdown(f"**{sample.name}**")
-                st.caption(sample.description)
-                st.caption(sample.summary)
+                st.markdown(
+                    f"**{i18n.sample_name(sample.key, sample.name)}**"
+                )
+                st.caption(i18n.sample_description(sample.key, sample.description))
+                st.caption(_sample_summary(sample))
                 st.button(
-                    "Select sample",
+                    i18n.t("dashboard.sample.select"),
                     key=f"sample_select_{sample.key}",
-                    help="Select only; the current twin is not changed yet.",
+                    help=i18n.t("dashboard.sample.select_help"),
                     on_click=request_sample,
                     args=(sample.key,),
                 )
@@ -54,20 +65,24 @@ def _render_quick_start() -> None:
             return
 
         current = state.peek_twin()
-        target = (
-            f"replace the current twin '{current.metadata.name}'"
-            if current is not None
-            else "load a new twin"
-        )
+        if current is not None:
+            target = i18n.t(
+                "dashboard.sample.replace", name=i18n.ltr(current.metadata.name)
+            )
+        else:
+            target = i18n.t("dashboard.sample.new")
         callout(
-            f"{pending.name} will {target} in this browser session. No file is "
-            "written and no existing run history is deleted.",
+            i18n.t(
+                "dashboard.sample.confirm_body",
+                name=i18n.sample_name(pending.key, pending.name),
+                target=target,
+            ),
             kind="warn",
-            title="Confirm sample load",
+            title=i18n.t("dashboard.sample.confirm_title"),
         )
         confirm, cancel = st.columns(2)
         confirm.button(
-            "Confirm and load sample",
+            i18n.t("dashboard.sample.confirm"),
             key="sample_confirm_load",
             type="primary",
             on_click=load_sample,
@@ -75,7 +90,7 @@ def _render_quick_start() -> None:
             kwargs={"confirmed": True},
         )
         cancel.button(
-            "Cancel",
+            i18n.t("common.cancel"),
             key="sample_cancel",
             on_click=cancel_sample,
         )
@@ -83,23 +98,15 @@ def _render_quick_start() -> None:
 
 def render_dashboard() -> None:
     """Render the application overview from twin and session data."""
-    page_header(
-        "Dashboard",
-        "Current state of the digital twin and the engineering runs retained in "
-        "this session.",
-    )
+    page_header(i18n.t("page.dashboard"), i18n.t("page.dashboard.description"))
     _render_quick_start()
 
     twin = state.get_twin()
     if twin is None:
         empty_state(
-            "No digital twin is loaded. Create one in the AI Network Designer "
-            "or generate or import a topology in the Topology Editor.",
-            title="Digital twin required",
-            hint=(
-                "The dashboard reports only data already stored in session "
-                "state. It does not create a design or run an engine."
-            ),
+            i18n.t("dashboard.empty.message"),
+            title=i18n.t("dashboard.empty.title"),
+            hint=i18n.t("dashboard.empty.hint"),
         )
         return
 
@@ -109,32 +116,33 @@ def render_dashboard() -> None:
     optimizations = state.peek_optimization_runs()
 
     columns = st.columns(6)
-    columns[0].metric("Devices", len(topology.devices))
-    columns[1].metric("Links", len(topology.links))
-    columns[2].metric("Demands", len(twin.demands))
-    columns[3].metric("Snapshots", len(snapshots))
-    columns[4].metric("Scenario runs", len(scenarios))
-    columns[5].metric("Optimization runs", len(optimizations))
+    columns[0].metric(i18n.t("dashboard.metric.devices"), len(topology.devices))
+    columns[1].metric(i18n.t("dashboard.metric.links"), len(topology.links))
+    columns[2].metric(i18n.t("dashboard.metric.demands"), len(twin.demands))
+    columns[3].metric(i18n.t("dashboard.metric.snapshots"), len(snapshots))
+    columns[4].metric(i18n.t("dashboard.metric.scenario_runs"), len(scenarios))
+    columns[5].metric(
+        i18n.t("dashboard.metric.optimization_runs"), len(optimizations)
+    )
 
     addressing = twin.addressing
     st.caption(
-        f"Twin: {twin.metadata.name} | Schema version: "
-        f"{twin.metadata.schema_version} | Created: "
-        f"{twin.metadata.created_at.isoformat()} | Subnets: "
-        f"{len(addressing.subnets) if addressing is not None else 0} | "
-        f"VLAN plans: "
-        f"{len(addressing.vlan_plans) if addressing is not None else 0} | "
-        f"DHCP scopes: {len(twin.dhcp_scopes)}"
+        i18n.t(
+            "dashboard.twin_caption",
+            name=i18n.ltr(twin.metadata.name),
+            schema=i18n.ltr(twin.metadata.schema_version),
+            created=i18n.ltr(twin.metadata.created_at.isoformat()),
+            subnets=len(addressing.subnets) if addressing is not None else 0,
+            vlans=len(addressing.vlan_plans) if addressing is not None else 0,
+            dhcp=len(twin.dhcp_scopes),
+        )
     )
 
     render_design_health(twin)
 
-    st.subheader("Retained runs")
+    st.subheader(i18n.t("dashboard.retained_runs"))
     if not scenarios and not optimizations:
-        empty_state(
-            "No scenario or optimization runs are retained in this session. "
-            "Run one from the Simulation Lab or Optimization Center."
-        )
+        empty_state(i18n.t("dashboard.runs_empty"))
         return
 
     latest_columns = st.columns(2)
@@ -142,41 +150,58 @@ def render_dashboard() -> None:
         if scenarios:
             run = scenarios[-1]
             status = (
-                "recovery available"
+                i18n.t("dashboard.recovery")
                 if run.comparison.recovery_available
-                else "not all baseline demands recovered"
+                else i18n.t("dashboard.not_recovered")
             )
             st.metric(
-                "Latest scenario served demand",
+                i18n.t("dashboard.latest_scenario"),
                 f"{run.comparison.scenario_served_demand_ratio:.1%}",
-                help=f"Scenario: {run.scenario.name}. Status: {status}.",
+                help=i18n.t(
+                    "dashboard.scenario_help",
+                    name=i18n.ltr(run.scenario.name),
+                    status=status,
+                ),
             )
             st.caption(
-                f"{run.scenario.name} | {run.scenario.type.value} | "
-                f"{status} | {len(run.comparison.newly_unserved_demands)} newly "
-                "unserved demand(s)"
+                i18n.t(
+                    "dashboard.scenario_caption",
+                    name=i18n.ltr(run.scenario.name),
+                    type=i18n.ltr(run.scenario.type.value),
+                    status=status,
+                    count=len(run.comparison.newly_unserved_demands),
+                )
             )
         else:
-            st.caption("No scenario runs retained.")
+            st.caption(i18n.t("dashboard.no_scenarios"))
 
     with latest_columns[1]:
         if optimizations:
             run = optimizations[-1]
             st.metric(
-                "Latest optimization evaluations",
+                i18n.t("dashboard.latest_optimization"),
                 run.evaluations,
-                help=(
-                    f"{run.algorithm.value}; stopped with "
-                    f"{run.stop_reason.value}."
+                help=i18n.t(
+                    "dashboard.optimization_help",
+                    algorithm=i18n.ltr(run.algorithm.value),
+                    reason=i18n.ltr(run.stop_reason.value),
                 ),
             )
             st.caption(
-                f"{run.algorithm.value} | {run.stop_reason.value} | "
-                f"{len(run.pareto_front)} Pareto candidate(s) | "
-                f"{'feasible best' if run.best is not None else 'no feasible best'}"
+                i18n.t(
+                    "dashboard.optimization_caption",
+                    algorithm=i18n.ltr(run.algorithm.value),
+                    reason=i18n.ltr(run.stop_reason.value),
+                    count=len(run.pareto_front),
+                    best=(
+                        i18n.t("dashboard.feasible_best")
+                        if run.best is not None
+                        else i18n.t("dashboard.no_feasible_best")
+                    ),
+                )
             )
         else:
-            st.caption("No optimization runs retained.")
+            st.caption(i18n.t("dashboard.no_optimizations"))
 
 
 __all__ = ["render_dashboard"]

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ui import i18n
 from ui.navigation import PAGE_SPECS, build_navigation
 from ui.progress import render_progress
 
@@ -34,19 +35,20 @@ def main() -> None:
         page_title="NetArchitect AI",
         page_icon=":material/hub:",
         layout="wide",
-        menu_items={
-            "About": (
-                "NetArchitect AI v1.0.0-rc1 - deterministic, design-time "
-                "network engineering. Results are modeled from the current "
-                "twin and stated assumptions. No device access, live scanning, "
-                "or guaranteed outcomes. See Settings > Release limitations."
-            ),
-        },
+        menu_items={"About": i18n.t("app.about")},
     )
+    i18n.render_rtl_css()
 
-    page = st.navigation(build_navigation(), position="sidebar")
+    navigation = build_navigation(
+        label_for=lambda spec: i18n.page_label(spec.title),
+        help_for=lambda spec: i18n.page_help(spec.title),
+    )
+    navigation = {
+        i18n.group_label(group): pages for group, pages in navigation.items()
+    }
+    page = st.navigation(navigation, position="sidebar")
     with st.sidebar:
-        st.caption("NetArchitect AI - deterministic network engineering first.")
+        st.caption(i18n.t("app.sidebar"))
     render_progress()
     page.run()
 

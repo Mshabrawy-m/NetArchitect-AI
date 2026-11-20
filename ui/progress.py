@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import streamlit as st
 
 from simulation import twin_fingerprint
-from ui import state
+from ui import i18n, state
 from ui.components import status_badge
 from ui.navigation import PAGE_FILES
 
@@ -21,13 +21,14 @@ DONE = "done"
 INCOMPLETE = "incomplete"
 STALE = "stale"
 
-_STEP_PAGES: tuple[tuple[str, str], ...] = (
-    ("Design", "AI Network Designer"),
-    ("Addressing", "IP Addressing & Subnetting"),
-    ("Validate", "Digital Twin"),
-    ("Simulate", "Simulation Lab"),
-    ("Optimize", "Optimization Center"),
-    ("Report", "Reports & Documentation"),
+# Stable keys stay English so session evidence and tests are language-neutral.
+_STEP_PAGES: tuple[tuple[str, str, str], ...] = (
+    ("design", "progress.step.design", "AI Network Designer"),
+    ("addressing", "progress.step.addressing", "IP Addressing & Subnetting"),
+    ("validate", "progress.step.validate", "Digital Twin"),
+    ("simulate", "progress.step.simulate", "Simulation Lab"),
+    ("optimize", "progress.step.optimize", "Optimization Center"),
+    ("report", "progress.step.report", "Reports & Documentation"),
 )
 
 
@@ -67,9 +68,9 @@ def build_progress() -> tuple[ProgressStep, ...]:
     links = len(topology.links) if topology is not None else 0
     design_status = DONE if devices > 0 else INCOMPLETE
     design_detail = (
-        f"{devices} devices, {links} links in this session."
+        i18n.t("progress.detail.design", devices=devices, links=links)
         if devices > 0
-        else "No design twin with devices is loaded."
+        else i18n.t("progress.detail.design_empty")
     )
 
     addressing = twin.addressing if twin is not None else None
@@ -79,11 +80,17 @@ def build_progress() -> tuple[ProgressStep, ...]:
     has_addressing = subnet_count > 0 or vlan_count > 0
     addressing_status = DONE if has_addressing else INCOMPLETE
     if has_addressing:
-        addressing_detail = f"{subnet_count} subnet(s), {vlan_count} VLAN plan(s) saved in the twin."
+        addressing_detail = i18n.t(
+            "progress.detail.addressing",
+            subnet_count=subnet_count,
+            vlan_count=vlan_count,
+        )
     elif vlsm is not None:
-        addressing_detail = f"{len(vlsm.allocations)} VLSM block(s) computed but not saved in the twin."
+        addressing_detail = i18n.t(
+            "progress.detail.addressing_vlsm", count=len(vlsm.allocations)
+        )
     else:
-        addressing_detail = "No addressing plan in the current twin."
+        addressing_detail = i18n.t("progress.detail.addressing_empty")
 
     check = state.peek_addressing_check()
     flows = state.peek_security_flows()
@@ -96,16 +103,15 @@ def build_progress() -> tuple[ProgressStep, ...]:
         has_result=check is not None or bool(flows),
     )
     if check is not None:
-        findings = len(check.findings)
         validate_detail = (
-            f"Subnet check retained with {findings} finding(s)."
+            i18n.t("progress.detail.validate_done", count=len(check.findings))
             if validate_status == DONE
-            else "Subnet check was run on a different twin revision."
+            else i18n.t("progress.detail.validate_stale")
         )
     elif flows:
-        validate_detail = f"{len(flows)} modeled flow check(s) retained."
+        validate_detail = i18n.t("progress.detail.validate_flows", count=len(flows))
     else:
-        validate_detail = "No validation result retained in this session."
+        validate_detail = i18n.t("progress.detail.validate_empty")
 
     scenarios = state.peek_simulation_runs()
     scenario = scenarios[-1] if scenarios else None
@@ -115,11 +121,13 @@ def build_progress() -> tuple[ProgressStep, ...]:
         has_result=scenario is not None,
     )
     if scenario is None:
-        simulate_detail = "No scenario run retained in this session."
+        simulate_detail = i18n.t("progress.detail.simulate_empty")
     elif simulate_status == DONE:
-        simulate_detail = f"Latest run: {scenario.scenario.name}."
+        simulate_detail = i18n.t(
+            "progress.detail.simulate_done", name=i18n.ltr(scenario.scenario.name)
+        )
     else:
-        simulate_detail = "Latest scenario run used a different twin revision."
+        simulate_detail = i18n.t("progress.detail.simulate_stale")
 
     optimizations = state.peek_optimization_runs()
     optimization = optimizations[-1] if optimizations else None
@@ -134,11 +142,13 @@ def build_progress() -> tuple[ProgressStep, ...]:
         has_result=optimization is not None,
     )
     if optimization is None:
-        optimize_detail = "No optimization run retained in this session."
+        optimize_detail = i18n.t("progress.detail.optimize_empty")
     elif optimize_status == DONE:
-        optimize_detail = f"{optimization.algorithm.value} run retained."
+        optimize_detail = i18n.t(
+            "progress.detail.optimize_done", algorithm=i18n.ltr(optimization.algorithm.value)
+        )
     else:
-        optimize_detail = "Latest optimization run used a different twin revision."
+        optimize_detail = i18n.t("progress.detail.optimize_stale")
 
     report_times = state.peek_report_times()
     report_status = _source_status(
@@ -150,11 +160,11 @@ def build_progress() -> tuple[ProgressStep, ...]:
     if report_status == INCOMPLETE and report_times:
         report_status = STALE
     if report_status == DONE:
-        report_detail = "Report prepared for the current twin."
+        report_detail = i18n.t("progress.detail.report_done")
     elif report_status == STALE:
-        report_detail = "Report was prepared for a different twin revision."
+        report_detail = i18n.t("progress.detail.report_stale")
     else:
-        report_detail = "No report prepared in this session."
+        report_detail = i18n.t("progress.detail.report_empty")
 
     statuses = (
         design_status,
@@ -174,13 +184,13 @@ def build_progress() -> tuple[ProgressStep, ...]:
     )
     return tuple(
         ProgressStep(
-            key=label.lower(),
-            label=label,
+            key=key,
+            label=i18n.t(label_key),
             status=status,
             page_file=PAGE_FILES[page],
             detail=detail,
         )
-        for (label, page), status, detail in zip(
+        for (key, label_key, page), status, detail in zip(
             _STEP_PAGES, statuses, details, strict=True
         )
     )
@@ -190,13 +200,13 @@ def render_progress(*, compact: bool = False) -> None:
     """Render the progress strip above the selected page."""
     steps = build_progress()
     with st.container(border=True):
-        st.caption("Project progress")
+        st.caption(i18n.t("progress.title"))
         columns = st.columns(len(steps))
         for index, (column, step) in enumerate(zip(columns, steps, strict=True)):
             with column:
                 st.page_link(
                     step.page_file,
-                    label=f"{index + 1}. {step.label}",
+                    label=f"{i18n.ltr(index + 1)}. {step.label}",
                     help=step.detail,
                 )
                 status_badge(step.status)
