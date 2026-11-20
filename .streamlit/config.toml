@@ -1,5 +1,5 @@
 # Streamlit configuration for NetArchitect AI.
-# Clean, professional light theme with a muted engineering blue accent.
+# The light and dark palettes mirror ui/theme.py. Keep both in sync.
 
 [server]
 headless = true
@@ -13,7 +13,50 @@ gatherUsageStats = false
 
 [theme]
 base = "light"
-primaryColor = "#2c5f8d"
+font = "Source Sans 3"
+headingFont = "Source Sans 3"
+codeFont = "monospace"
+baseRadius = "0.35rem"
+showWidgetBorder = true
+showSidebarBorder = true
+paddingTop = "1.5rem"
+chartCategoricalColors = ["#2f6690", "#7a5195", "#2f7d68", "#a15c2f", "#4f7cac", "#8a6d3b"]
+
+[theme.light]
+primaryColor = "#1f5f8b"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f4f6f8"
-textColor = "#1f2933"
+textColor = "#1b2b3a"
+linkColor = "#1f5f8b"
+borderColor = "#d4dce5"
+dataframeHeaderBackgroundColor = "#e9edf2"
+dataframeHeaderTextColor = "#1b2b3a"
+dataframeBorderColor = "#d4dce5"
+
+[theme.light.sidebar]
+backgroundColor = "#f4f6f8"
+secondaryBackgroundColor = "#e9edf2"
+textColor = "#1b2b3a"
+primaryColor = "#1f5f8b"
+linkColor = "#1f5f8b"
+borderColor = "#d4dce5"
+
+[theme.dark]
+primaryColor = "#8cc8f0"
+backgroundColor = "#111a24"
+secondaryBackgroundColor = "#1b2734"
+textColor = "#e8edf2"
+linkColor = "#8cc8f0"
+borderColor = "#3b4b5c"
+dataframeHeaderBackgroundColor = "#253444"
+dataframeHeaderTextColor = "#e8edf2"
+dataframeBorderColor = "#3b4b5c"
+chartCategoricalColors = ["#8cc8f0", "#c2a4dc", "#7bd2b4", "#f0b27a", "#a8d2ea", "#e0c07a"]
+
+[theme.dark.sidebar]
+backgroundColor = "#1b2734"
+secondaryBackgroundColor = "#253444"
+textColor = "#e8edf2"
+primaryColor = "#8cc8f0"
+linkColor = "#8cc8f0"
+borderColor = "#3b4b5c"

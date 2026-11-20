@@ -16,6 +16,7 @@ from agents.network_agents import TopologyInput, TopologyOutput, default_agents
 from core.exceptions import AgentValidationError
 from core.schemas.requirements import NetworkRequirements, UserFacts
 from tests.unit.agents.helpers import sample_requirements
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 from ui.pages import agent_control_center
 
@@ -38,7 +39,7 @@ class ExplodingTopologyAgent(BaseAgent):
 def control_center() -> AppTest:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120).run()
     assert not at.exception
-    at.selectbox(key="page_nav").select("Agent Control Center").run()
+    open_page(at, "Agent Control Center")
     assert not at.exception
     return at
 
@@ -62,7 +63,7 @@ def test_read_only_dag_trace_and_critic_for_a_completed_workflow() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[agent_control_center.PLAN_SOURCES[0][1]] = plan_state
     at.run()
-    at.selectbox(key="page_nav").select("Agent Control Center").run()
+    open_page(at, "Agent Control Center")
 
     assert not at.exception
     assert metric(at, "Tasks succeeded") == "11/11"
@@ -100,7 +101,7 @@ def test_unresolved_workflow_shows_the_typed_stop_reason_and_error() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[agent_control_center.PLAN_SOURCES[0][1]] = plan_state
     at.run()
-    at.selectbox(key="page_nav").select("Agent Control Center").run()
+    open_page(at, "Agent Control Center")
 
     assert not at.exception
     assert any("Workflow stopped: failed" in error.value for error in at.error)
@@ -115,7 +116,7 @@ def test_two_workflows_can_be_selected_by_source() -> None:
     at.session_state[agent_control_center.PLAN_SOURCES[0][1]] = first
     at.session_state[agent_control_center.PLAN_SOURCES[1][1]] = second
     at.run()
-    at.selectbox(key="page_nav").select("Agent Control Center").run()
+    open_page(at, "Agent Control Center")
 
     assert not at.exception
     selector = at.selectbox(key=agent_control_center.SELECTOR_KEY)
@@ -132,7 +133,7 @@ def test_trace_json_never_contains_the_session_key() -> None:
     at.session_state[state.LLM_SESSION_KEY] = secret
     at.session_state[agent_control_center.PLAN_SOURCES[0][1]] = plan_state
     at.run()
-    at.selectbox(key="page_nav").select("Agent Control Center").run()
+    open_page(at, "Agent Control Center")
 
     assert not at.exception
     assert secret not in plan_state.trace.to_json()

@@ -9,6 +9,7 @@ from streamlit.testing.v1 import AppTest
 from forecasting import SeriesUnit
 from tests.unit.capacity.helpers import line_capacity_twin
 from tests.unit.forecasting.helpers import make_series
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 from ui.pages import capacity_planning
 
@@ -22,7 +23,7 @@ def _capacity_page(twin=None, series=()) -> AppTest:
     if series:
         at.session_state[state.CAPACITY_SERIES_KEY] = tuple(series)
     at.run()
-    at.selectbox(key="page_nav").select("Capacity Planning").run()
+    open_page(at, "Capacity Planning")
     return at
 
 

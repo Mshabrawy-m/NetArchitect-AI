@@ -13,6 +13,7 @@ from simulation import ScenarioHistory, run_scenario
 from tests.unit.digital_twin.helpers import make_twin as design_twin
 from tests.unit.optimization.helpers import settings, tiny_twin
 from tests.unit.simulation.helpers import make_scenario
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -20,7 +21,7 @@ APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 
 def _run_dashboard() -> AppTest:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120).run()
-    at.selectbox(key="page_nav").select("Dashboard").run()
+    open_page(at, "Dashboard")
     return at
 
 
@@ -53,7 +54,7 @@ def test_dashboard_shows_twin_sessions_and_design_health() -> None:
     store.add(create_snapshot(twin, "baseline"))
     at.session_state[state.SNAPSHOTS_KEY] = store
     at.run()
-    at.selectbox(key="page_nav").select("Dashboard").run()
+    open_page(at, "Dashboard")
 
     assert not at.exception
     metrics = {metric.label: metric.value for metric in at.metric}
@@ -75,7 +76,7 @@ def test_dashboard_counts_zero_when_no_runs_are_retained() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.TWIN_KEY] = design_twin()
     at.run()
-    at.selectbox(key="page_nav").select("Dashboard").run()
+    open_page(at, "Dashboard")
 
     assert not at.exception
     metrics = {metric.label: metric.value for metric in at.metric}

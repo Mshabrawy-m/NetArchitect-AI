@@ -7,6 +7,7 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 from network.topology import generate_ring, generate_spine_leaf
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -16,7 +17,7 @@ def test_routing_page_requires_a_topology() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("Routing Analysis").run()
+    open_page(at, "Routing Analysis")
 
     assert not at.exception
     assert any("No topology is loaded" in info.value for info in at.info)
@@ -25,7 +26,7 @@ def test_routing_page_requires_a_topology() -> None:
 def test_routing_page_renders_paths_tables_and_failures() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state["topology"] = generate_ring(node_count=4)
-    at.selectbox(key="page_nav").select("Routing Analysis").run()
+    open_page(at, "Routing Analysis")
     assert not at.exception
     assert state.TWIN_KEY in at.session_state
 
@@ -46,7 +47,7 @@ def test_analytics_page_requires_a_topology() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("Network Analytics").run()
+    open_page(at, "Network Analytics")
 
     assert not at.exception
     assert any("No topology is loaded" in info.value for info in at.info)
@@ -55,7 +56,7 @@ def test_analytics_page_requires_a_topology() -> None:
 def test_analytics_page_renders_metrics_and_findings() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state["topology"] = generate_spine_leaf(spines=2, leaves=3)
-    at.selectbox(key="page_nav").select("Network Analytics").run()
+    open_page(at, "Network Analytics")
 
     assert not at.exception
     assert at.get("dataframe")

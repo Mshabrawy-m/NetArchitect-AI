@@ -9,6 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from config import settings as settings_module
+from tests.unit.ui.nav_helpers import open_page
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_PATH = ROOT / "app.py"
@@ -74,7 +75,7 @@ def test_settings_page_states_release_limitations_with_no_api_key(monkeypatch) -
     try:
         at = AppTest.from_file(str(APP_PATH), default_timeout=120).run()
         assert not at.exception
-        at.selectbox(key="page_nav").select("Settings").run()
+        open_page(at, "Settings")
         assert not at.exception
         text = _rendered_text(at)
         assert "Release limitations" in text

@@ -41,7 +41,7 @@ from simulation import (
     validate_scenario,
 )
 from simulation.models import CongestionThresholds, SimulationAssumptions
-from ui import state
+from ui import state, theme
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
 from ui.components.editors import bump_editor_key, editor_key
 
@@ -83,28 +83,28 @@ EXPANSION_SCENARIOS = {
 }
 
 LEVEL_COLORS = {
-    "normal": "#e8f3ea",
-    "warning": "#fff1cc",
-    "critical": "#ffe0b2",
-    "overloaded": "#f8d4d4",
-    "not present": "#eceff1",
+    "normal": theme.color("state_normal"),
+    "warning": theme.color("state_warning"),
+    "critical": theme.color("state_critical"),
+    "overloaded": theme.color("state_overloaded"),
+    "not present": theme.color("state_absent"),
 }
 LINK_COLORS = {
-    "normal": "#9aa7b4",
-    "warning": "#d98c00",
-    "critical": "#e05a00",
-    "overloaded": "#b23c3c",
-    "failed": "#7a2f2f",
+    "normal": theme.color("link_undirected"),
+    "warning": theme.color("util_medium"),
+    "critical": theme.color("util_high"),
+    "overloaded": theme.color("critical"),
+    "failed": theme.color("critical"),
 }
 ROLE_COLORS = {
-    "core": "#1f3a5f",
-    "distribution": "#2f6690",
-    "aggregation": "#3d7ea6",
-    "access": "#7fa8c9",
-    "border": "#6b4c3b",
-    "edge": "#4f7cac",
-    "wan": "#6b4c3b",
-    "dmz": "#8a6d3b",
+    "core": theme.color("role_core"),
+    "distribution": theme.color("role_distribution"),
+    "aggregation": theme.color("role_aggregation"),
+    "access": theme.color("role_access"),
+    "border": theme.color("role_border"),
+    "edge": theme.color("role_edge"),
+    "wan": theme.color("role_border"),
+    "dmz": theme.color("role_wan"),
 }
 EXPANSION_TEMPLATE = json.dumps(
     {"devices": [], "links": [], "demands": []},
@@ -712,7 +712,7 @@ def _render_utilization_chart(run: ScenarioRun) -> None:
     for link_id in ordered:
         link = after.get(link_id)
         scenario_colors.append(
-            LINK_COLORS.get(link.level.value, "#9aa7b4")
+            LINK_COLORS.get(link.level.value, theme.color("link_undirected"))
             if link is not None
             else LINK_COLORS["failed"]
         )
@@ -725,7 +725,7 @@ def _render_utilization_chart(run: ScenarioRun) -> None:
                 for link_id in ordered
             ],
             name="Baseline utilization",
-            marker_color="#9aa7b4",
+            marker_color=theme.color("link_undirected"),
         )
     )
     figure.add_trace(
@@ -740,9 +740,9 @@ def _render_utilization_chart(run: ScenarioRun) -> None:
         )
     )
     for value, label, color in (
-        (run.thresholds.warning_percent, "warning", "#d98c00"),
-        (run.thresholds.critical_percent, "critical", "#e05a00"),
-        (run.thresholds.overload_percent, "overload", "#b23c3c"),
+        (run.thresholds.warning_percent, "warning", theme.color("util_medium")),
+        (run.thresholds.critical_percent, "critical", theme.color("util_high")),
+        (run.thresholds.overload_percent, "overload", theme.color("critical")),
     ):
         figure.add_hline(
             y=value,
@@ -756,8 +756,8 @@ def _render_utilization_chart(run: ScenarioRun) -> None:
         barmode="group",
         height=380,
         margin={"l": 10, "r": 10, "t": 30, "b": 70},
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#ffffff",
+        paper_bgcolor=theme.color("background"),
+        plot_bgcolor=theme.color("background"),
         xaxis_title="Link",
         yaxis_title="Utilization (%)",
         xaxis_tickangle=-45,
@@ -936,11 +936,11 @@ def _topology_figure(twin: DigitalTwin, run: ScenarioRun) -> go.Figure | None:
                 mode="markers+text" if show_labels else "markers",
                 text=nodes if show_labels else None,
                 textposition="top center",
-                textfont={"size": 10, "color": "#33414f"},
+                textfont={"size": 10, "color": theme.color("chart_text")},
                 marker={
                     "size": 18,
-                    "color": ROLE_COLORS.get(role, "#7fa8c9"),
-                    "line": {"width": 1, "color": "#ffffff"},
+                    "color": ROLE_COLORS.get(role, theme.color("role_access")),
+                    "line": {"width": 1, "color": theme.color("background")},
                 },
                 customdata=[
                     [node, metadata[node][1], metadata[node][2], metadata[node][0]]
@@ -963,12 +963,12 @@ def _topology_figure(twin: DigitalTwin, run: ScenarioRun) -> go.Figure | None:
                 mode="markers+text" if show_labels else "markers",
                 text=failed_nodes if show_labels else None,
                 textposition="top center",
-                textfont={"size": 10, "color": "#7a2f2f"},
+                textfont={"size": 10, "color": theme.color("critical")},
                 marker={
                     "size": 14,
-                    "color": "#b23c3c",
+                    "color": theme.color("critical"),
                     "symbol": "x",
-                    "line": {"width": 1, "color": "#7a2f2f"},
+                    "line": {"width": 1, "color": theme.color("critical")},
                 },
                 hovertemplate="<b>%{text}</b><br>Failed device<extra></extra>",
                 name="Failed device",
@@ -978,8 +978,8 @@ def _topology_figure(twin: DigitalTwin, run: ScenarioRun) -> go.Figure | None:
     figure.update_layout(
         height=520,
         margin={"l": 10, "r": 10, "t": 30, "b": 10},
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#ffffff",
+        paper_bgcolor=theme.color("background"),
+        plot_bgcolor=theme.color("background"),
         legend={
             "orientation": "h",
             "yanchor": "bottom",

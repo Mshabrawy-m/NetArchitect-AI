@@ -92,12 +92,13 @@ def render_all_pages() -> None:
     from streamlit.testing.v1 import AppTest
 
     from app import PAGES
+    from ui.navigation import PAGE_FILES
 
     at = AppTest.from_file(str(APP), default_timeout=120).run()
     if at.exception:
         raise RuntimeError(f"Root render failed: {at.exception[0].message}")
     for page in PAGES:
-        at.selectbox(key="page_nav").select(page).run()
+        at.switch_page(PAGE_FILES[page]).run()
         if at.exception:
             raise RuntimeError(
                 f"Page {page!r} failed: {at.exception[0].message}"

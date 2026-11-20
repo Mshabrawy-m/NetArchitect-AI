@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: v1.0.0 released; V2 technical hardening on `feature/v2-tech`
-- Current task: final V2 verification and reporting
-- Overall status: Phase 15a/b/c/d merged to `main` (`b1507f9`); annotated `v1.0.0-rc1` and `v1.0.0` pushed. A post-release commit inlines `pyarrow==23.0.1` in `requirements.txt` and removes `constraints.txt` for a single-file Cloud install. T0-T4 are committed on `feature/v2-tech`; nothing is pushed.
-- Last updated: 2026-11-20
-- Branch: `feature/v2-tech` (created from an up-to-date `main`)
+- Current phase: v1.0.0 released; V2 design package on `feature/v2-design`
+- Current task: D1 design system and navigation complete; D2-D5 pending
+- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, and shared presentation components. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
+- Last updated: 2026-11-21
+- Branch: `feature/v2-design` (created from updated `main`)
 
 ## V2 package (feature/v2-tech)
 
@@ -37,6 +37,24 @@
   clean. See `docs/PERFORMANCE.md`.
 - T4: lazy imports complete. `app.py` imports page modules only when selected; `services.export` defers all implementation modules, and `ui/cache.py` imports reporting/export helpers inside cached functions. Cold `import app` now has zero cumulative importtime for reportlab, reporting, export, and four rare pages. App import `2327519` to `1564059` us and Dashboard first render `1.994` to `1.363` s in fresh one-run measurements against `bf2b5b8`. All six `st.cache_data` uses remain bounded at 8 entries. `pytest -q` 992 passed/3 deselected; `pytest -q -m smoke` 12 passed/983 deselected; `ruff check .` clean. See `docs/PERFORMANCE.md`.
 - T5: bounded Hypothesis suite complete. Eight property tests cover IPv4/IPv6 VLSM allocation, deterministic route walks with device/link failures, twin JSON/fingerprint/legacy-v1 compatibility, CSV formula neutralization, and optimizer infeasibility. Shared settings use `max_examples=50`, `derandomize=True`, and `deadline=None`; a local 1000-example probe also passed. No product bug was found by the properties (one incorrect IPv6 prefix assertion in the new test was corrected before commit). `pytest -q` 1000 passed/3 deselected; `pytest -q -m smoke` 12 passed/991 deselected; `pytest -q -m perf` 3 passed/1000 deselected; `ruff check .` clean.
+
+## V2 design package (feature/v2-design)
+
+- Scope: UI design system, guided workflow, topology UX, ar/en i18n, and
+  accessibility polish. No engine, schema, export, or runtime dependency changes.
+- D1: `ui/theme.py` is the only UI module with raw color literals. Light and
+  dark palettes are mirrored in `.streamlit/config.toml` with one typeface.
+  Native `st.navigation`/`st.Page` replaces the sidebar selectbox; Dashboard is
+  first, followed by Design, Analyze, Operate, and Output groups. The 15
+  existing render functions are reached through thin files in `app_pages/`.
+  Shared metric, status, section, callout, empty-state, and key/value helpers
+  are available from `ui.components`.
+- D1 evidence: `pytest -q` 1006 passed/3 deselected; `pytest -q -m smoke` 12
+  passed/997 deselected; `ruff check .` clean. Changed assertion: the old
+  navigation test asserted that Security followed Capacity in the flat
+  selectbox order; it now asserts the specified group contents and Dashboard
+  first/Settings last. Navigation tests switch pages through registered
+  `st.Page` files instead of `page_nav`.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

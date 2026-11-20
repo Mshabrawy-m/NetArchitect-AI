@@ -16,6 +16,7 @@ from digital_twin import (
 )
 from network.topology import generate_ring
 from tests.unit.digital_twin.helpers import make_twin
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -25,7 +26,7 @@ def test_digital_twin_page_requires_a_twin() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("Digital Twin").run()
+    open_page(at, "Digital Twin")
 
     assert not at.exception
     assert any("No digital twin is loaded" in info.value for info in at.info)
@@ -39,7 +40,7 @@ def test_digital_twin_page_shows_categorized_design_health() -> None:
     )
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = twin
-    at.selectbox(key="page_nav").select("Digital Twin").run()
+    open_page(at, "Digital Twin")
 
     assert not at.exception
     subheaders = [element.value for element in at.get("subheader")]
@@ -51,10 +52,10 @@ def test_digital_twin_page_shows_categorized_design_health() -> None:
 
 def test_digital_twin_page_summarizes_state_and_creates_snapshot() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
-    at.selectbox(key="page_nav").select("Topology Editor").run()
+    open_page(at, "Topology Editor")
     at.button(key="generate_topology").click().run()
 
-    at.selectbox(key="page_nav").select("Digital Twin").run()
+    open_page(at, "Digital Twin")
     assert not at.exception
     assert at.get("dataframe")
     assert any("single source of truth" in caption.value for caption in at.caption)
@@ -83,7 +84,7 @@ def test_routing_page_applies_twin_operational_failures() -> None:
 
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = twin
-    at.selectbox(key="page_nav").select("Routing Analysis").run()
+    open_page(at, "Routing Analysis")
 
     assert not at.exception
     assert any("currently models 1 failed device" in info.value for info in at.info)

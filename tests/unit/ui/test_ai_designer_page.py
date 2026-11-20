@@ -11,6 +11,7 @@ from agents import WorkflowState
 from core.exceptions import LLMProviderError
 from services.llm.testing import FakeProvider
 from tests.unit.simulation.helpers import diamond_twin
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 from ui.pages import ai_designer
 
@@ -34,7 +35,7 @@ def extraction(**overrides: object) -> str:
 def designer_page() -> AppTest:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120).run()
     assert not at.exception
-    at.selectbox(key="page_nav").select("AI Network Designer").run()
+    open_page(at, "AI Network Designer")
     assert not at.exception
     return at
 
@@ -89,7 +90,7 @@ def test_form_run_completes_without_a_key_and_keeps_the_baseline() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.TWIN_KEY] = baseline
     at.run()
-    at.selectbox(key="page_nav").select("AI Network Designer").run()
+    open_page(at, "AI Network Designer")
 
     at.button(key=ai_designer.RUN_BUTTON).click().run()
 
@@ -126,7 +127,7 @@ def test_free_text_interpretation_keeps_facts_and_assumptions_separate(
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.LLM_SESSION_KEY] = "gsk-designer-test-key"
     at.run()
-    at.selectbox(key="page_nav").select("AI Network Designer").run()
+    open_page(at, "AI Network Designer")
 
     at.text_area(key=ai_designer.FREE_TEXT_KEY).set_value(
         "Acme has one site, Headquarters. Engineering has 25 users. "
@@ -157,7 +158,7 @@ def test_provider_failure_is_shown_without_crashing(monkeypatch) -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.LLM_SESSION_KEY] = "gsk-designer-test-key"
     at.run()
-    at.selectbox(key="page_nav").select("AI Network Designer").run()
+    open_page(at, "AI Network Designer")
 
     at.text_area(key=ai_designer.FREE_TEXT_KEY).set_value("A small office.")
     at.button(key=ai_designer.INTERPRET_BUTTON).click().run()
@@ -186,7 +187,7 @@ def test_interpreted_requirements_drive_the_workflow(monkeypatch) -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.LLM_SESSION_KEY] = "gsk-designer-test-key"
     at.run()
-    at.selectbox(key="page_nav").select("AI Network Designer").run()
+    open_page(at, "AI Network Designer")
 
     at.text_area(key=ai_designer.FREE_TEXT_KEY).set_value(
         "Interpreted Org has one site, Remote. Engineering has 25 users and "
@@ -207,7 +208,7 @@ def test_apply_creates_a_new_snapshot_and_never_replaces_the_baseline() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.TWIN_KEY] = baseline
     at.run()
-    at.selectbox(key="page_nav").select("AI Network Designer").run()
+    open_page(at, "AI Network Designer")
     at.button(key=ai_designer.RUN_BUTTON).click().run()
 
     at.text_input(key=ai_designer.SNAPSHOT_LABEL_KEY).set_value("AI design test")
@@ -238,7 +239,7 @@ def test_the_session_key_is_never_rendered_or_written_to_the_trace(
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.LLM_SESSION_KEY] = secret
     at.run()
-    at.selectbox(key="page_nav").select("AI Network Designer").run()
+    open_page(at, "AI Network Designer")
     at.text_area(key=ai_designer.FREE_TEXT_KEY).set_value(
         "Acme. Engineering has 25 users. The total is 25 users."
     )

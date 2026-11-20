@@ -41,7 +41,7 @@ from network.topology import (
     update_link,
 )
 from services.validation import ValidationCategory, build_design_health
-from ui import state
+from ui import state, theme
 from ui.components import findings_frame, page_header
 from ui.components.editors import bump_editor_key, editor_key
 
@@ -59,19 +59,19 @@ GENERATOR_FAMILIES = (
 )
 
 ROLE_COLORS = {
-    "core": "#1f3a5f",
-    "distribution": "#2f6690",
-    "aggregation": "#3d7ea6",
-    "access": "#7fa8c9",
-    "border": "#6b4c3b",
-    "edge": "#4f7cac",
-    "wan": "#6b4c3b",
-    "dmz": "#8a6d3b",
+    "core": theme.color("role_core"),
+    "distribution": theme.color("role_distribution"),
+    "aggregation": theme.color("role_aggregation"),
+    "access": theme.color("role_access"),
+    "border": theme.color("role_border"),
+    "edge": theme.color("role_edge"),
+    "wan": theme.color("role_border"),
+    "dmz": theme.color("role_wan"),
 }
 
 LINK_STYLES = (
-    (False, "Undirected link", "solid", "#9aa7b4"),
-    (True, "Directed link", "dash", "#a15c2f"),
+    (False, "Undirected link", "solid", theme.color("link_undirected")),
+    (True, "Directed link", "dash", theme.color("link_directed")),
 )
 
 
@@ -639,11 +639,11 @@ def _build_figure(topology: Topology) -> go.Figure | None:
                 mode="markers+text" if show_labels else "markers",
                 text=nodes if show_labels else None,
                 textposition="top center",
-                textfont={"size": 10, "color": "#33414f"},
+                textfont={"size": 10, "color": theme.color("chart_text")},
                 marker={
                     "size": 18,
-                    "color": ROLE_COLORS.get(role, "#7fa8c9"),
-                    "line": {"width": 1, "color": "#ffffff"},
+                    "color": ROLE_COLORS.get(role, theme.color("role_access")),
+                    "line": {"width": 1, "color": theme.color("background")},
                 },
                 customdata=[
                     [
@@ -666,8 +666,8 @@ def _build_figure(topology: Topology) -> go.Figure | None:
     figure.update_layout(
         height=520,
         margin={"l": 10, "r": 10, "t": 30, "b": 10},
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#ffffff",
+        paper_bgcolor=theme.color("background"),
+        plot_bgcolor=theme.color("background"),
         legend={
             "orientation": "h",
             "yanchor": "bottom",

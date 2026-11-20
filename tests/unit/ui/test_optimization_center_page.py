@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 
 from optimization import SEARCH_NOTE
 from tests.unit.simulation.helpers import diamond_twin, make_demand
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 from ui.pages.optimization_center import SNAPSHOT_LABEL_KEY
 
@@ -22,7 +23,7 @@ def test_optimization_center_requires_a_twin() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("Optimization Center").run()
+    open_page(at, "Optimization Center")
 
     assert not at.exception
     assert any("No digital twin" in info.value for info in at.info)
@@ -32,7 +33,7 @@ def test_optimization_center_requires_a_twin() -> None:
 def test_optimization_center_requires_demands() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = diamond_twin()
-    at.selectbox(key="page_nav").select("Optimization Center").run()
+    open_page(at, "Optimization Center")
 
     assert not at.exception
     assert any("no traffic demands" in info.value for info in at.info)
@@ -41,7 +42,7 @@ def test_optimization_center_requires_demands() -> None:
 def test_optimization_center_runs_and_shows_results() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.selectbox(key="page_nav").select("Optimization Center").run()
+    open_page(at, "Optimization Center")
 
     assert not at.exception
     assert any(SEARCH_NOTE in info.value for info in at.info)
@@ -64,7 +65,7 @@ def test_optimization_center_runs_and_shows_results() -> None:
 def test_optimization_center_parses_a_candidate_pool() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.selectbox(key="page_nav").select("Optimization Center").run()
+    open_page(at, "Optimization Center")
 
     at.session_state["optimization_pool_editor"] = {
         "edited_rows": {},
@@ -93,7 +94,7 @@ def test_optimization_center_parses_a_candidate_pool() -> None:
 def test_optimization_center_saves_an_explicit_snapshot() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.selectbox(key="page_nav").select("Optimization Center").run()
+    open_page(at, "Optimization Center")
     at.button(key="optimization_run").click().run()
 
     assert not at.exception
@@ -109,7 +110,7 @@ def test_optimization_center_saves_an_explicit_snapshot() -> None:
 def test_optimization_center_excludes_infeasible_recommendations() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.selectbox(key="page_nav").select("Optimization Center").run()
+    open_page(at, "Optimization Center")
 
     # Requiring zero devices makes every candidate infeasible.
     at.session_state["optimization_max_nodes"] = 0

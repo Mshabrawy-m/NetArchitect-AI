@@ -46,6 +46,79 @@ def empty_state(
         st.caption(hint)
 
 
+def metric_tile(
+    label: str,
+    value: str | float,
+    *,
+    help: str | None = None,
+    delta: str | float | None = None,
+) -> None:
+    """Render one metric using the shared bordered-tile treatment."""
+    st.metric(label, value, delta=delta, help=help, border=True)
+
+
+def status_badge(status: str, *, label: str | None = None) -> None:
+    """Render a text status with a semantic color; never color-only."""
+    colors = {
+        "done": "green",
+        "complete": "green",
+        "ok": "green",
+        "incomplete": "grey",
+        "stale": "orange",
+        "warning": "orange",
+        "warn": "orange",
+        "critical": "red",
+        "error": "red",
+        "info": "blue",
+    }
+    normalized = status.lower()
+    text = label or status.replace("_", " ").capitalize()
+    st.badge(text, color=colors.get(normalized, "blue"))
+
+
+def section_header(
+    title: str,
+    *,
+    description: str = "",
+    divider: bool = False,
+) -> None:
+    """Render a consistent section heading and optional one-line description."""
+    st.subheader(title, divider=divider)
+    if description:
+        st.caption(description)
+
+
+def callout(
+    text: str,
+    *,
+    kind: str = "info",
+    title: str | None = None,
+) -> None:
+    """Render an information, warning, or model-estimate callout."""
+    if kind == "warn":
+        st.warning(text, title=title or "Review required")
+    elif kind == "model_estimate":
+        st.info(text, title=title or "Model estimate")
+    elif kind == "info":
+        st.info(text, title=title or "Note")
+    else:
+        raise ValueError(f"Unsupported callout kind: {kind!r}")
+
+
+def key_value_list(
+    values: Sequence[tuple[str, object]],
+    *,
+    key_header: str = "Field",
+    value_header: str = "Value",
+) -> None:
+    """Render key/value properties as a full-width, readable table."""
+    rows = [
+        {key_header: key, value_header: "" if value is None else str(value)}
+        for key, value in values
+    ]
+    st.dataframe(rows, hide_index=True, width="stretch")
+
+
 def model_estimate_note(text: str, *, title: str = "Model scope") -> None:
     """Render the standard note that separates modeled estimates from measurements."""
     st.info(text, title=title)
@@ -102,12 +175,17 @@ from .health import render_design_health
 
 __all__ = [
     "SEVERITY_ORDER",
+    "callout",
     "csv_bytes",
     "empty_state",
     "findings_frame",
     "format_error",
+    "key_value_list",
+    "metric_tile",
     "model_estimate_note",
     "page_header",
     "render_design_health",
     "render_findings",
+    "section_header",
+    "status_badge",
 ]

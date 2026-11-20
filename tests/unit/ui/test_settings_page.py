@@ -10,6 +10,7 @@ from agents import WorkflowState, WorkflowStopReason
 from core.exceptions import LLMProviderError
 from services.llm import LLMResponse, LLMUsage, RequestBudget
 from tests.unit.simulation.helpers import diamond_twin
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 from ui.components.requirements_form import PLAN_STATE_KEY, RUN_BUTTON_KEY
 from ui.pages import settings as settings_page
@@ -20,7 +21,7 @@ APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 def _settings_page() -> AppTest:
     at = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
     assert not at.exception
-    at.selectbox(key="page_nav").select("Settings").run()
+    open_page(at, "Settings")
     assert not at.exception
     return at
 
@@ -78,7 +79,7 @@ def test_settings_page_shows_key_presence_but_never_the_key() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=60)
     at.session_state[state.LLM_SESSION_KEY] = secret
     at.run()
-    at.selectbox(key="page_nav").select("Settings").run()
+    open_page(at, "Settings")
 
     assert not at.exception
     assert _metric(at, "API key configured") == "Yes"
@@ -117,7 +118,7 @@ def test_settings_page_shows_and_resets_the_session_budget() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=60)
     at.session_state[state.LLM_BUDGET_KEY] = budget
     at.run()
-    at.selectbox(key="page_nav").select("Settings").run()
+    open_page(at, "Settings")
 
     assert _metric(at, "Requests used") == f"3/{budget.max_calls}"
     assert _metric(at, "Tokens used") == f"1200/{budget.max_tokens}"
@@ -144,7 +145,7 @@ def test_settings_page_test_connection_reports_provider_failure(
     at = AppTest.from_file(str(APP_PATH), default_timeout=60)
     at.session_state[state.LLM_SESSION_KEY] = "gsk-test-key"
     at.run()
-    at.selectbox(key="page_nav").select("Settings").run()
+    open_page(at, "Settings")
     at.button(key=settings_page.TEST_BUTTON).click().run()
 
     assert not at.exception
@@ -169,7 +170,7 @@ def test_settings_page_test_connection_reports_success(monkeypatch) -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=60)
     at.session_state[state.LLM_SESSION_KEY] = "gsk-test-key"
     at.run()
-    at.selectbox(key="page_nav").select("Settings").run()
+    open_page(at, "Settings")
     at.button(key=settings_page.TEST_BUTTON).click().run()
 
     assert not at.exception
@@ -182,7 +183,7 @@ def test_settings_page_runs_the_deterministic_plan_from_the_form() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
     at.session_state[state.TWIN_KEY] = baseline
     at.run()
-    at.selectbox(key="page_nav").select("Settings").run()
+    open_page(at, "Settings")
 
     at.button(key=RUN_BUTTON_KEY).click().run()
 

@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 
 from simulation import MODEL_NOTE
 from tests.unit.simulation.helpers import diamond_twin, make_demand
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -21,7 +22,7 @@ def test_simulation_lab_requires_a_twin() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("Simulation Lab").run()
+    open_page(at, "Simulation Lab")
 
     assert not at.exception
     assert any("No digital twin is loaded" in info.value for info in at.info)
@@ -31,7 +32,7 @@ def test_simulation_lab_requires_a_twin() -> None:
 def test_simulation_lab_rejects_invalid_scenario() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.selectbox(key="page_nav").select("Simulation Lab").run()
+    open_page(at, "Simulation Lab")
 
     at.button(key="simulation_validate_scenario").click().run()
 
@@ -45,7 +46,7 @@ def test_simulation_lab_rejects_invalid_scenario() -> None:
 def test_simulation_lab_demand_editor_writes_to_twin() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = diamond_twin()
-    at.selectbox(key="page_nav").select("Simulation Lab").run()
+    open_page(at, "Simulation Lab")
 
     at.session_state["simulation_demand_editor"] = {
         "edited_rows": {},
@@ -73,7 +74,7 @@ def test_simulation_lab_demand_editor_writes_to_twin() -> None:
 def test_rejected_demand_edit_resets_the_editor_widget() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.selectbox(key="page_nav").select("Simulation Lab").run()
+    open_page(at, "Simulation Lab")
 
     at.session_state["simulation_demand_editor"] = {
         "edited_rows": {0: {"source": "ghost"}},
@@ -94,7 +95,7 @@ def test_rejected_demand_edit_resets_the_editor_widget() -> None:
 def test_simulation_lab_runs_and_compares_scenarios() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.selectbox(key="page_nav").select("Simulation Lab").run()
+    open_page(at, "Simulation Lab")
 
     assert any(MODEL_NOTE in info.value for info in at.info)
     assert at.button(key="simulation_apply_demands")

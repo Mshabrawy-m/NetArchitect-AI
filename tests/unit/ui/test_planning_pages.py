@@ -9,6 +9,7 @@ from streamlit.testing.v1 import AppTest
 from core.schemas.validation import ValidationReport
 from network.addressing import SubnetInfo, VlsmResult
 from network.vlan import VlanPlanResult
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -18,7 +19,7 @@ def test_ip_addressing_page_calculates_and_validates() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("IP Addressing & Subnetting").run()
+    open_page(at, "IP Addressing & Subnetting")
     assert not at.exception
 
     at.button(key="ip_cidr_calculate").click().run()
@@ -64,7 +65,7 @@ def test_vlan_dhcp_page_builds_default_plan() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("VLAN & DHCP Planner").run()
+    open_page(at, "VLAN & DHCP Planner")
     assert not at.exception
 
     at.button(key="vlan_build_plan").click().run()
@@ -103,7 +104,7 @@ def test_vlan_dhcp_page_reports_invalid_parent() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("VLAN & DHCP Planner").run()
+    open_page(at, "VLAN & DHCP Planner")
     at.text_input(key="vlan_parent").set_value("not-an-ip/16").run()
     at.button(key="vlan_build_plan").click().run()
 

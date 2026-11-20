@@ -53,7 +53,7 @@ from optimization import (
     run_to_json_bytes,
 )
 from simulation import twin_fingerprint
-from ui import state
+from ui import state, theme
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
 from ui.components.editors import bump_editor_key, editor_key
 
@@ -965,7 +965,7 @@ def _render_pareto_chart(run: OptimizationRun) -> None:
             y=[point[1] for point in evaluated_points],
             mode="markers",
             name="Evaluated feasible",
-            marker={"color": "#b8c4d0", "size": 7, "opacity": 0.6},
+            marker={"color": theme.color("util_none"), "size": 7, "opacity": 0.6},
             hoverinfo="skip",
         )
     )
@@ -982,9 +982,9 @@ def _render_pareto_chart(run: OptimizationRun) -> None:
             mode="markers",
             name="Reported Pareto front",
             marker={
-                "color": "#2f6690",
+                "color": theme.color("role_distribution"),
                 "size": 11,
-                "line": {"color": "#ffffff", "width": 1},
+                "line": {"color": theme.color("background"), "width": 1},
             },
         )
     )
@@ -999,18 +999,18 @@ def _render_pareto_chart(run: OptimizationRun) -> None:
                 text=["Baseline"],
                 textposition="top center",
                 marker={
-                    "color": "#b23c3c",
+                    "color": theme.color("critical"),
                     "size": 15,
                     "symbol": "diamond",
-                    "line": {"color": "#ffffff", "width": 1},
+                    "line": {"color": theme.color("background"), "width": 1},
                 },
             )
         )
     figure.update_layout(
         height=420,
         margin={"l": 10, "r": 10, "t": 30, "b": 60},
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#ffffff",
+        paper_bgcolor=theme.color("background"),
+        plot_bgcolor=theme.color("background"),
         xaxis_title=(
             f"{first.label} ({first.unit}) - "
             f"{DIRECTION_TEXT[first.direction.value]}"

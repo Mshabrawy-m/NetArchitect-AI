@@ -33,18 +33,18 @@ from network.routing import (
     shortest_path,
 )
 from network.topology import to_networkx
-from ui import state
+from ui import state, theme
 from ui.components import csv_bytes, empty_state, format_error, page_header
 
 ROLE_COLORS = {
-    "core": "#1f3a5f",
-    "distribution": "#2f6690",
-    "aggregation": "#3d7ea6",
-    "access": "#7fa8c9",
-    "border": "#6b4c3b",
-    "edge": "#4f7cac",
-    "wan": "#6b4c3b",
-    "dmz": "#8a6d3b",
+    "core": theme.color("role_core"),
+    "distribution": theme.color("role_distribution"),
+    "aggregation": theme.color("role_aggregation"),
+    "access": theme.color("role_access"),
+    "border": theme.color("role_border"),
+    "edge": theme.color("role_edge"),
+    "wan": theme.color("role_border"),
+    "dmz": theme.color("role_wan"),
 }
 
 
@@ -180,8 +180,8 @@ def _build_figure(
     figure = go.Figure()
 
     for directed, label, dash, color in (
-        (False, "Undirected link", "solid", "#9aa7b4"),
-        (True, "Directed link", "dash", "#a15c2f"),
+        (False, "Undirected link", "solid", theme.color("link_undirected")),
+        (True, "Directed link", "dash", theme.color("link_directed")),
     ):
         x_values: list[float | None] = []
         y_values: list[float | None] = []
@@ -219,7 +219,7 @@ def _build_figure(
                 x=failed_x,
                 y=failed_y,
                 mode="lines",
-                line={"color": "#b23c3c", "width": 2.4, "dash": "dot"},
+                line={"color": theme.color("critical"), "width": 2.4, "dash": "dot"},
                 hoverinfo="skip",
                 name="Failed link",
             )
@@ -227,7 +227,7 @@ def _build_figure(
 
     highlights: list[tuple[str, RoutePath, str, str]] = []
     if after_path is not None and after_path.reachable:
-        highlights.append(("Shortest path", after_path, "#1f6f8b", "solid"))
+        highlights.append(("Shortest path", after_path, theme.color("highlight"), "solid"))
     if (
         baseline_path is not None
         and baseline_path.reachable
@@ -236,7 +236,7 @@ def _build_figure(
             or baseline_path.device_ids != after_path.device_ids
         )
     ):
-        highlights.append(("Baseline path", baseline_path, "#b07a3a", "dash"))
+        highlights.append(("Baseline path", baseline_path, theme.color("baseline"), "dash"))
     for label, path, color, dash in highlights:
         x_values = []
         y_values = []
@@ -274,11 +274,11 @@ def _build_figure(
                 mode="markers+text" if show_labels else "markers",
                 text=nodes if show_labels else None,
                 textposition="top center",
-                textfont={"size": 10, "color": "#33414f"},
+                textfont={"size": 10, "color": theme.color("chart_text")},
                 marker={
                     "size": 18,
-                    "color": ROLE_COLORS.get(role, "#7fa8c9"),
-                    "line": {"width": 1, "color": "#ffffff"},
+                    "color": ROLE_COLORS.get(role, theme.color("role_access")),
+                    "line": {"width": 1, "color": theme.color("background")},
                 },
                 customdata=[
                     [
@@ -307,12 +307,12 @@ def _build_figure(
                 mode="markers+text" if show_labels else "markers",
                 text=failed_nodes if show_labels else None,
                 textposition="top center",
-                textfont={"size": 10, "color": "#7a2f2f"},
+                textfont={"size": 10, "color": theme.color("critical")},
                 marker={
                     "size": 14,
-                    "color": "#b23c3c",
+                    "color": theme.color("critical"),
                     "symbol": "x",
-                    "line": {"width": 1, "color": "#7a2f2f"},
+                    "line": {"width": 1, "color": theme.color("critical")},
                 },
                 hovertemplate="<b>%{text}</b><br>Failed device<extra></extra>",
                 name="Failed device",
@@ -322,8 +322,8 @@ def _build_figure(
     figure.update_layout(
         height=520,
         margin={"l": 10, "r": 10, "t": 30, "b": 10},
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#ffffff",
+        paper_bgcolor=theme.color("background"),
+        plot_bgcolor=theme.color("background"),
         legend={
             "orientation": "h",
             "yanchor": "bottom",

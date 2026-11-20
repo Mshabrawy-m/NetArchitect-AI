@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 
 from core.schemas.network import Topology
 from network.topology.connectivity import analyze_connectivity
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -17,7 +18,7 @@ def test_topology_editor_loads_and_generates_star() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=20).run()
     assert not at.exception
 
-    at.selectbox(key="page_nav").select("Topology Editor").run()
+    open_page(at, "Topology Editor")
     assert not at.exception
 
     at.button(key="generate_topology").click().run()

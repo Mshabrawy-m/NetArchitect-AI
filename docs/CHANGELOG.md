@@ -2,6 +2,32 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - D1: design system and navigation
+
+### Added
+- `ui/theme.py`: one token module with light/dark palettes, semantic status
+  colors, role and zone colors, a spacing scale, and WCAG contrast helpers.
+- Shared `ui.components` helpers: `metric_tile`, `status_badge`,
+  `section_header`, `callout`, `empty_state`, and `key_value_list`.
+- `ui/navigation.py` and 15 thin `app_pages/` entry files for native grouped
+  `st.navigation`/`st.Page` navigation.
+
+### Changed
+- `.streamlit/config.toml` now declares paired light and dark themes with one
+  typeface. Plotly colors in four UI pages use theme tokens instead of raw hex.
+- `app.py` no longer renders a `page_nav` selectbox. The Dashboard render
+  function moved to `ui/pages/dashboard.py` and is unchanged in behavior.
+- Navigation tests switch through registered page files. The prior assertion
+  that Security immediately followed Capacity in the flat selectbox order was
+  removed because the specified group order places Security in Analyze before
+  Capacity in Operate. New assertions cover the exact groups and page labels.
+
+### Evidence
+- `pytest -q` 1006 passed/3 deselected; `pytest -q -m smoke` 12 passed/
+  997 deselected; `ruff check .` clean.
+- A token scan test fails if any raw hex color appears in `ui/` outside
+  `ui/theme.py`; a contrast test asserts every text token pair is >= 4.5:1.
+
 ## 2026-11-20 - T5: bounded Hypothesis properties
 
 ### Added

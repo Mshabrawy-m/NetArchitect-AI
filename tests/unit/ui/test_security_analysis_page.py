@@ -10,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 from config.limits import MAX_SECURITY_FLOW_CHECKS
 from security import SECURITY_DISCLAIMER, FlowRequest, Protocol, get_security_model
 from tests.unit.security.design_helpers import case_design, hardened_design
+from tests.unit.ui.nav_helpers import open_page
 from ui import state
 from ui.pages import security_analysis as page
 
@@ -21,7 +22,7 @@ def _page(twin=None) -> AppTest:
     if twin is not None:
         at.session_state[state.TWIN_KEY] = twin
     at.run()
-    at.selectbox(key="page_nav").select("Security Analysis").run()
+    open_page(at, "Security Analysis")
     return at
 
 

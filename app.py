@@ -9,155 +9,26 @@ Settings page with a structured design-plan runner. Phase 10 adds the
 specialized requirements, critic, and documentation agents plus the AI Network
 Designer and read-only Agent Control Center pages. Phase 11 adds
 provenance-tagged reports, in-memory exports, and the Reports & Documentation
-page. The Topology Editor, IP Addressing, VLAN & DHCP Planner, Routing
-Analysis, Network Analytics, Digital Twin, Simulation Lab, Optimization Center,
-Capacity Planning, Security Analysis, AI Network Designer, Agent Control
-Center, Reports & Documentation, and Settings are working engineering pages.
+page. V2 adds grouped navigation and a shared design system; the 15 engineering
+page render functions remain in ``ui/pages``.
 """
 
 from __future__ import annotations
 
 import streamlit as st
 
-from ui import state
-from ui.components import empty_state, page_header, render_design_health
+from ui.navigation import PAGE_SPECS, build_navigation
 
-# Page modules are imported inside main() when selected. The Dashboard is the
+# Page modules are imported by app_pages/ when selected. The Dashboard is the
 # default page, so cold start must not import the report, export, agent, or
 # other rarely used page modules.
 
-# The 15 planned application pages from the blueprint (section 7).
-PAGES: tuple[str, ...] = (
-    "Dashboard",
-    "AI Network Designer",
-    "Topology Editor",
-    "IP Addressing & Subnetting",
-    "VLAN & DHCP Planner",
-    "Routing Analysis",
-    "Network Analytics",
-    "Digital Twin",
-    "Simulation Lab",
-    "Optimization Center",
-    "Capacity Planning",
-    "Security Analysis",
-    "Agent Control Center",
-    "Reports & Documentation",
-    "Settings",
-)
-
+PAGES: tuple[str, ...] = tuple(spec.title for spec in PAGE_SPECS)
 READY_PAGES: frozenset[str] = frozenset(PAGES)
 
 
-def render_sidebar_navigation() -> str:
-    """Render the sidebar navigation and return the selected page."""
-    with st.sidebar:
-        st.markdown("## Navigation")
-        page = st.selectbox("Page", PAGES, index=0, key="page_nav")
-        st.caption("All 15 pages are available.")
-        st.divider()
-        st.caption("NetArchitect AI - deterministic network engineering first.")
-    return page
-
-
-def render_dashboard() -> None:
-    """Render the application overview from twin and session data."""
-    page_header(
-        "Dashboard",
-        "Current state of the digital twin and the engineering runs retained in "
-        "this session.",
-    )
-
-    twin = state.get_twin()
-    if twin is None:
-        empty_state(
-            "No digital twin is loaded. Create one in the AI Network Designer "
-            "or generate or import a topology in the Topology Editor.",
-            title="Digital twin required",
-            hint=(
-                "The dashboard reports only data already stored in session "
-                "state. It does not create a design or run an engine."
-            ),
-        )
-        return
-
-    topology = twin.topology
-    snapshots = state.peek_snapshots()
-    scenarios = state.peek_simulation_runs()
-    optimizations = state.peek_optimization_runs()
-
-    columns = st.columns(6)
-    columns[0].metric("Devices", len(topology.devices))
-    columns[1].metric("Links", len(topology.links))
-    columns[2].metric("Demands", len(twin.demands))
-    columns[3].metric("Snapshots", len(snapshots))
-    columns[4].metric("Scenario runs", len(scenarios))
-    columns[5].metric("Optimization runs", len(optimizations))
-
-    addressing = twin.addressing
-    st.caption(
-        f"Twin: {twin.metadata.name} | Schema version: "
-        f"{twin.metadata.schema_version} | Created: "
-        f"{twin.metadata.created_at.isoformat()} | Subnets: "
-        f"{len(addressing.subnets) if addressing is not None else 0} | "
-        f"VLAN plans: "
-        f"{len(addressing.vlan_plans) if addressing is not None else 0} | "
-        f"DHCP scopes: {len(twin.dhcp_scopes)}"
-    )
-
-    render_design_health(twin)
-
-    st.subheader("Retained runs")
-    if not scenarios and not optimizations:
-        empty_state(
-            "No scenario or optimization runs are retained in this session. "
-            "Run one from the Simulation Lab or Optimization Center."
-        )
-        return
-
-    latest_columns = st.columns(2)
-    with latest_columns[0]:
-        if scenarios:
-            run = scenarios[-1]
-            status = (
-                "recovery available"
-                if run.comparison.recovery_available
-                else "not all baseline demands recovered"
-            )
-            st.metric(
-                "Latest scenario served demand",
-                f"{run.comparison.scenario_served_demand_ratio:.1%}",
-                help=f"Scenario: {run.scenario.name}. Status: {status}.",
-            )
-            st.caption(
-                f"{run.scenario.name} | {run.scenario.type.value} | "
-                f"{status} | {len(run.comparison.newly_unserved_demands)} newly "
-                "unserved demand(s)"
-            )
-        else:
-            st.caption("No scenario runs retained.")
-
-    with latest_columns[1]:
-        if optimizations:
-            run = optimizations[-1]
-            st.metric(
-                "Latest optimization evaluations",
-                run.evaluations,
-                help=(
-                    f"{run.algorithm.value}; stopped with "
-                    f"{run.stop_reason.value}."
-                ),
-            )
-            st.caption(
-                f"{run.algorithm.value} | {run.stop_reason.value} | "
-                f"{len(run.pareto_front)} Pareto candidate(s) | "
-                f"{'feasible best' if run.best is not None else 'no feasible best'}"
-            )
-        else:
-            st.caption("No optimization runs retained.")
-
-
 def main() -> None:
-    """Render the selected application page."""
+    """Build navigation and run the selected application page."""
     st.set_page_config(
         page_title="NetArchitect AI",
         page_icon=":material/hub:",
@@ -172,68 +43,10 @@ def main() -> None:
         },
     )
 
-    page = render_sidebar_navigation()
-
-    if page == "Dashboard":
-        render_dashboard()
-    elif page == "AI Network Designer":
-        from ui.pages.ai_designer import render as render_ai_designer
-
-        render_ai_designer()
-    elif page == "Topology Editor":
-        from ui.pages.topology_editor import render as render_topology_editor
-
-        render_topology_editor()
-    elif page == "IP Addressing & Subnetting":
-        from ui.pages.ip_addressing import render as render_ip_addressing
-
-        render_ip_addressing()
-    elif page == "VLAN & DHCP Planner":
-        from ui.pages.vlan_dhcp import render as render_vlan_dhcp
-
-        render_vlan_dhcp()
-    elif page == "Routing Analysis":
-        from ui.pages.routing_analysis import render as render_routing_analysis
-
-        render_routing_analysis()
-    elif page == "Network Analytics":
-        from ui.pages.network_analytics import render as render_network_analytics
-
-        render_network_analytics()
-    elif page == "Digital Twin":
-        from ui.pages.digital_twin import render as render_digital_twin
-
-        render_digital_twin()
-    elif page == "Simulation Lab":
-        from ui.pages.simulation_lab import render as render_simulation_lab
-
-        render_simulation_lab()
-    elif page == "Optimization Center":
-        from ui.pages.optimization_center import render as render_optimization_center
-
-        render_optimization_center()
-    elif page == "Capacity Planning":
-        from ui.pages.capacity_planning import render as render_capacity_planning
-
-        render_capacity_planning()
-    elif page == "Security Analysis":
-        from ui.pages.security_analysis import render as render_security_analysis
-
-        render_security_analysis()
-    elif page == "Agent Control Center":
-        from ui.pages.agent_control_center import (
-            render as render_agent_control_center,
-        )
-
-        render_agent_control_center()
-    elif page == "Reports & Documentation":
-        from ui.pages.reports import render as render_reports
-
-        render_reports()
-    elif page == "Settings":
-        from ui.pages.settings import render as render_settings
-
-        render_settings()
+    page = st.navigation(build_navigation(), position="sidebar")
+    with st.sidebar:
+        st.caption("NetArchitect AI - deterministic network engineering first.")
+    page.run()
 
 
 if __name__ == "__main__":

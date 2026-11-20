@@ -59,6 +59,7 @@ from tests.unit.simulation.helpers import (
     make_demand,
     make_scenario,
 )
+from tests.unit.ui.nav_helpers import open_page
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 GENERATED_AT = datetime(2026, 11, 18, 12, 0, tzinfo=UTC)
@@ -356,7 +357,7 @@ def test_structured_design_and_all_pages_work_with_no_api_key(monkeypatch) -> No
         for page in PAGES:
             at = AppTest.from_file(str(APP_PATH), default_timeout=120).run()
             assert not at.exception
-            at.selectbox(key="page_nav").select(page).run()
+            open_page(at, page)
             assert not at.exception
             assert at.title[0].value == page
             text = _rendered_text(at)
