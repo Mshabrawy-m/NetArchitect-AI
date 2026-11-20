@@ -2,6 +2,24 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-20 - T5: bounded Hypothesis properties
+
+### Added
+- `tests/property/` with eight bounded properties for VLSM (IPv4/IPv6),
+  deterministic shortest-path walks under failures, twin JSON/fingerprint and
+  legacy-v1 round trips, CSV formula neutralization, and optimizer hard-constraint
+  infeasibility.
+- Shared `BOUNDED` Hypothesis settings: 50 examples, `derandomize=True`, and no
+  deadline, so default and smoke runs stay deterministic and bounded.
+
+### Evidence
+- `pytest -q` 1000 passed/3 deselected; `pytest -q -m smoke` 12 passed/
+  991 deselected; `pytest -q -m perf` 3 passed/1000 deselected;
+  `ruff check .` clean.
+- A local 1000-example probe of the same properties passed. No product bug was
+  found; one incorrect IPv6 prefix assertion in the new test itself was
+  corrected before commit.
+
 ## 2026-11-20 - T4: cold-start lazy imports
 
 ### Added
