@@ -12,9 +12,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 
-import networkx as nx
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 from pydantic import ValidationError
 
@@ -36,14 +34,14 @@ from network.topology import (
     remove_device,
     remove_link,
     to_json,
-    to_networkx,
     update_device,
     update_link,
 )
 from services.validation import ValidationCategory, build_design_health
-from ui import state, theme
+from ui import state
 from ui.components import findings_frame, page_header
 from ui.components.editors import bump_editor_key, editor_key
+from ui.topology_view import render_topology_view
 
 DEVICE_COLUMNS = ("id", "type", "site", "role")
 LINK_COLUMNS = ("id", "endpoint_a", "endpoint_b", "capacity_mbps", "cost", "directed")
@@ -57,23 +55,6 @@ GENERATOR_FAMILIES = (
     "Spine-leaf",
     "Hybrid",
 )
-
-ROLE_COLORS = {
-    "core": theme.color("role_core"),
-    "distribution": theme.color("role_distribution"),
-    "aggregation": theme.color("role_aggregation"),
-    "access": theme.color("role_access"),
-    "border": theme.color("role_border"),
-    "edge": theme.color("role_edge"),
-    "wan": theme.color("role_border"),
-    "dmz": theme.color("role_wan"),
-}
-
-LINK_STYLES = (
-    (False, "Undirected link", "solid", theme.color("link_undirected")),
-    (True, "Directed link", "dash", theme.color("link_directed")),
-)
-
 
 def _flash(level: str, message: str) -> None:
     """Queue a one-shot message to display after the next rerun."""
@@ -581,108 +562,6 @@ def _render_tables(topology: Topology) -> None:
                     st.info("No link changes to apply.")
 
 
-def _build_figure(topology: Topology) -> go.Figure | None:
-    engine_graph = to_networkx(topology)
-    if engine_graph.number_of_nodes() == 0:
-        return None
-
-    layout_graph = nx.Graph()
-    for node in engine_graph.nodes:
-        layout_graph.add_node(node)
-
-    seen_links: set[str] = set()
-    links: list[tuple[str, str, bool]] = []
-    for source, target, attributes in engine_graph.edges(data=True):
-        link_id = str(attributes["link_id"])
-        if link_id in seen_links:
-            continue
-        seen_links.add(link_id)
-        links.append((source, target, bool(attributes["directed"])))
-        if not layout_graph.has_edge(source, target):
-            layout_graph.add_edge(source, target)
-
-    positions = nx.spring_layout(layout_graph, seed=42, iterations=60)
-    figure = go.Figure()
-
-    for directed, label, dash, color in LINK_STYLES:
-        x_values: list[float | None] = []
-        y_values: list[float | None] = []
-        for source, target, is_directed in links:
-            if is_directed is not directed:
-                continue
-            source_x, source_y = positions[source]
-            target_x, target_y = positions[target]
-            x_values.extend([source_x, target_x, None])
-            y_values.extend([source_y, target_y, None])
-        if x_values:
-            figure.add_trace(
-                go.Scatter(
-                    x=x_values,
-                    y=y_values,
-                    mode="lines",
-                    line={"color": color, "width": 1.4, "dash": dash},
-                    hoverinfo="skip",
-                    name=label,
-                )
-            )
-
-    roles = sorted({engine_graph.nodes[node]["role"] for node in engine_graph.nodes})
-    show_labels = engine_graph.number_of_nodes() <= 30
-    for role in roles:
-        nodes = [
-            node for node in engine_graph.nodes if engine_graph.nodes[node]["role"] == role
-        ]
-        figure.add_trace(
-            go.Scatter(
-                x=[positions[node][0] for node in nodes],
-                y=[positions[node][1] for node in nodes],
-                mode="markers+text" if show_labels else "markers",
-                text=nodes if show_labels else None,
-                textposition="top center",
-                textfont={"size": 10, "color": theme.color("chart_text")},
-                marker={
-                    "size": 18,
-                    "color": ROLE_COLORS.get(role, theme.color("role_access")),
-                    "line": {"width": 1, "color": theme.color("background")},
-                },
-                customdata=[
-                    [
-                        node,
-                        engine_graph.nodes[node]["type"],
-                        engine_graph.nodes[node]["site"],
-                        engine_graph.nodes[node]["role"],
-                    ]
-                    for node in nodes
-                ],
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b><br>Type: %{customdata[1]}"
-                    "<br>Site: %{customdata[2]}<br>Role: %{customdata[3]}"
-                    "<extra></extra>"
-                ),
-                name=role.replace("_", " ").capitalize(),
-            )
-        )
-
-    figure.update_layout(
-        height=520,
-        margin={"l": 10, "r": 10, "t": 30, "b": 10},
-        paper_bgcolor=theme.color("background"),
-        plot_bgcolor=theme.color("background"),
-        legend={
-            "orientation": "h",
-            "yanchor": "bottom",
-            "y": 1.02,
-            "xanchor": "left",
-            "x": 0,
-            "font": {"size": 11},
-        },
-        hovermode="closest",
-    )
-    figure.update_xaxes(visible=False)
-    figure.update_yaxes(visible=False)
-    return figure
-
-
 def _render_connectivity(topology: Topology) -> None:
     report = analyze_connectivity(topology)
     columns = st.columns(4)
@@ -750,25 +629,7 @@ def _render_twin_consistency() -> None:
 
 
 def _render_diagram(topology: Topology) -> None:
-    with st.container(border=True):
-        st.subheader("Diagram")
-        st.caption(
-            "Deterministic spring layout (seed 42). Link style shows direction; "
-            "node color shows hierarchical role."
-        )
-        figure = _build_figure(topology)
-        if figure is None:
-            st.info("The topology has no devices to display.")
-            return
-        st.plotly_chart(
-            figure,
-            width="stretch",
-            config={"displayModeBar": False},
-            alt=(
-                f"Topology diagram with {len(topology.devices)} devices and "
-                f"{len(topology.links)} links"
-            ),
-        )
+    render_topology_view(topology)
 
 
 def _render_json(topology: Topology | None) -> None:

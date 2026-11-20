@@ -2,6 +2,39 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - D3: layered topology UX
+
+### Added
+- `ui/topology_view.py`: deterministic bounded layered layout, device-type
+  marker shapes, stable zone colors, role/utilization color modes, a fixed
+  metadata legend, bounded label thinning, and hover details for devices/links.
+- Plotly point selection for devices and link midpoints, a keyboard-reachable
+  entity picker, an inspector with properties, and quick actions that queue
+  node/link failure scenarios in the existing Simulation Lab session keys.
+- Two alternating Plotly chart keys so selection can be cleared or replaced
+  without assigning a mounted widget key; no new session state grows per click.
+- Focused tests for deterministic tier order, bounded coordinates, symbol and
+  legend coverage, color tokens, hover/selection metadata, inspector actions,
+  and clearing selection.
+
+### Changed
+- `ui/pages/topology_editor.py` now delegates only its diagram section to
+  `render_topology_view`. Generators, table editors, JSON import/export, and
+  twin-consistency reporting are unchanged.
+- The old NetworkX spring-layout figure and role-only color map were removed;
+  no engine, schema, or runtime dependency changed.
+
+### Evidence
+- Focused tests: 11 passed.
+- `pytest -q`: 1030 passed/3 deselected.
+- `pytest -q -m smoke`: 12 passed/1021 deselected.
+- `ruff check .`: All checks passed!
+- Fresh runtime-only venv: health `ok`, root status 200, 15 pages rendered by
+  `scripts/verify_runtime_only.py`, pytest absent.
+- Live Streamlit agent API: Topology page generated a star topology, exposed
+  Color by / Inspect entity / Clear selection, and reported no exceptions or
+  server warnings.
+
 ## 2026-11-21 - D2: guided workflow and sample projects
 
 ### Added

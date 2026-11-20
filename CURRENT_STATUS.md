@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: v1.0.0 released; V2 design package on `feature/v2-design`
-- Current task: D2 guided progress and samples complete; D3-D5 pending
-- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, and confirmation-gated sample projects. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
+- Current task: D3 topology UX complete; D4-D5 pending
+- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, confirmation-gated sample projects, and a deterministic layered topology diagram with click/keyboard inspection. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
 - Last updated: 2026-11-21
 - Branch: `feature/v2-design` (created from updated `main`)
 
@@ -73,6 +73,24 @@
   The optimizer fixture in the progress tests uses the matching a-b-c-d pool
   twin because the default pool links are not endpoints of the campus fixture;
   source fingerprint assertions remain explicit in the crafted session data.
+- D3: `ui/topology_view.py` replaces the spring-layout figure with bounded
+  left-to-right tiers ordered by role (WAN/border, DMZ/core, distribution/
+  aggregation, access/edge, endpoints). Device type is encoded by marker shape,
+  and color can be switched between role, stable site-derived zone, and latest
+  baseline-simulation utilization. A fixed legend covers every type and color
+  mode; labels thin out above 30 devices while hover details stay available.
+  Clicking a device or link midpoint populates an inspector with properties and
+  quick actions that queue node/link failure scenarios. The picker is also a
+  keyboard-accessible selection path. Plotly selection uses two alternating
+  widget keys so clearing/reselecting stays bounded and never assigns a widget
+  key directly.
+- D3 evidence: focused tests 11 passed; `pytest -q` 1030 passed/3 deselected;
+  `pytest -q -m smoke` 12 passed/1021 deselected; `ruff check .` clean; fresh
+  runtime-only venv health `ok`, root 200, 15 pages rendered, pytest absent.
+  Live Streamlit agent API switched to the Topology page, generated a star
+  topology, showed Color by / Inspect entity / Clear selection controls, and
+  reported no exceptions or server warnings. No engine, schema, or editor table
+  behavior was changed.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
