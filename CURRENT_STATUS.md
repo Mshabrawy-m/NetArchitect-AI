@@ -2,7 +2,7 @@
 
 ## Overall
 - Current phase: v1.0.0 released; V2 design package on `feature/v2-design`
-- Current task: D5 accessibility and formatting complete; final verification package in progress
+- Current task: D1-D5 complete; final verification/report package delivered
 - Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, confirmation-gated sample projects, a deterministic layered topology diagram with click/keyboard inspection, session-scoped ar/en interface text with RTL support, and consistent accessibility/formatting behavior. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
 - Last updated: 2026-11-21
 - Branch: `feature/v2-design` (created from updated `main`)
@@ -122,8 +122,13 @@
 - D5 evidence: focused UI tests 153 passed; `pytest -q` 1048 passed/3 deselected;
   `pytest -q -m smoke` 12 passed/1039 deselected; `ruff check .` clean; fresh
   runtime-only venv health `ok`, root 200, 15 pages rendered, pytest absent.
-  Profile imports: app total `1578519` us; Dashboard first render `1.365` s.
+  Final clean profile imports: app total `1459589` us; Dashboard first render
+  `1.340` s.
   No engine, schema, export, PDF, state, or runtime dependency changed.
+- Final package: `docs/V2_FINAL_REPORT.md` records the D1-D5 file/change table,
+  verbatim final command output, before/after Dashboard timing, six real-browser
+  screens in `docs/screenshots/`, and the remaining unverified items. The live
+  Streamlit server and CDP browser used for the screens were stopped afterward.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

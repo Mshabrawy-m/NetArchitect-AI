@@ -30,7 +30,8 @@ All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 - `ruff check .`: All checks passed!
 - Fresh runtime-only venv: health `ok`, root status 200, 15 pages rendered by
   `scripts/verify_runtime_only.py`, pytest absent.
-- Profile imports: app total `1578519` us; Dashboard first render `1.365` s.
+- Final clean profile imports: app total `1459589` us; Dashboard first render
+  `1.340` s.
 
 ## 2026-11-21 - D4: ar/en interface and RTL
 
