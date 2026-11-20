@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: v1.0.0 released; V2 design package on `feature/v2-design`
-- Current task: D4 ar/en i18n and RTL complete; D5 pending
-- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, confirmation-gated sample projects, a deterministic layered topology diagram with click/keyboard inspection, and session-scoped ar/en interface text with RTL support. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
+- Current task: D5 accessibility and formatting complete; final verification package in progress
+- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, confirmation-gated sample projects, a deterministic layered topology diagram with click/keyboard inspection, session-scoped ar/en interface text with RTL support, and consistent accessibility/formatting behavior. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
 - Last updated: 2026-11-21
 - Branch: `feature/v2-design` (created from updated `main`)
 
@@ -109,6 +109,21 @@
   toggle back to English. One existing release test was updated: the About-menu
   source scan now reads `i18n.EN["app.about"]` because the wording moved from
   `app.py` into the catalog. English defaults preserve existing test wording.
+- D5: `ui/formatting.py` centralizes grouped numbers, percentages, ratios,
+  Mbps/ms units, signed deltas, and bounded missing-value handling. English and
+  Arabic tokens are explicit; Arabic numeric/unit tokens receive the same LTR
+  isolation as other engineering terms. `ui/components/feedback.py` adds one
+  shared spinner for the bounded synchronous provider, workflow, connection,
+  CSV, forecast, capacity, and scenario actions. Domain errors use the shared
+  `format_error` helper. The simulation congestion chart adds visible level
+  labels and hover text so its colors are not the only meaning. Static tests
+  enforce visible widget labels, full-width tables, one RTL stylesheet, text
+  contrast >= 4.5:1, and no raw `st.error(str(error))`.
+- D5 evidence: focused UI tests 153 passed; `pytest -q` 1048 passed/3 deselected;
+  `pytest -q -m smoke` 12 passed/1039 deselected; `ruff check .` clean; fresh
+  runtime-only venv health `ok`, root 200, 15 pages rendered, pytest absent.
+  Profile imports: app total `1578519` us; Dashboard first render `1.365` s.
+  No engine, schema, export, PDF, state, or runtime dependency changed.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

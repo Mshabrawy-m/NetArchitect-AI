@@ -2,6 +2,36 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - D5: accessibility and consistent formatting
+
+### Added
+- `ui/formatting.py`: bounded number, percentage, ratio, Mbps, ms, signed-delta,
+  and missing-value formatting with LTR isolation for Arabic sessions.
+- `ui/components/feedback.py`: one shared spinner for bounded synchronous
+  provider, workflow, connection, CSV, forecast, capacity, and scenario actions.
+- `tests/unit/ui/test_d5_accessibility.py`: static checks for visible widget
+  labels, full-width tables, shared error formatting, one RTL stylesheet, and
+  text contrast >= 4.5:1; behavioral checks for status text, congestion labels,
+  and English/Arabic numeric formatting.
+
+### Changed
+- Simulation metrics, topology hover/inspector values, forecast tables, twin
+  diffs, optimization scores, and Dashboard ratios now use the shared formatters.
+- Congestion bars carry visible level labels and hover text, so color is not the
+  only cue. Long-running actions show one loading message on the script thread.
+- Domain errors in capacity, digital twin, security, settings, AI designer, and
+  Simulation Lab use `format_error`. No thread, worker, disk write, cache,
+  engine, schema, export, PDF, or runtime dependency was added.
+
+### Evidence
+- Focused UI tests: 153 passed.
+- `pytest -q`: 1048 passed/3 deselected.
+- `pytest -q -m smoke`: 12 passed/1039 deselected.
+- `ruff check .`: All checks passed!
+- Fresh runtime-only venv: health `ok`, root status 200, 15 pages rendered by
+  `scripts/verify_runtime_only.py`, pytest absent.
+- Profile imports: app total `1578519` us; Dashboard first render `1.365` s.
+
 ## 2026-11-21 - D4: ar/en interface and RTL
 
 ### Added

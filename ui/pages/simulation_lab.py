@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Mapping, Sequence
 
 import networkx as nx
 import pandas as pd
@@ -41,9 +42,10 @@ from simulation import (
     validate_scenario,
 )
 from simulation.models import CongestionThresholds, SimulationAssumptions
-from ui import state, theme
+from ui import formatting, i18n, state, theme
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
 from ui.components.editors import bump_editor_key, editor_key
+from ui.components.feedback import working
 
 VIEW_RUN_KEY = "simulation_view_run"
 FLASH_KEY = "simulation_flash"
@@ -615,7 +617,8 @@ def _render_scenario_builder(twin: DigitalTwin) -> None:
         )
         return
     try:
-        run = run_scenario(twin, scenario, assumptions)
+        with working(i18n.t("loading.scenario")):
+            run = run_scenario(twin, scenario, assumptions)
         state.add_simulation_run(run)
     except (NetArchitectError, ValidationError, ValueError) as error:
         st.error(format_error(error), title="Scenario run failed")
@@ -648,6 +651,19 @@ def _row_color(row: pd.Series) -> list[str]:
     return [f"background-color: {color}"] * len(row)
 
 
+def _scenario_level_labels(
+    link_ids: Sequence[str],
+    after: Mapping[str, object],
+) -> list[str]:
+    """Return visible congestion labels so bar colors are never the only cue."""
+    labels: list[str] = []
+    for link_id in link_ids:
+        link = after.get(link_id)
+        level = getattr(getattr(link, "level", None), "value", None)
+        labels.append(str(level) if level is not None else "failed")
+    return labels
+
+
 def _render_headline_metrics(run: ScenarioRun) -> None:
     baseline = run.baseline_state
     scenario = run.scenario_state
@@ -656,26 +672,30 @@ def _render_headline_metrics(run: ScenarioRun) -> None:
     columns[0].metric(
         "Served demands",
         f"{scenario.served_demand_count}/{scenario.demand_count}",
-        delta=(
-            f"{scenario.served_demand_count - baseline.served_demand_count:+d}"
+        delta=formatting.signed_int(
+            scenario.served_demand_count - baseline.served_demand_count
         ),
     )
     columns[1].metric(
         "Max utilization",
-        f"{scenario.max_utilization_percent:.2f}%",
-        delta=f"{comparison.max_utilization_delta_percent:+.2f} pp",
+        formatting.percent(scenario.max_utilization_percent, decimals=2),
+        delta=formatting.signed(
+            comparison.max_utilization_delta_percent,
+            decimals=2,
+            unit=" pp",
+        ),
         delta_color="inverse",
     )
     columns[2].metric(
         "Congested links",
         scenario.congested_link_count,
-        delta=f"{comparison.congested_link_delta:+d}",
+        delta=formatting.signed_int(comparison.congested_link_delta),
         delta_color="inverse",
     )
     columns[3].metric(
         "Overloaded links",
         scenario.overloaded_link_count,
-        delta=f"{comparison.overloaded_link_delta:+d}",
+        delta=formatting.signed_int(comparison.overloaded_link_delta),
         delta_color="inverse",
     )
     columns[4].metric(
@@ -716,6 +736,7 @@ def _render_utilization_chart(run: ScenarioRun) -> None:
             if link is not None
             else LINK_COLORS["failed"]
         )
+    level_labels = _scenario_level_labels(ordered, after)
     figure = go.Figure()
     figure.add_trace(
         go.Bar(
@@ -737,6 +758,13 @@ def _render_utilization_chart(run: ScenarioRun) -> None:
             ],
             name="Scenario utilization",
             marker_color=scenario_colors,
+            text=level_labels,
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate=(
+                "%{{x}}<br>Utilization: %{{y:.2f}}%<br>"
+                f"{i18n.t('chart.congestion')}: %{{text}}<extra></extra>"
+            ),
         )
     )
     for value, label, color in (
@@ -755,7 +783,7 @@ def _render_utilization_chart(run: ScenarioRun) -> None:
     figure.update_layout(
         barmode="group",
         height=380,
-        margin={"l": 10, "r": 10, "t": 30, "b": 70},
+        margin={"l": 10, "r": 10, "t": 48, "b": 70},
         paper_bgcolor=theme.color("background"),
         plot_bgcolor=theme.color("background"),
         xaxis_title="Link",

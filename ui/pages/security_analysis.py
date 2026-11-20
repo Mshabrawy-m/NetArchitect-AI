@@ -602,7 +602,7 @@ def _render_flow_tab(twin, analysis) -> None:
             try:
                 removed = state.remove_security_flow(int(selected))
             except (IndexError, ValueError, TypeError) as error:
-                st.error(str(error))
+                st.error(format_error(error))
             else:
                 st.success(f"Removed flow check {removed.id!r}.")
                 st.rerun()

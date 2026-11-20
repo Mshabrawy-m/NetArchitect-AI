@@ -34,8 +34,9 @@ from config.settings import get_settings
 from core.exceptions import NetArchitectError
 from core.schemas.requirements import NetworkRequirements, UserFacts
 from services.llm import GroqProvider, LLMProvider
-from ui import state
+from ui import i18n, state
 from ui.components import format_error, page_header
+from ui.components.feedback import working
 from ui.components.requirements_form import MAX_DEPARTMENTS, build_requirements
 
 FREE_TEXT_KEY = "ai_designer_free_text"
@@ -198,12 +199,13 @@ def _interpret(active_key: str) -> None:
         except (ValidationError, ValueError):
             requirements = None
     try:
-        provider = _build_provider(active_key)
-        output = understand_requirements(
-            text,
-            requirements=requirements,
-            provider=provider,
-        )
+        with working(i18n.t("loading.provider")):
+            provider = _build_provider(active_key)
+            output = understand_requirements(
+                text,
+                requirements=requirements,
+                provider=provider,
+            )
     except NetArchitectError as error:
         st.error(format_error(error))
     else:
@@ -331,9 +333,10 @@ def _run_workflow() -> None:
         st.error(format_error(error))
         return
     try:
-        plan_state = Orchestrator(
-            baseline_accessor=state.get_twin
-        ).run_structured(requirements)
+        with working(i18n.t("loading.workflow")):
+            plan_state = Orchestrator(
+                baseline_accessor=state.get_twin
+            ).run_structured(requirements)
     except NetArchitectError as error:
         st.error(format_error(error))
         return

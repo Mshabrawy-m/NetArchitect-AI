@@ -36,14 +36,21 @@ from forecasting import (
 )
 from optimization import CostModel
 from simulation import SimulationAssumptions
-from ui import state
+from ui import formatting, i18n, state
 from ui.cache import (
     cached_capacity_run,
     cached_forecast_run,
     capacity_series_payload,
     twin_payload,
 )
-from ui.components import csv_bytes, empty_state, model_estimate_note, page_header
+from ui.components import (
+    csv_bytes,
+    empty_state,
+    format_error,
+    model_estimate_note,
+    page_header,
+)
+from ui.components.feedback import working
 
 MODEL_NOTE = (
     "Modeled projections from supplied or synthetic data; not measurements or "
@@ -124,9 +131,10 @@ def _render_data_tab() -> None:
     )
     if st.button("Parse supplied CSV", key=PARSE_KEY):
         try:
-            result = parse_csv(text, gap_policy=GapPolicy(gap_value))
+            with working(i18n.t("loading.parse")):
+                result = parse_csv(text, gap_policy=GapPolicy(gap_value))
         except InputError as error:
-            st.error(str(error), title="CSV input rejected")
+            st.error(format_error(error), title="CSV input rejected")
             return
         for finding in result.findings:
             if finding.severity.value == "error":
@@ -218,7 +226,7 @@ def _render_data_tab() -> None:
                 seed=int(seed),
             )
         except ValueError as error:
-            st.error(str(error))
+            st.error(format_error(error))
         else:
             generated = generate_synthetic(spec)
             _replace_series(generated.series_id, generated)
@@ -305,15 +313,16 @@ def _render_forecast_tab() -> None:
     if st.button("Build forecasts", key=FORECAST_KEY):
         gap_policy = series[0].fill_report.policy.value
         try:
-            run = cached_forecast_run(
-                capacity_series_payload(series),
-                int(horizon),
-                int(moving_window),
-                int(seasonal_period),
-                gap_policy,
-            )
+            with working(i18n.t("loading.forecast")):
+                run = cached_forecast_run(
+                    capacity_series_payload(series),
+                    int(horizon),
+                    int(moving_window),
+                    int(seasonal_period),
+                    gap_policy,
+                )
         except ForecastError as error:
-            st.error(str(error))
+            st.error(format_error(error))
         else:
             state.set_capacity_forecast(run)
             st.success(f"Forecast {len(run.results)} series for {run.horizon} steps.")
@@ -329,8 +338,10 @@ def _render_forecast_tab() -> None:
                 "data_label": result.data_label,
                 "unit": result.unit.value,
                 "model": result.model.value,
-                "mae": result.evaluation.metrics.mae,
-                "naive_mae": result.naive_evaluation.metrics.mae,
+                "mae": formatting.number(result.evaluation.metrics.mae, decimals=3),
+                "naive_mae": formatting.number(
+                    result.naive_evaluation.metrics.mae, decimals=3
+                ),
                 "beats_naive": result.beats_naive,
                 "steps": len(result.forecast_points),
                 "selection_note": result.selection_note,
@@ -357,9 +368,9 @@ def _render_forecast_tab() -> None:
                 "data_label": result.data_label,
                 "step": point.step,
                 "timestamp": point.timestamp.isoformat(),
-                "projected": point.value,
-                "lower_approx": point.lower,
-                "upper_approx": point.upper,
+                "projected": formatting.number(point.value, decimals=2),
+                "lower_approx": formatting.number(point.lower, decimals=2),
+                "upper_approx": formatting.number(point.upper, decimals=2),
             }
             for result in run.results
             for point in result.forecast_points
@@ -560,17 +571,18 @@ def _render_capacity_tab() -> None:
     )
     if st.button("Evaluate projected demand", key=EVALUATE_KEY):
         try:
-            run = cached_capacity_run(
-                twin_payload(twin),
-                forecast.model_dump_json(),
-                demand_mapping.model_dump_json(),
-                assumptions.model_dump_json(),
-                cost.model_dump_json(),
-                MAX_CAPACITY_EVALUATIONS,
-                MAX_CAPACITY_RUNTIME_SECONDS,
-            )
+            with working(i18n.t("loading.capacity")):
+                run = cached_capacity_run(
+                    twin_payload(twin),
+                    forecast.model_dump_json(),
+                    demand_mapping.model_dump_json(),
+                    assumptions.model_dump_json(),
+                    cost.model_dump_json(),
+                    MAX_CAPACITY_EVALUATIONS,
+                    MAX_CAPACITY_RUNTIME_SECONDS,
+                )
         except (CapacityError, ValueError) as error:
-            st.error(str(error))
+            st.error(format_error(error))
         else:
             state.add_capacity_run(run)
             st.success("Capacity analysis completed and retained for this session.")

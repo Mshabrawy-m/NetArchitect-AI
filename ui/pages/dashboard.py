@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ui import i18n, state
+from ui import formatting, i18n, state
 from ui.components import (
     callout,
     empty_state,
@@ -156,7 +156,9 @@ def render_dashboard() -> None:
             )
             st.metric(
                 i18n.t("dashboard.latest_scenario"),
-                f"{run.comparison.scenario_served_demand_ratio:.1%}",
+                formatting.ratio(
+                    run.comparison.scenario_served_demand_ratio, decimals=1
+                ),
                 help=i18n.t(
                     "dashboard.scenario_help",
                     name=i18n.ltr(run.scenario.name),

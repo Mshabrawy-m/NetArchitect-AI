@@ -154,6 +154,15 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "common.link": "Link",
         "common.open_simulation": "Open Simulation Lab",
         "common.no_data": "No data",
+        # Loading states for bounded synchronous actions
+        "loading.parse": "Parsing supplied CSV...",
+        "loading.forecast": "Building forecasts...",
+        "loading.capacity": "Evaluating projected demand...",
+        "loading.connection": "Testing connection...",
+        "loading.scenario": "Running scenario...",
+        "loading.provider": "Interpreting requirements...",
+        "loading.workflow": "Running the deterministic workflow...",
+        "chart.congestion": "Congestion level",
         # Progress strip
         "progress.title": "Project progress",
         "progress.step.design": "Design",
@@ -518,6 +527,15 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "common.link": "رابط",
         "common.open_simulation": "فتح مختبر المحاكاة",
         "common.no_data": "لا توجد بيانات",
+        # Loading states for bounded synchronous actions
+        "loading.parse": "جارٍ تحليل ملف CSV...",
+        "loading.forecast": "جارٍ بناء التوقعات...",
+        "loading.capacity": "جارٍ تقييم الطلب المتوقع...",
+        "loading.connection": "جارٍ اختبار الاتصال...",
+        "loading.scenario": "جارٍ تشغيل السيناريو...",
+        "loading.provider": "جارٍ تفسير المتطلبات...",
+        "loading.workflow": "جارٍ تشغيل سير العمل الحتمي...",
+        "chart.congestion": "مستوى الازدحام",
         # Progress strip
         "progress.title": "تقدم المشروع",
         "progress.step.design": "التصميم",

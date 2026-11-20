@@ -24,8 +24,13 @@ from digital_twin import (
     effective_link_state,
     to_json,
 )
-from ui import state
-from ui.components import csv_bytes, page_header, render_design_health
+from ui import formatting, state
+from ui.components import (
+    csv_bytes,
+    format_error,
+    page_header,
+    render_design_health,
+)
 from ui.components.editors import bump_editor_key, editor_key
 from ui.components.notices import queue_notice, render_notices
 
@@ -255,8 +260,8 @@ def _diff_rows(diff) -> pd.DataFrame:
             {
                 "kind": "link capacity (Mbps)",
                 "entity": change.link_id,
-                "before": change.before_mbps,
-                "after": change.after_mbps,
+                "before": formatting.number(change.before_mbps, decimals=1),
+                "after": formatting.number(change.after_mbps, decimals=1),
             }
         )
     for change in diff.cost_changes:
@@ -264,8 +269,8 @@ def _diff_rows(diff) -> pd.DataFrame:
             {
                 "kind": "link cost",
                 "entity": change.link_id,
-                "before": change.before,
-                "after": change.after,
+                "before": formatting.number(change.before, decimals=2),
+                "after": formatting.number(change.after, decimals=2),
             }
         )
     for name in diff.demands_added:
@@ -323,7 +328,7 @@ def _render_snapshot_actions(twin, snapshots: tuple[Snapshot, ...]) -> None:
         try:
             state.create_twin_snapshot(label.strip() or "Untitled snapshot")
         except (NetArchitectError, ValidationError, ValueError) as error:
-            st.error(str(error), title="Snapshot not created")
+            st.error(format_error(error), title="Snapshot not created")
         else:
             st.success(f"Created snapshot {label.strip()!r}.")
             st.rerun()
@@ -371,7 +376,7 @@ def _render_snapshot_actions(twin, snapshots: tuple[Snapshot, ...]) -> None:
             try:
                 state.delete_snapshot(selected_index)
             except (IndexError, ValueError) as error:
-                st.error(str(error), title="Snapshot not deleted")
+                st.error(format_error(error), title="Snapshot not deleted")
             else:
                 st.success(f"Deleted snapshot {selected.label!r}.")
                 st.rerun()
@@ -417,7 +422,7 @@ def _render_comparison(
         after = resolve(after_choice)
         diff = diff_twins(before, after)
     except (IndexError, ValueError) as error:
-        st.error(str(error), title="Comparison failed")
+        st.error(format_error(error), title="Comparison failed")
         return
 
     st.caption(diff.summary())

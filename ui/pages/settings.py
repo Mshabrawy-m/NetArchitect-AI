@@ -29,6 +29,7 @@ from core.exceptions import NetArchitectError
 from services.llm import GroqProvider, LLMMessage, MessageRole, RequestBudget
 from ui import i18n, state
 from ui.components import format_error, page_header
+from ui.components.feedback import working
 from ui.components.requirements_form import render_requirements_form
 
 KEY_ENTRY_KEY = "llm_key_entry"
@@ -161,11 +162,12 @@ def _render_test_connection(active_key: str) -> None:
         disabled=not bool(active_key),
     ):
         try:
-            provider = _build_provider(active_key, state.get_llm_budget())
-            response = provider.complete(
-                [LLMMessage(role=MessageRole.user, content=TEST_PROMPT)],
-                timeout=TEST_TIMEOUT_SECONDS,
-            )
+            with working(i18n.t("loading.connection")):
+                provider = _build_provider(active_key, state.get_llm_budget())
+                response = provider.complete(
+                    [LLMMessage(role=MessageRole.user, content=TEST_PROMPT)],
+                    timeout=TEST_TIMEOUT_SECONDS,
+                )
         except NetArchitectError as error:
             st.error(format_error(error))
         except ValueError as error:

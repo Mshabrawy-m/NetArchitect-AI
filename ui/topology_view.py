@@ -20,7 +20,7 @@ import streamlit as st
 
 from core.schemas.network import Device, DeviceType, Topology
 from simulation import ScenarioRun, twin_fingerprint
-from ui import i18n, state, theme
+from ui import formatting, i18n, state, theme
 from ui.components import key_value_list, section_header
 from ui.navigation import PAGE_FILES
 
@@ -345,10 +345,10 @@ def build_topology_figure(
                     "link",
                     link.id,
                     f"{link.endpoints[0]} - {link.endpoints[1]}",
-                    f"{link.capacity_mbps:.1f} Mbps",
-                    f"{link.cost:.2f}",
+                    formatting.capacity_mbps(link.capacity_mbps),
+                    formatting.number(link.cost, decimals=2),
                     i18n.t("common.directed") if link.directed else i18n.t("common.undirected"),
-                    i18n.t("common.na") if value is None else f"{value:.1f}%",
+                    formatting.percent(value),
                 ]
             )
         figure.add_trace(
@@ -396,7 +396,7 @@ def build_topology_figure(
                     device.role.value,
                     str(layout.tiers[device.id]),
                     label,
-                    i18n.t("common.na") if value is None else f"{value:.1f}%",
+                    formatting.percent(value),
                 ]
             )
         figure.add_trace(
@@ -689,7 +689,7 @@ def _render_inspector(
                     ),
                     (
                         i18n.t("common.link_utilization"),
-                        i18n.t("common.na") if value is None else f"{value:.1f}%",
+                        formatting.percent(value),
                     ),
                 ]
             )
@@ -714,8 +714,14 @@ def _render_inspector(
         key_value_list(
             [
                 (i18n.t("topology.hover.endpoints"), " - ".join(link.endpoints)),
-                (i18n.t("common.capacity"), f"{link.capacity_mbps:.1f} Mbps"),
-                (i18n.t("common.routing_cost"), f"{link.cost:.2f}"),
+                (
+                    i18n.t("common.capacity"),
+                    formatting.capacity_mbps(link.capacity_mbps),
+                ),
+                (
+                    i18n.t("common.routing_cost"),
+                    formatting.number(link.cost, decimals=2),
+                ),
                 (
                     i18n.t("common.style"),
                     i18n.t("common.directed")
@@ -724,7 +730,7 @@ def _render_inspector(
                 ),
                 (
                     i18n.t("common.utilization"),
-                    i18n.t("common.na") if value is None else f"{value:.1f}%",
+                    formatting.percent(value),
                 ),
             ]
         )

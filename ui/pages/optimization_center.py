@@ -53,7 +53,7 @@ from optimization import (
     run_to_json_bytes,
 )
 from simulation import twin_fingerprint
-from ui import state, theme
+from ui import formatting, state, theme
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
 from ui.components.editors import bump_editor_key, editor_key
 
@@ -840,7 +840,11 @@ def _render_headline(run: OptimizationRun) -> None:
     columns[2].metric("Evaluations", run.evaluations)
     columns[3].metric(
         "Best weighted score",
-        "none feasible" if run.best is None else f"{run.best.evaluation.weighted_score:.4f}",
+        (
+            "none feasible"
+            if run.best is None
+            else formatting.number(run.best.evaluation.weighted_score, decimals=4)
+        ),
     )
     st.caption(
         f"Seed {run.seed}; limits: population {run.limits.max_population}, "
@@ -901,8 +905,12 @@ def _render_best_comparison(run: OptimizationRun) -> None:
     columns = st.columns(5)
     columns[0].metric("Links", metrics.link_count)
     columns[1].metric("Served demands", f"{metrics.served_demand_count}/{metrics.demand_count}")
-    columns[2].metric("Max utilization", f"{metrics.max_utilization_percent:.2f}%")
-    columns[3].metric("Cost proxy", f"{metrics.infrastructure_cost_proxy:.2f}")
+    columns[2].metric(
+        "Max utilization", formatting.percent(metrics.max_utilization_percent, decimals=2)
+    )
+    columns[3].metric(
+        "Cost proxy", formatting.number(metrics.infrastructure_cost_proxy, decimals=2)
+    )
     columns[4].metric(
         "SPOFs",
         "not evaluated" if metrics.spof_count is None else metrics.spof_count,
