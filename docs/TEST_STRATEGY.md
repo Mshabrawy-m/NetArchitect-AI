@@ -9,12 +9,13 @@ Run from the repository root:
 ```powershell
 & ".venv\Scripts\python.exe" -m pytest -q
 & ".venv\Scripts\python.exe" -m pytest -q -m smoke
+& ".venv\Scripts\python.exe" -m pytest -q -m perf
 & ".venv\Scripts\python.exe" -m ruff check .
 & ".venv\Scripts\python.exe" scripts\profile_phase12.py
 & ".venv\Scripts\python.exe" scripts\profile_phase12.py --no-memory
 ```
 
-`pytest.ini` defines the `smoke` marker. The marker selects a fast regression subset; it does not replace the full suite.
+`pytest.ini` defines the `smoke` marker, which selects a fast regression subset, and the `perf` marker, which holds opt-in timing budgets with a 2x margin. `addopts = -m "not perf"` excludes timing budgets from default and smoke runs; run them explicitly with `-m perf`. Neither marker replaces the full suite.
 
 ## Test layers
 

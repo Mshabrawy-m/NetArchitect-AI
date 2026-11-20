@@ -117,7 +117,7 @@ def run_nsga2(
     limit keeps its partial front and reports the matching
     :class:`~optimization.models.StopReason`.
     """
-    cache = EvaluationCache()
+    cache = EvaluationCache.for_run(baseline_twin, settings)
     baseline = evaluate_candidate(
         baseline_twin,
         Candidate(),
@@ -129,7 +129,12 @@ def run_nsga2(
         baseline.candidate_hash: baseline
     }
     rng = np.random.default_rng(settings.seed)
-    space = genome_space(baseline_twin, settings)
+    space = genome_space(
+        baseline_twin,
+        settings,
+        pool=cache.pool,
+        baseline_links=cache.baseline_links,
+    )
     budget = SearchBudget.start(settings, cache, deadline)
 
     population = _seed_population(

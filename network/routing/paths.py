@@ -27,6 +27,7 @@ from collections.abc import Iterable
 from itertools import pairwise
 
 import networkx as nx
+import numpy as np
 from pydantic import BaseModel, Field
 
 from config.limits import MAX_ALTERNATIVE_PATHS
@@ -34,6 +35,7 @@ from core.exceptions import DeviceNotFoundError, LimitsExceededError
 from core.schemas.network import Topology
 
 from .graph import build_routing_graph, excluded_ids
+from .sparse import SparseRouter
 
 NodePath = tuple[str, ...]
 
@@ -155,6 +157,81 @@ def _path_from_nodes(graph: nx.DiGraph, source: str, nodes: NodePath) -> RoutePa
     )
 
 
+def _path_from_sparse(
+    source: str,
+    destination: str,
+    result: tuple[
+        tuple[str, ...], tuple[tuple[str, str, str, float], ...], float
+    ]
+    | None,
+) -> RoutePath:
+    """Wrap a sparse path result in the public typed model."""
+    if result is None:
+        return _unreachable(
+            source,
+            destination,
+            "No directed path exists between the selected devices",
+        )
+    nodes, hops, total_cost = result
+    return RoutePath(
+        source=source,
+        destination=destination,
+        reachable=True,
+        device_ids=list(nodes),
+        hops=[
+            RouteHop(
+                source=source_id,
+                target=target_id,
+                link_id=link_id,
+                cost=cost,
+            )
+            for source_id, target_id, link_id, cost in hops
+        ],
+        total_cost=total_cost,
+        hop_count=len(hops),
+    )
+
+
+def shortest_path_from_router(
+    router: SparseRouter,
+    source: str,
+    destination: str,
+) -> RoutePath:
+    """Route one pair using a precomputed sparse router.
+
+    The caller is responsible for endpoint validation and failed-endpoint
+    messages; this helper only converts the sparse result to the public type.
+    """
+    if source not in router.node_ids:
+        return _unreachable(source, destination, f"Source device {source!r} is failed")
+    if destination not in router.node_ids:
+        return _unreachable(
+            source, destination, f"Destination device {destination!r} is failed"
+        )
+    if source == destination:
+        return RoutePath(
+            source=source,
+            destination=destination,
+            reachable=True,
+            device_ids=[source],
+        )
+    return _path_from_sparse(source, destination, router.path(source, destination))
+
+
+def component_summary_from_router(router: SparseRouter) -> ComponentSummary:
+    """Summarize weak/strong components from precomputed sparse arrays."""
+    weak, strong, isolated = router.components()
+    weak_list = [list(component) for component in weak]
+    strong_list = [list(component) for component in strong]
+    return ComponentSummary(
+        weak_components=weak_list,
+        strong_components=strong_list,
+        is_weakly_connected=router.size > 0 and len(weak_list) == 1,
+        is_strongly_connected=router.size > 0 and len(strong_list) == 1,
+        isolated_device_ids=list(isolated),
+    )
+
+
 def _dijkstra_tree(
     graph: nx.DiGraph,
     source: str,
@@ -217,20 +294,12 @@ def shortest_path(
             device_ids=[source],
         )
 
-    graph = build_routing_graph(
+    router = SparseRouter.from_topology(
         topology,
         failed_devices=failed_device_ids,
         failed_links=failed_link_ids,
     )
-    tree = _dijkstra_tree(graph, source)
-    result = tree.get(destination)
-    if result is None:
-        return _unreachable(
-            source,
-            destination,
-            "No directed path exists between the selected devices",
-        )
-    return _path_from_nodes(graph, source, result[1])
+    return shortest_path_from_router(router, source, destination)
 
 
 def _dijkstra_single(
@@ -468,23 +537,20 @@ def reachability_matrix(
         for device in topology.devices
         if device.id not in failed_device_ids
     )
-    graph = build_routing_graph(
+    router = SparseRouter.from_topology(
         topology,
         failed_devices=failed_device_ids,
         failed_links=failed_link_ids,
     )
-    matrix: list[list[bool]] = []
-    unreachable = 0
-    for source in device_ids:
-        reachable = {source}
-        reachable.update(_dijkstra_tree(graph, source))
-        row = [destination in reachable for destination in device_ids]
-        unreachable += sum(
-            1
-            for destination, value in zip(device_ids, row)
-            if destination != source and not value
-        )
-        matrix.append(row)
+    distances = router.distances_from()
+    finite = np.isfinite(distances)
+    matrix = [[bool(finite[row, column]) for column in range(len(device_ids))] for row in range(len(device_ids))]
+    unreachable = sum(
+        1
+        for row in range(len(device_ids))
+        for column in range(len(device_ids))
+        if row != column and not matrix[row][column]
+    )
     return ReachabilityMatrix(
         device_ids=device_ids,
         matrix=matrix,
@@ -509,24 +575,9 @@ def component_summary(
         failed_devices=failed_devices,
         failed_links=failed_links,
     )
-    graph = build_routing_graph(
+    router = SparseRouter.from_topology(
         topology,
         failed_devices=failed_device_ids,
         failed_links=failed_link_ids,
     )
-    weak = [sorted(component) for component in nx.weakly_connected_components(graph)]
-    strong = [
-        sorted(component) for component in nx.strongly_connected_components(graph)
-    ]
-    weak.sort(key=lambda component: component[0] if component else "")
-    strong.sort(key=lambda component: component[0] if component else "")
-    isolated = sorted(
-        node for node, degree in graph.degree() if degree == 0
-    )
-    return ComponentSummary(
-        weak_components=weak,
-        strong_components=strong,
-        is_weakly_connected=graph.number_of_nodes() > 0 and len(weak) == 1,
-        is_strongly_connected=graph.number_of_nodes() > 0 and len(strong) == 1,
-        isolated_device_ids=isolated,
-    )
+    return component_summary_from_router(router)

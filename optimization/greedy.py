@@ -138,7 +138,7 @@ def run_greedy(
     deadline: float | None = None,
 ) -> OptimizationRun:
     """Run the deterministic greedy hill-climb baseline optimizer."""
-    cache = EvaluationCache()
+    cache = EvaluationCache.for_run(baseline_twin, settings)
     # Baseline metrics are always recorded; the search-phase deadline starts
     # after the baseline evaluation so a tiny search budget can still be
     # reported cleanly.

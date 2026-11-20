@@ -24,7 +24,18 @@
   450 MB (`scripts/check_linux_memory.py`), and a throwaway-venv pip-audit job.
   Weekly `dependabot.yml` added. Remote Actions execution was not performed;
   owner checks are listed in `docs/DEPLOYMENT.md`.
-- T3-T5: in progress; evidence will be recorded here per task.
+- T3: sparse CSR routing/evaluation hot paths complete. All-pairs 0.970 s to
+  0.066 s (14.7x) and evaluate 0.762 s to 0.045 s (16.9x) in the reproducible
+  profile; 5 s GA throughput 1.0 to 10.1 evaluations/sec. The >=3x target was
+  met; GA/NSGA-II wall clock is still limited by the configured 60 s budget.
+  Frozen NetworkX reference equivalence tests cover ties, parallel/directed
+  links, failures, disconnection, star/ring/campus/spine-leaf/max-size. Seeded
+  GA/NSGA-II objective vectors are byte-identical to commit `3e31a41`. Opt-in
+  `perf` budgets use a 2x margin and are excluded from default/smoke runs.
+  `pytest -q` 988 passed/3 deselected; `pytest -q -m smoke` 12 passed/
+  979 deselected; `pytest -q -m perf` 3 passed/988 deselected; `ruff check .`
+  clean. See `docs/PERFORMANCE.md`.
+- T4-T5: in progress; evidence will be recorded here per task.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

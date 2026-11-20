@@ -27,8 +27,12 @@ from core.schemas.routing import TrafficDemand
 from digital_twin.adapters import failed_entities
 from digital_twin.models import DigitalTwin
 from digital_twin.serialization import canonical_payload
-from network.routing import component_summary, shortest_path
-from network.routing.paths import RoutePath
+from network.routing.paths import (
+    RoutePath,
+    component_summary_from_router,
+    shortest_path_from_router,
+)
+from network.routing.sparse import SparseRouter
 
 from .models import (
     CongestionLevel,
@@ -97,6 +101,27 @@ def _check_deadline(deadline: float, phase: str) -> None:
         )
 
 
+def _routing_key(
+    topology: Topology,
+    failed_devices: tuple[str, ...],
+    failed_links: tuple[str, ...],
+) -> tuple[object, ...]:
+    """Identify a routing graph by the fields that affect path selection."""
+    return (
+        tuple(sorted(failed_devices)),
+        tuple(sorted(failed_links)),
+        tuple(
+            (
+                link.id,
+                link.endpoints,
+                float(link.cost),
+                link.directed,
+            )
+            for link in topology.links
+        ),
+    )
+
+
 def _hop_is_forward(link: Link, source: str, target: str) -> bool:
     return link.endpoints[0] == source and link.endpoints[1] == target
 
@@ -125,12 +150,10 @@ def _latency_for(
 
 
 def _demand_evaluation(
-    topology: Topology,
     demand: TrafficDemand,
     assumptions: SimulationAssumptions,
     *,
-    failed_devices: tuple[str, ...],
-    failed_links: tuple[str, ...],
+    router: SparseRouter,
     known_devices: set[str],
 ) -> DemandEvaluation:
     name = demand.name
@@ -160,13 +183,7 @@ def _demand_evaluation(
             ),
         )
 
-    path = shortest_path(
-        topology,
-        source,
-        destination,
-        failed_devices=failed_devices,
-        failed_links=failed_links,
-    )
+    path = shortest_path_from_router(router, source, destination)
     latency, latency_note = _latency_for(path, assumptions)
     if not path.reachable:
         return DemandEvaluation(
@@ -196,18 +213,14 @@ def _demand_evaluation(
 def _connected_devices(
     topology: Topology,
     *,
+    router: SparseRouter,
     failed_devices: tuple[str, ...],
-    failed_links: tuple[str, ...],
 ) -> tuple[
     tuple[tuple[str, ...], ...],
     tuple[str, ...],
     tuple[str, ...],
 ]:
-    summary = component_summary(
-        topology,
-        failed_devices=failed_devices,
-        failed_links=failed_links,
-    )
+    summary = component_summary_from_router(router)
     components = tuple(tuple(component) for component in summary.weak_components)
     isolated = tuple(summary.isolated_device_ids)
     if not components:
@@ -309,6 +322,7 @@ def evaluate(
     *,
     max_runtime_seconds: float | None = None,
     _deadline: float | None = None,
+    _router_cache: dict[tuple[object, ...], SparseRouter] | None = None,
 ) -> NetworkState:
     """Evaluate one twin revision and return its modeled network state.
 
@@ -316,6 +330,7 @@ def evaluate(
     delay map. The twin is never modified. ``max_runtime_seconds`` may only
     lower the global limit; ``_deadline`` is an internal absolute monotonic
     deadline used by the scenario engine to share one budget across evaluations.
+    ``_router_cache`` is an optional per-run cache of sparse routing arrays.
     """
     resolved_assumptions = (
         SimulationAssumptions() if assumptions is None else assumptions
@@ -334,17 +349,28 @@ def evaluate(
             f"Links: {', '.join(selection.stale_links) or 'none'}."
         )
 
+    router_cache = _router_cache if _router_cache is not None else {}
+    routing_key = _routing_key(
+        twin.topology, selection.devices, selection.links
+    )
+    router = router_cache.get(routing_key)
+    if router is None:
+        router = SparseRouter.from_topology(
+            twin.topology,
+            failed_devices=selection.devices,
+            failed_links=selection.links,
+        )
+        router_cache[routing_key] = router
+
     known_devices = {device.id for device in twin.topology.devices}
     demands: list[DemandEvaluation] = []
     for demand in twin.demands:
         _check_deadline(deadline, "demand routing")
         demands.append(
             _demand_evaluation(
-                twin.topology,
                 demand,
                 resolved_assumptions,
-                failed_devices=selection.devices,
-                failed_links=selection.links,
+                router=router,
                 known_devices=known_devices,
             )
         )
@@ -373,8 +399,8 @@ def evaluate(
     _check_deadline(deadline, "connectivity summary")
     components, isolated, disconnected = _connected_devices(
         twin.topology,
+        router=router,
         failed_devices=selection.devices,
-        failed_links=selection.links,
     )
 
     served = tuple(evaluation for evaluation in demand_tuple if evaluation.served)

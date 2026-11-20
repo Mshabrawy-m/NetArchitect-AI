@@ -45,9 +45,14 @@ def _validate_candidate(
     baseline_twin: DigitalTwin,
     candidate: Candidate,
     settings: OptimizationSettings,
+    *,
+    pool: dict[str, Link] | None = None,
+    baseline_links: dict[str, Link] | None = None,
 ) -> tuple[dict[str, Link], dict[str, Link]]:
-    pool = pool_index(settings)
-    baseline_links = baseline_link_index(baseline_twin)
+    pool = pool_index(settings) if pool is None else pool
+    baseline_links = (
+        baseline_link_index(baseline_twin) if baseline_links is None else baseline_links
+    )
     known = set(pool) | set(baseline_links)
 
     unknown_selected = sorted(set(candidate.selected_link_ids) - set(pool))
@@ -85,6 +90,9 @@ def build_candidate_twin(
     baseline_twin: DigitalTwin,
     candidate: Candidate,
     settings: OptimizationSettings,
+    *,
+    pool: dict[str, Link] | None = None,
+    baseline_links: dict[str, Link] | None = None,
 ) -> DigitalTwin:
     """Return a new twin with ``candidate`` decisions applied.
 
@@ -92,7 +100,13 @@ def build_candidate_twin(
     and routing-cost multipliers are applied last. The input twin is never
     mutated.
     """
-    pool, baseline_links = _validate_candidate(baseline_twin, candidate, settings)
+    pool, baseline_links = _validate_candidate(
+        baseline_twin,
+        candidate,
+        settings,
+        pool=pool,
+        baseline_links=baseline_links,
+    )
     replacements: dict[str, Link] = {}
     additions: list[Link] = []
 

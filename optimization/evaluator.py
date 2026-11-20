@@ -12,9 +12,11 @@ import time
 from dataclasses import dataclass, field
 
 from core.exceptions import OptimizationRuntimeExceeded, SimulationRuntimeExceeded
+from core.schemas.network import Link
 from digital_twin import DigitalTwin
 from network.analysis import redundancy, spof_report
-from simulation import evaluate
+from network.routing import SparseRouter
+from simulation import evaluate, twin_fingerprint
 from simulation.models import NetworkState
 
 from .constraints import evaluate_constraints
@@ -31,16 +33,55 @@ from .objectives import (
     objective_value,
     weighted_score,
 )
-from .space import build_candidate_twin
+from .space import baseline_link_index, build_candidate_twin, pool_index
+
+
+def _context_key(baseline_twin: DigitalTwin, config: OptimizationSettings) -> str:
+    """Identify the immutable inputs shared by a run's precomputed lookups."""
+    return f"{twin_fingerprint(baseline_twin)}|{config.model_dump_json()}"
 
 
 @dataclass
 class EvaluationCache:
-    """Per-run candidate cache and evaluation counters."""
+    """Per-run candidate cache, precomputed lookups, and evaluation counters."""
 
     results: dict[str, CandidateEvaluation] = field(default_factory=dict)
     hits: int = 0
     misses: int = 0
+    router_cache: dict[tuple[object, ...], SparseRouter] = field(default_factory=dict)
+    pool: dict[str, Link] | None = None
+    baseline_links: dict[str, Link] | None = None
+    context_key: str | None = None
+
+    @classmethod
+    def for_run(
+        cls,
+        baseline_twin: DigitalTwin,
+        config: OptimizationSettings,
+    ) -> EvaluationCache:
+        """Create a cache with the baseline link and pool indexes precomputed."""
+        return cls(
+            pool=pool_index(config),
+            baseline_links=baseline_link_index(baseline_twin),
+            context_key=_context_key(baseline_twin, config),
+        )
+
+    def prepare(
+        self,
+        baseline_twin: DigitalTwin,
+        config: OptimizationSettings,
+    ) -> None:
+        """Populate or validate the per-run indexes before an evaluation."""
+        key = _context_key(baseline_twin, config)
+        if self.context_key is None:
+            self.context_key = key
+            self.pool = pool_index(config)
+            self.baseline_links = baseline_link_index(baseline_twin)
+        elif self.context_key != key:
+            raise ValueError(
+                "An evaluation cache must not be reused across different "
+                "baselines or settings"
+            )
 
     @property
     def unique_candidates(self) -> int:
@@ -109,6 +150,8 @@ def _metrics(
     *,
     needs_spof: bool,
     needs_redundancy: bool,
+    pool: dict[str, Link] | None = None,
+    baseline_links: dict[str, Link] | None = None,
 ) -> CandidateMetrics:
     spof_count = (
         len(
@@ -146,6 +189,8 @@ def _metrics(
             baseline_twin,
             candidate,
             settings,
+            pool=pool,
+            baseline_links=baseline_links,
         ),
         spof_count=spof_count,
         min_edge_disjoint_paths=min_paths,
@@ -185,6 +230,7 @@ def evaluate_candidate(
     evaluations.
     """
     cache = cache if cache is not None else EvaluationCache()
+    cache.prepare(baseline_twin, config)
     check_deadline = deadline if deadline is not None else resolve_deadline(
         config, None
     )
@@ -196,12 +242,19 @@ def evaluate_candidate(
         cache.hits += 1
         return cached.model_copy(update={"cache_hit": True})
 
-    twin = build_candidate_twin(baseline_twin, candidate, config)
+    twin = build_candidate_twin(
+        baseline_twin,
+        candidate,
+        config,
+        pool=cache.pool,
+        baseline_links=cache.baseline_links,
+    )
     try:
         state = evaluate(
             twin,
             config.assumptions,
             _deadline=check_deadline,
+            _router_cache=cache.router_cache,
         )
     except SimulationRuntimeExceeded as error:
         raise OptimizationRuntimeExceeded(str(error)) from error
@@ -220,6 +273,8 @@ def evaluate_candidate(
         state,
         needs_spof=needs_spof,
         needs_redundancy=needs_redundancy,
+        pool=cache.pool,
+        baseline_links=cache.baseline_links,
     )
     values = tuple(
         objective_value(spec, _raw_value(spec.kind, metrics))

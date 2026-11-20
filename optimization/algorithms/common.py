@@ -14,6 +14,7 @@ from itertools import product
 
 import numpy as np
 
+from core.schemas.network import Link
 from digital_twin import DigitalTwin
 
 from ..models import (
@@ -155,9 +156,14 @@ class GenomeSpace:
 def genome_space(
     baseline_twin: DigitalTwin,
     settings: OptimizationSettings,
+    *,
+    pool: dict[str, Link] | None = None,
+    baseline_links: dict[str, Link] | None = None,
 ) -> GenomeSpace:
     """Build the genome layout for one baseline and settings pair."""
-    baseline_links = baseline_link_index(baseline_twin)
+    baseline_links = (
+        baseline_link_index(baseline_twin) if baseline_links is None else baseline_links
+    )
     baseline_ids = tuple(sorted(baseline_links))
     baseline_tier_names = tuple(
         tuple(
@@ -168,7 +174,7 @@ def genome_space(
         for link_id in baseline_ids
     )
     return GenomeSpace(
-        pool_ids=tuple(sorted(pool_index(settings))),
+        pool_ids=tuple(sorted(pool_index(settings) if pool is None else pool)),
         baseline_ids=baseline_ids,
         baseline_tier_names=baseline_tier_names,
         tier_names=tuple(tier.name for tier in settings.cost_model.tiers),

@@ -107,7 +107,7 @@ def run_genetic(
     clock time. The run stops with ``completed`` only when the population has
     collapsed to one distinct design; otherwise it stops at a stated limit.
     """
-    cache = EvaluationCache()
+    cache = EvaluationCache.for_run(baseline_twin, settings)
     baseline = evaluate_candidate(
         baseline_twin,
         Candidate(),
@@ -119,7 +119,12 @@ def run_genetic(
         baseline.candidate_hash: baseline
     }
     rng = np.random.default_rng(settings.seed)
-    space = genome_space(baseline_twin, settings)
+    space = genome_space(
+        baseline_twin,
+        settings,
+        pool=cache.pool,
+        baseline_links=cache.baseline_links,
+    )
     budget = SearchBudget.start(settings, cache, deadline)
 
     population = _seed_population(

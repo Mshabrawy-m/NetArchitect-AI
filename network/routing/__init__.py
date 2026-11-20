@@ -17,10 +17,13 @@ from .paths import (
     RoutingTableEntry,
     alternative_paths,
     component_summary,
+    component_summary_from_router,
     reachability_matrix,
     routing_table,
     shortest_path,
+    shortest_path_from_router,
 )
+from .sparse import SparseRouter
 from .tables import (
     alternative_rows,
     path_rows,
@@ -36,10 +39,12 @@ __all__ = [
     "RoutePath",
     "RoutingTable",
     "RoutingTableEntry",
+    "SparseRouter",
     "alternative_paths",
     "alternative_rows",
     "build_routing_graph",
     "component_summary",
+    "component_summary_from_router",
     "excluded_ids",
     "path_rows",
     "reachability_matrix",
@@ -47,4 +52,5 @@ __all__ = [
     "routing_table",
     "routing_table_rows",
     "shortest_path",
+    "shortest_path_from_router",
 ]

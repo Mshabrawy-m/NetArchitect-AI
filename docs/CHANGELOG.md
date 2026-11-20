@@ -2,6 +2,39 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-20 - T3: sparse routing and per-run precomputation
+
+### Added
+- `network/routing/sparse.py`: bounded CSR adjacency arrays built from the same
+  arc rules as the NetworkX routing graph. Distances, reachability, and
+  components use `scipy.sparse.csgraph`; deterministic path extraction keeps the
+  original lexicographic tie-break and directed/undirected semantics.
+- `scripts/bench_hotpaths.py`, `tests/routing_reference.py`, sparse equivalence
+  tests, and a byte-identical seeded GA/NSGA-II objective-vector fixture from
+  commit `3e31a41`.
+- `perf` pytest marker and opt-in timing budgets in
+  `tests/unit/test_perf_budgets.py`; default and smoke runs exclude them.
+
+### Changed
+- `network/routing/paths.py` and `simulation/evaluator.py` now use one sparse
+  router per routing signature. `optimization/evaluator.py` shares baseline
+  link/pool indexes and the router cache across one seeded run; greedy, GA, and
+  NSGA-II reuse that context. No schema, UI, or runtime dependency changed.
+- Fixed a real equivalence bug found by the new reference tests: a float
+  tolerance in sparse path extraction preferred `a-b-d` (`0.30000000000000004`)
+  over the reference's exact `a-d` (`0.3`). Suffix distances now come from the
+  candidate neighbor as source and are compared exactly; the minimal topology
+  is a regression test.
+
+### Evidence
+- Profile: all-pairs 0.970 s to 0.066 s (14.7x); evaluate 0.762 s to 0.045 s
+  (16.9x). Bench: 0.974 s to 0.063 s, 0.940 s to 0.082 s, and GA throughput
+  1.0 to 10.1 evaluations/sec in the same 5 s budget. Full tables are in
+  `docs/PERFORMANCE.md`.
+- `pytest -q` 988 passed/3 deselected; `pytest -q -m smoke` 12 passed/
+  979 deselected; `pytest -q -m perf` 3 passed/988 deselected;
+  `ruff check .` clean.
+
 ## 2026-11-20 - V2 package started (feature/v2-tech)
 
 ### Added

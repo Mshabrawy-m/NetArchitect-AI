@@ -7,6 +7,7 @@ route traffic or mutate a twin.
 
 from __future__ import annotations
 
+from core.schemas.network import Link
 from digital_twin import DigitalTwin
 
 from .models import (
@@ -23,6 +24,9 @@ def infrastructure_cost_proxy(
     baseline_twin: DigitalTwin,
     candidate: Candidate,
     settings: OptimizationSettings,
+    *,
+    pool: dict[str, Link] | None = None,
+    baseline_links: dict[str, Link] | None = None,
 ) -> float:
     """Return the modeled infrastructure cost proxy for one candidate.
 
@@ -36,8 +40,12 @@ def infrastructure_cost_proxy(
     value. Routing-cost multipliers do not change the infrastructure cost proxy.
     """
     cost_model = settings.cost_model
-    baseline_links = baseline_link_index(baseline_twin)
-    pool = pool_index(settings)
+    baseline_links = (
+        baseline_link_index(baseline_twin)
+        if baseline_links is None
+        else baseline_links
+    )
+    pool = pool_index(settings) if pool is None else pool
     total = cost_model.device_cost_proxy * len(baseline_twin.topology.devices)
 
     for link_id in candidate.selected_link_ids:
