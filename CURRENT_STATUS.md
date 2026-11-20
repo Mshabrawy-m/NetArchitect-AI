@@ -19,7 +19,12 @@
   install: 254.6 s / 568.6 MiB before vs 262.1 s / 556.3 MiB after
   (`--no-cache-dir`; network time varied). `pytest -q` 975 passed;
   `pytest -q -m smoke` 12 passed, 963 deselected; `ruff check .` clean.
-- T2-T5: in progress; evidence will be recorded here per task.
+- T2: CI rewritten for `ubuntu-latest` with Python 3.11/3.12, pip cache, dev
+  install/ruff/pytest/smoke, a runtime-only 15-page job, a Linux VmRSS gate at
+  450 MB (`scripts/check_linux_memory.py`), and a throwaway-venv pip-audit job.
+  Weekly `dependabot.yml` added. Remote Actions execution was not performed;
+  owner checks are listed in `docs/DEPLOYMENT.md`.
+- T3-T5: in progress; evidence will be recorded here per task.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

@@ -20,6 +20,24 @@ All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 - Evidence: `pytest -q` 975 passed; `pytest -q -m smoke` 12 passed/963 deselected;
   `ruff check .` clean; fresh runtime-only venv health `ok`, root 200, 15 pages.
 
+## 2026-11-20 - T2: Linux CI and safety gates
+
+### Added
+- `.github/dependabot.yml` with weekly pip and github-actions updates.
+- `scripts/check_linux_memory.py`: Linux-only VmRSS gate after app import and
+  Dashboard render, limited to 450 MB with the rationale in
+  `docs/PERFORMANCE.md`.
+- Owner checklist for the first Linux CI push in `docs/DEPLOYMENT.md`.
+
+### Changed
+- `.github/workflows/ci.yml` now runs on ubuntu-latest: Python 3.11/3.12 dev
+  verification, a runtime-only headless/15-page job, and a throwaway-venv
+  pip-audit job. No secrets are referenced. GitHub Actions was not run remotely.
+
+### Evidence
+- `pytest -q` 975 passed; `ruff check .` clean; the RSS script skips on win32 by
+  design and will be exercised on the first Linux CI run.
+
 ## 2026-11-19 - Inline pyarrow pin for Community Cloud install
 
 ### Changed

@@ -99,6 +99,19 @@ The script starts a headless Streamlit server, checks `/_stcore/health` and the
 root page, renders all 15 pages with `AppTest`, and refuses to run if pytest is
 installed. It uses stdlib HTTP only and needs no test dependencies.
 
+## First CI push on Linux - owner checks
+
+GitHub Actions was **not run remotely** from this workspace. After pushing
+`feature/v2-tech`, the owner must check:
+
+1. `Tests and lint - Python 3.11` and `3.12` are green (dev requirements, ruff,
+   full tests, smoke tests, config assertion).
+2. `Runtime-only install and Linux memory gate` is green; its log shows health
+   `ok`, 15 pages rendered, and VmRSS below 450 MB.
+3. `Dependency audit (throwaway venv)` reports no known vulnerabilities.
+4. The Dependabot configuration is accepted with weekly pip and github-actions
+   updates, and no workflow step refers to a secret.
+
 ## Verification matrix
 
 | Check | Expected result |
