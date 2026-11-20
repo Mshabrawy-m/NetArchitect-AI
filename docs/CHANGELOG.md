@@ -2,6 +2,13 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-20 - V2 package started (feature/v2-tech)
+
+### Added
+- `docs/V2_SPEC.md`: short shared reference for the 2.0-2.5 roadmap and the
+  non-negotiable Community Cloud Free rules. This package adds no features, UI,
+  schema changes, or runtime dependencies.
+
 ## 2026-11-19 - Inline pyarrow pin for Community Cloud install
 
 ### Changed

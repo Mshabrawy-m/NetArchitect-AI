@@ -4,8 +4,15 @@
 - Current phase: v1.0.0 released; post-release dependency layout change applied on `main`
 - Current task: Owner deployment on Streamlit Community Cloud Free
 - Overall status: Phase 15a/b/c/d merged to `main` (`b1507f9`); annotated `v1.0.0-rc1` and `v1.0.0` pushed. A post-release commit inlines `pyarrow==23.0.1` in `requirements.txt` and removes `constraints.txt` for a single-file Cloud install.
-- Last updated: 2026-11-19
-- Branch: `main` (tracks `origin/main`)
+- Last updated: 2026-11-20
+- Branch: `feature/v2-tech` (created from an up-to-date `main`)
+
+## V2 package (feature/v2-tech)
+
+- Scope: free-tier-safe speed, install-size, and verification work only. No
+  features, UI changes, schema changes, or new runtime dependencies.
+- T0: `docs/V2_SPEC.md` created as the shared roadmap and free-tier reference.
+- T1-T5: in progress; evidence will be recorded here per task.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
