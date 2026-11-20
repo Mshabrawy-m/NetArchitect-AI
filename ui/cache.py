@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
@@ -28,19 +29,11 @@ from forecasting import (
 )
 from optimization import CostModel, OptimizationRun
 from security import FlowRequest, SecurityAnalysis, SecurityModel, analyze_design
-from services.export import (
-    pdf_warnings,
-    to_config_bundle,
-    to_csv_bundle,
-    to_markdown,
-    to_pdf,
-)
-from services.export import (
-    to_json as document_to_json,
-)
-from services.reporting import ReportDocument, ReportSources, build_report
 from services.validation import DesignHealth, build_design_health
 from simulation import ScenarioRun, SimulationAssumptions, twin_fingerprint
+
+if TYPE_CHECKING:
+    from services.reporting import ReportDocument
 
 CACHE_ENTRIES = 8
 
@@ -183,6 +176,8 @@ def cached_report(
     optimization_source_fingerprint: str = "",
 ) -> ReportDocument:
     """Build one report document once per twin revision and source selection."""
+    from services.reporting import ReportSources, build_report
+
     return build_report(
         ReportSources(
             twin=DigitalTwin.model_validate_json(twin_payload),
@@ -223,6 +218,18 @@ class ExportBundle:
 @st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
 def cached_exports(document_payload: str, twin_payload: str) -> ExportBundle:
     """Build every export once per filtered document and twin revision."""
+    from services.export import (
+        pdf_warnings,
+        to_config_bundle,
+        to_csv_bundle,
+        to_markdown,
+        to_pdf,
+    )
+    from services.export import (
+        to_json as document_to_json,
+    )
+    from services.reporting import ReportDocument
+
     document = ReportDocument.model_validate_json(document_payload)
     return ExportBundle(
         pdf=to_pdf(document),

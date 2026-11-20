@@ -119,3 +119,55 @@ evidence for this host, not a guarantee for Cloud.
 - Opt-in timing budgets live in `tests/unit/test_perf_budgets.py` with the
   `perf` marker. They are excluded from default and smoke runs by `pytest.ini`
   and use at least a 2x margin over the measured after-change numbers.
+
+## Cold-start imports (T4)
+
+Command: `.venv\Scripts\python.exe -B scripts/profile_imports.py`. This runs
+`python -X importtime -c "import app"` in a fresh child process and then times
+one clean `AppTest` run of the Dashboard. The baseline was measured in a
+throwaway worktree at commit `bf2b5b8` with the same script and interpreter;
+the after numbers were measured in the working tree after the lazy-import
+changes. `importtime` cumulative values include nested imports, so target rows
+overlap and are not added together. The harmless
+`missing ScriptRunContext` warning appeared on stderr in both runs.
+
+Baseline (before T4), verbatim table:
+
+| import target | cumulative us |
+| --- | ---: |
+| reportlab | 322842 |
+| services.reporting | 137397 |
+| services.export | 367015 |
+| ui.pages.reports | 4040 |
+| ui.pages.agent_control_center | 192633 |
+| ui.pages.ai_designer | 6939 |
+| ui.pages.security_analysis | 7186 |
+| app (total cumulative) | 2327519 |
+
+| measurement | seconds |
+| --- | ---: |
+| Dashboard first render | 1.994 |
+
+After T4, verbatim table:
+
+| import target | cumulative us |
+| --- | ---: |
+| reportlab | 0 |
+| services.reporting | 0 |
+| services.export | 0 |
+| ui.pages.reports | 0 |
+| ui.pages.agent_control_center | 0 |
+| ui.pages.ai_designer | 0 |
+| ui.pages.security_analysis | 0 |
+| app (total cumulative) | 1564059 |
+
+| measurement | seconds |
+| --- | ---: |
+| Dashboard first render | 1.363 |
+
+Measured delta: app cumulative import `2327519` to `1564059` us; Dashboard
+first render `1.994` to `1.363` s. All seven deferred targets are absent from
+`sys.modules` after a cold `import app`; PDF/report/export modules load on
+first use. All six `@st.cache_data` decorators remain bounded with
+`max_entries=8` and `show_spinner=False`; `tests/unit/test_cold_start.py`
+asserts both properties.

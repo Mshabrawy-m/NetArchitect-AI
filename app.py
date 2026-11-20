@@ -21,20 +21,10 @@ import streamlit as st
 
 from ui import state
 from ui.components import empty_state, page_header, render_design_health
-from ui.pages.agent_control_center import render as render_agent_control_center
-from ui.pages.ai_designer import render as render_ai_designer
-from ui.pages.capacity_planning import render as render_capacity_planning
-from ui.pages.digital_twin import render as render_digital_twin
-from ui.pages.ip_addressing import render as render_ip_addressing
-from ui.pages.network_analytics import render as render_network_analytics
-from ui.pages.optimization_center import render as render_optimization_center
-from ui.pages.reports import render as render_reports
-from ui.pages.routing_analysis import render as render_routing_analysis
-from ui.pages.security_analysis import render as render_security_analysis
-from ui.pages.settings import render as render_settings
-from ui.pages.simulation_lab import render as render_simulation_lab
-from ui.pages.topology_editor import render as render_topology_editor
-from ui.pages.vlan_dhcp import render as render_vlan_dhcp
+
+# Page modules are imported inside main() when selected. The Dashboard is the
+# default page, so cold start must not import the report, export, agent, or
+# other rarely used page modules.
 
 # The 15 planned application pages from the blueprint (section 7).
 PAGES: tuple[str, ...] = (
@@ -187,32 +177,62 @@ def main() -> None:
     if page == "Dashboard":
         render_dashboard()
     elif page == "AI Network Designer":
+        from ui.pages.ai_designer import render as render_ai_designer
+
         render_ai_designer()
     elif page == "Topology Editor":
+        from ui.pages.topology_editor import render as render_topology_editor
+
         render_topology_editor()
     elif page == "IP Addressing & Subnetting":
+        from ui.pages.ip_addressing import render as render_ip_addressing
+
         render_ip_addressing()
     elif page == "VLAN & DHCP Planner":
+        from ui.pages.vlan_dhcp import render as render_vlan_dhcp
+
         render_vlan_dhcp()
     elif page == "Routing Analysis":
+        from ui.pages.routing_analysis import render as render_routing_analysis
+
         render_routing_analysis()
     elif page == "Network Analytics":
+        from ui.pages.network_analytics import render as render_network_analytics
+
         render_network_analytics()
     elif page == "Digital Twin":
+        from ui.pages.digital_twin import render as render_digital_twin
+
         render_digital_twin()
     elif page == "Simulation Lab":
+        from ui.pages.simulation_lab import render as render_simulation_lab
+
         render_simulation_lab()
     elif page == "Optimization Center":
+        from ui.pages.optimization_center import render as render_optimization_center
+
         render_optimization_center()
     elif page == "Capacity Planning":
+        from ui.pages.capacity_planning import render as render_capacity_planning
+
         render_capacity_planning()
     elif page == "Security Analysis":
+        from ui.pages.security_analysis import render as render_security_analysis
+
         render_security_analysis()
     elif page == "Agent Control Center":
+        from ui.pages.agent_control_center import (
+            render as render_agent_control_center,
+        )
+
         render_agent_control_center()
     elif page == "Reports & Documentation":
+        from ui.pages.reports import render as render_reports
+
         render_reports()
     elif page == "Settings":
+        from ui.pages.settings import render as render_settings
+
         render_settings()
 
 

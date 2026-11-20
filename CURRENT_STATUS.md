@@ -1,9 +1,9 @@
 # Current Project Status
 
 ## Overall
-- Current phase: v1.0.0 released; post-release dependency layout change applied on `main`
-- Current task: Owner deployment on Streamlit Community Cloud Free
-- Overall status: Phase 15a/b/c/d merged to `main` (`b1507f9`); annotated `v1.0.0-rc1` and `v1.0.0` pushed. A post-release commit inlines `pyarrow==23.0.1` in `requirements.txt` and removes `constraints.txt` for a single-file Cloud install.
+- Current phase: v1.0.0 released; V2 technical hardening on `feature/v2-tech`
+- Current task: T5 bounded property tests
+- Overall status: Phase 15a/b/c/d merged to `main` (`b1507f9`); annotated `v1.0.0-rc1` and `v1.0.0` pushed. A post-release commit inlines `pyarrow==23.0.1` in `requirements.txt` and removes `constraints.txt` for a single-file Cloud install. T0-T4 are committed on `feature/v2-tech`; nothing is pushed.
 - Last updated: 2026-11-20
 - Branch: `feature/v2-tech` (created from an up-to-date `main`)
 
@@ -35,7 +35,8 @@
   `pytest -q` 988 passed/3 deselected; `pytest -q -m smoke` 12 passed/
   979 deselected; `pytest -q -m perf` 3 passed/988 deselected; `ruff check .`
   clean. See `docs/PERFORMANCE.md`.
-- T4-T5: in progress; evidence will be recorded here per task.
+- T4: lazy imports complete. `app.py` imports page modules only when selected; `services.export` defers all implementation modules, and `ui/cache.py` imports reporting/export helpers inside cached functions. Cold `import app` now has zero cumulative importtime for reportlab, reporting, export, and four rare pages. App import `2327519` to `1564059` us and Dashboard first render `1.994` to `1.363` s in fresh one-run measurements against `bf2b5b8`. All six `st.cache_data` uses remain bounded at 8 entries. `pytest -q` 992 passed/3 deselected; `pytest -q -m smoke` 12 passed/983 deselected; `ruff check .` clean. See `docs/PERFORMANCE.md`.
+- T5: in progress; bounded Hypothesis tests and any discovered bugs will be recorded here.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment

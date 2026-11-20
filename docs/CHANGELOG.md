@@ -2,6 +2,35 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-20 - T4: cold-start lazy imports
+
+### Added
+- `scripts/profile_imports.py` measures fresh `import app` cumulative import
+  time and one clean Dashboard `AppTest` render.
+- `tests/unit/test_cold_start.py` asserts that cold app import defers report,
+  export, PDF, and four rarely used page modules; that PDF helpers load only on
+  first use; that public function names survive submodule loading; and that all
+  six `st.cache_data` decorators stay bounded.
+
+### Changed
+- `app.py` imports page modules inside the selected branch instead of at module
+  import. Dashboard cold start no longer imports report, agent, security, or
+  other rarely used pages.
+- `services/export/__init__.py` resolves every public export through module-level
+  `__getattr__`, keeping ReportLab and report modules out of cold start. A
+  shadow-restore step keeps `config_templates` and `csv_tables` callable after
+  their implementation modules load.
+- `ui/cache.py` imports reporting and export helpers only inside cached
+  functions. No cache bound, schema, feature, UI, or runtime dependency changed.
+
+### Evidence
+- Against commit `bf2b5b8` on the same host: app cumulative import `2327519` to
+  `1564059` us; Dashboard first render `1.994` to `1.363` s. The seven targeted
+  import rows are all `0` after the change. Full verbatim tables are in
+  `docs/PERFORMANCE.md`.
+- `pytest -q` 992 passed/3 deselected; `pytest -q -m smoke` 12 passed/
+  983 deselected; `ruff check .` clean.
+
 ## 2026-11-20 - T3: sparse routing and per-run precomputation
 
 ### Added
