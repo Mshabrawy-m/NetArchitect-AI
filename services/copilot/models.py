@@ -14,6 +14,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.limits import (
+    MAX_COPILOT_EXPLANATION_CHARS,
     MAX_COPILOT_TEXT_CHARS,
     MAX_SCENARIO_ELEMENTS,
 )
@@ -175,6 +176,39 @@ class InterpretationResult(BaseModel):
         return self.scenario is not None
 
 
+class ExplanationTarget(str, Enum):
+    """The only result types an optional explanation may describe."""
+
+    route = "route"
+    finding = "finding"
+    simulation = "simulation"
+    optimization = "optimization"
+
+
+class ExplanationResult(BaseModel):
+    """A deterministic explanation with optional audited advisory prose."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    target: ExplanationTarget
+    target_id: str
+    deterministic_text: str = Field(
+        min_length=1,
+        max_length=MAX_COPILOT_EXPLANATION_CHARS,
+    )
+    ai_text: str = Field(default="", max_length=MAX_COPILOT_EXPLANATION_CHARS)
+    ai_rejection: str = Field(default="", max_length=MAX_COPILOT_TEXT_CHARS)
+    prompt_id: str = ""
+    prompt_version: str = ""
+    cache_hit: bool = False
+    provider_used: bool = False
+
+    @property
+    def has_ai(self) -> bool:
+        """Return whether an audited AI paragraph is present."""
+        return bool(self.ai_text)
+
+
 def audit_prose(text: str, *, allowed_numbers: str) -> str:
     """Return a rejection reason for unsafe model prose, or an empty string.
 
@@ -195,6 +229,8 @@ __all__ = [
     "AIExplanationDraft",
     "Clarification",
     "ClarificationCode",
+    "ExplanationResult",
+    "ExplanationTarget",
     "InterpretationResult",
     "InterpretationSource",
     "ScenarioIntent",

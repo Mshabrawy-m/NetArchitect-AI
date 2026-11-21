@@ -68,10 +68,16 @@ from optimization import (
     sensitivity_to_csv,
     sensitivity_to_json,
 )
-from services.copilot import SuggestionReport, apply_suggestion, suggest
+from services.copilot import (
+    SuggestionReport,
+    apply_suggestion,
+    optimization_request,
+    suggest,
+)
 from simulation import FailureSweepDepth, run_failure_sweep, twin_fingerprint
 from ui import formatting, i18n, state, theme
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
+from ui.components.copilot import why_button
 from ui.components.editors import bump_editor_key, editor_key
 from ui.components.feedback import working
 
@@ -1261,6 +1267,15 @@ def _render_candidates(run: OptimizationRun, twin: DigitalTwin) -> None:
             st.write(f"- {change}")
     else:
         st.info("This candidate keeps the baseline design unchanged.")
+    why_button(
+        "copilot_why_optimization",
+        lambda: optimization_request(
+            record,
+            twin=twin,
+            settings=run.settings,
+            baseline=run.baseline,
+        ),
+    )
     _render_apply(run, twin, evaluation)
 
 

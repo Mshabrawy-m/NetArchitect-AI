@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -9,9 +10,11 @@ from streamlit.testing.v1 import AppTest
 
 from config.limits import MAX_SECURITY_FLOW_CHECKS
 from security import SECURITY_DISCLAIMER, FlowRequest, Protocol, get_security_model
+from services.llm.testing import FakeProvider
 from tests.unit.security.design_helpers import case_design, hardened_design
 from tests.unit.ui.nav_helpers import open_page
 from ui import state
+from ui.components import copilot as copilot_component
 from ui.pages import security_analysis as page
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -56,6 +59,51 @@ def test_security_analysis_shows_five_tabs_and_exact_disclaimer() -> None:
     assert at.button(key=page.FLOW_ADD_KEY)
     assert at.download_button(key=page.TEMPLATE_DOWNLOAD_KEY)
     assert at.download_button(key=page.ANALYSIS_DOWNLOAD_KEY)
+
+
+def test_c3_finding_explanation_without_key() -> None:
+    twin, _ = case_design("SEC-DW-004")
+    at = _page(twin)
+
+    assert not at.exception
+    assert at.button(key="copilot_why_finding")
+    at.button(key="copilot_why_finding").click().run()
+
+    assert not at.exception
+    result = at.session_state[copilot_component.EXPLANATION_STATE_KEY][
+        "copilot_why_finding"
+    ]
+    assert result.target.value == "finding"
+    assert result.has_ai is False
+    assert any("Deterministic explanation" in item.value for item in at.caption)
+
+
+def test_c3_finding_explanation_with_key_is_audited(monkeypatch) -> None:
+    reply = json.dumps({"text": "The modeled zones are described in the finding."})
+    monkeypatch.setattr(
+        copilot_component,
+        "_provider",
+        lambda: FakeProvider([reply]),
+    )
+    twin, _ = case_design("SEC-DW-004")
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120).run()
+    at.session_state[state.TWIN_KEY] = twin
+    at.session_state[state.LLM_SESSION_KEY] = "session-only-test-key"
+    open_page(at, "Security Analysis")
+
+    at.button(key="copilot_why_finding").click().run()
+
+    assert not at.exception
+    result = at.session_state[copilot_component.EXPLANATION_STATE_KEY][
+        "copilot_why_finding"
+    ]
+    assert result.has_ai is True
+    rendered = "\n".join(
+        [caption.value for caption in at.caption]
+        + [element.value for element in at.markdown]
+    )
+    assert "AI-generated" in rendered
+    assert "session-only-test-key" not in rendered
 
 
 def test_security_analysis_adds_a_bounded_modeled_flow_check() -> None:

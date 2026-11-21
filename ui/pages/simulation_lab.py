@@ -37,7 +37,7 @@ from core.inputs import parse_json_text
 from core.schemas.routing import TrafficDemand
 from core.schemas.scenario import Scenario, ScenarioType
 from digital_twin import DigitalTwin, SharedRiskGroup, validate_twin
-from services.copilot import interpret_scenario
+from services.copilot import interpret_scenario, route_request, simulation_request
 from services.llm import GroqProvider
 from simulation import (
     DEFAULT_COMPARISON_MODES,
@@ -67,6 +67,7 @@ from simulation import (
 from simulation.models import CongestionThresholds, SimulationAssumptions
 from ui import formatting, i18n, state, theme
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
+from ui.components.copilot import why_button
 from ui.components.editors import bump_editor_key, editor_key
 from ui.components.feedback import working
 
@@ -82,6 +83,7 @@ SWEEP_SLICE_KEY = "simulation_sweep_slice_size"
 COPILOT_SENTENCE_KEY = "simulation_copilot_sentence"
 COPILOT_RESULT_KEY = "simulation_copilot_result"
 COPILOT_PREVIEW_KEY = "simulation_copilot_preview"
+ROUTE_EXPLANATION_SELECT_KEY = "copilot_why_route_demand"
 
 ROUTING_MODE_LABELS: dict[RoutingMode, str] = {
     RoutingMode.single_path: "Single path (legacy)",
@@ -1768,6 +1770,30 @@ def _render_exports(run: ScenarioRun) -> None:
         )
 
 
+def _render_explanations(run: ScenarioRun) -> None:
+    """Explain computed results; deterministic text never depends on an API key."""
+    st.markdown("**Explanations**")
+    st.caption(
+        "The computed explanation is always shown. An AI note is advisory only, "
+        "is audited against the computed values, and never sets a verdict."
+    )
+    why_button("copilot_why_simulation", lambda: simulation_request(run))
+
+    demands = run.baseline_state.demands
+    if not demands:
+        return
+    by_name = {demand.name: demand for demand in demands}
+    selected = st.selectbox(
+        "Demand to explain",
+        list(by_name),
+        key=ROUTE_EXPLANATION_SELECT_KEY,
+    )
+    why_button(
+        "copilot_why_route",
+        lambda: route_request(by_name[selected], assumptions=run.assumptions),
+    )
+
+
 def _render_results(twin: DigitalTwin) -> None:
     run = _active_run()
     if run is None:
@@ -1801,6 +1827,8 @@ def _render_results(twin: DigitalTwin) -> None:
 
     st.markdown("**Path changes**")
     _render_path_changes(run)
+
+    _render_explanations(run)
 
     st.markdown("**Unserved demands**")
     _render_unserved(run)

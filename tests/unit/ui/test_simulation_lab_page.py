@@ -17,6 +17,7 @@ from simulation import (
 from tests.unit.simulation.helpers import diamond_twin, make_demand
 from tests.unit.ui.nav_helpers import open_page
 from ui import i18n, state
+from ui.components import copilot as copilot_component
 from ui.components import editors
 from ui.pages import simulation_lab
 
@@ -193,6 +194,68 @@ def test_copilot_with_key_uses_audited_ai_draft(monkeypatch) -> None:
         [caption.value for caption in at.caption]
         + [element.value for element in at.markdown]
     )
+    assert "session-only-test-key" not in rendered
+
+
+def _run_scenario_in_app(at: AppTest) -> None:
+    at.session_state["simulation_scenario_type"] = "Multiple link failures"
+    at.session_state["simulation_scenario_name"] = "Lose both branches"
+    at.session_state["simulation_affected_links"] = ["ab", "bd", "ac", "cd"]
+    at.button(key="simulation_run_scenario").click().run()
+
+
+def test_c3_explanations_work_without_a_key() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = _twin_with_demand()
+    open_page(at, "Simulation Lab")
+    _run_scenario_in_app(at)
+
+    assert not at.exception
+    assert at.button(key="copilot_why_simulation")
+    assert at.button(key="copilot_why_route")
+    at.button(key="copilot_why_simulation").click().run()
+    at.button(key="copilot_why_route").click().run()
+
+    assert not at.exception
+    results = at.session_state[copilot_component.EXPLANATION_STATE_KEY]
+    assert {key: value.target.value for key, value in results.items()} == {
+        "copilot_why_simulation": "simulation",
+        "copilot_why_route": "route",
+    }
+    assert all(not value.has_ai for value in results.values())
+    captions = [caption.value for caption in at.caption]
+    assert "Deterministic explanation" in captions
+    assert not any("AI-generated" in caption for caption in captions)
+
+
+def test_c3_explanations_use_audited_ai_with_a_key(monkeypatch) -> None:
+    replies = [
+        json.dumps({"text": "The modeled path follows the cheaper branch."}),
+        json.dumps({"text": "The demand can still use the alternate branch."}),
+    ]
+    pending = iter(replies)
+    monkeypatch.setattr(
+        copilot_component,
+        "_provider",
+        lambda: FakeProvider([next(pending)]),
+    )
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = _twin_with_demand()
+    at.session_state[state.LLM_SESSION_KEY] = "session-only-test-key"
+    open_page(at, "Simulation Lab")
+    _run_scenario_in_app(at)
+
+    at.button(key="copilot_why_simulation").click().run()
+    at.button(key="copilot_why_route").click().run()
+
+    assert not at.exception
+    results = at.session_state[copilot_component.EXPLANATION_STATE_KEY]
+    assert all(value.has_ai for value in results.values())
+    rendered = "\n".join(
+        [caption.value for caption in at.caption]
+        + [element.value for element in at.markdown]
+    )
+    assert "AI-generated" in rendered
     assert "session-only-test-key" not in rendered
 
 

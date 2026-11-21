@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -12,11 +13,13 @@ from optimization import (
     OptimizationHistory,
     run_optimization,
 )
+from services.llm.testing import FakeProvider
 from simulation import twin_fingerprint
 from tests.unit.optimization.helpers import settings, tiny_twin
 from tests.unit.simulation.helpers import diamond_twin, line_twin, make_demand
 from tests.unit.ui.nav_helpers import open_page
 from ui import state
+from ui.components import copilot as copilot_component
 from ui.pages.optimization_center import (
     ALGORITHM_LABELS,
     SNAPSHOT_LABEL_KEY,
@@ -231,3 +234,56 @@ def test_copilot_suggestions_work_without_key_and_require_confirmation() -> None
     assert at.session_state[SUGGESTION_APPLIED_KEY] == twin_fingerprint(
         snapshots[0].twin
     )
+
+
+def _app_with_run():
+    twin, run = _retained_nsga2_run()
+    at = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    at.session_state[state.TWIN_KEY] = twin
+    history = OptimizationHistory()
+    history.add(run)
+    at.session_state[state.OPTIMIZATION_HISTORY_KEY] = history
+    open_page(at, "Optimization Center")
+    return at
+
+
+def test_c3_candidate_explanation_without_key() -> None:
+    at = _app_with_run()
+
+    assert not at.exception
+    assert at.button(key="copilot_why_optimization")
+    at.button(key="copilot_why_optimization").click().run()
+
+    assert not at.exception
+    result = at.session_state[copilot_component.EXPLANATION_STATE_KEY][
+        "copilot_why_optimization"
+    ]
+    assert result.target.value == "optimization"
+    assert result.has_ai is False
+    assert any("Deterministic explanation" in item.value for item in at.caption)
+
+
+def test_c3_candidate_explanation_with_key_is_audited(monkeypatch) -> None:
+    reply = json.dumps({"text": "The modeled candidate keeps the same link count."})
+    monkeypatch.setattr(
+        copilot_component,
+        "_provider",
+        lambda: FakeProvider([reply]),
+    )
+    at = _app_with_run()
+    at.session_state[state.LLM_SESSION_KEY] = "session-only-test-key"
+    at.run()
+
+    at.button(key="copilot_why_optimization").click().run()
+
+    assert not at.exception
+    result = at.session_state[copilot_component.EXPLANATION_STATE_KEY][
+        "copilot_why_optimization"
+    ]
+    assert result.has_ai is True
+    rendered = "\n".join(
+        [caption.value for caption in at.caption]
+        + [element.value for element in at.markdown]
+    )
+    assert "AI-generated" in rendered
+    assert "session-only-test-key" not in rendered

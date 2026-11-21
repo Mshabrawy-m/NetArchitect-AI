@@ -30,6 +30,7 @@ from security import (
     get_security_model,
     set_security_model,
 )
+from services.copilot import finding_request
 from ui import state
 from ui.cache import cached_security_analysis, security_flows_payload, twin_payload
 from ui.components import (
@@ -39,6 +40,7 @@ from ui.components import (
     page_header,
     render_findings,
 )
+from ui.components.copilot import why_button
 from ui.components.editors import bump_editor_key, editor_key
 from ui.components.notices import queue_notice, render_notices
 
@@ -62,6 +64,7 @@ FLOW_REMOVE_KEY = "security_flow_remove_index"
 FLOW_REMOVE_BUTTON_KEY = "security_remove_flow"
 FLOW_CLEAR_BUTTON_KEY = "security_clear_flows"
 
+COPILOT_WHY_FINDING_KEY = "copilot_why_finding_select"
 PROPOSAL_SELECT_KEY = "security_selected_proposals"
 APPLY_PROPOSALS_KEY = "security_apply_proposals"
 TEMPLATE_DOWNLOAD_KEY = "security_template_download"
@@ -673,6 +676,27 @@ def _render_findings_tab(twin, analysis) -> None:
         tuple(item.to_validation_finding() for item in analysis.findings),
         "No design-weakness or policy finding was produced for this model.",
     )
+
+    if analysis.findings:
+        st.subheader("Explain a finding")
+        st.caption(
+            "The deterministic explanation uses the full finding, its evidence, "
+            "and its computed remediation. Optional AI prose is audited and never "
+            "states a severity or verdict."
+        )
+        # Codes can repeat, so include a stable index in the visible label. Keep
+        # the full SecurityFinding (not the reduced Finding) for the builder.
+        choices = [
+            (f"{item.code} ({index + 1})", item)
+            for index, item in enumerate(analysis.findings)
+        ]
+        selected = st.selectbox(
+            "Finding to explain",
+            [label for label, _ in choices],
+            key=COPILOT_WHY_FINDING_KEY,
+        )
+        finding = next(item for label, item in choices if label == selected)
+        why_button("copilot_why_finding", lambda: finding_request(finding))
 
     st.subheader("Fixed catalog")
     st.caption(

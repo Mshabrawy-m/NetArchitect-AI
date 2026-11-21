@@ -9,12 +9,23 @@ any application code.
 from __future__ import annotations
 
 from .cache import CacheKey, CopilotCache, build_key, input_hash
+from .explain import (
+    ExplanationRequest,
+    audit_ai_explanation,
+    explain,
+    finding_request,
+    optimization_request,
+    route_request,
+    simulation_request,
+)
 from .interpret import interpret_scenario
 from .llm_bridge import request_structured
 from .models import (
     AIExplanationDraft,
     Clarification,
     ClarificationCode,
+    ExplanationResult,
+    ExplanationTarget,
     InterpretationResult,
     InterpretationSource,
     ScenarioIntent,
@@ -40,6 +51,9 @@ __all__ = [
     "Clarification",
     "ClarificationCode",
     "CopilotCache",
+    "ExplanationRequest",
+    "ExplanationResult",
+    "ExplanationTarget",
     "InterpretationResult",
     "InterpretationSource",
     "PromptTrace",
@@ -52,10 +66,16 @@ __all__ = [
     "SuggestionReport",
     "TwinAllowlist",
     "apply_suggestion",
+    "audit_ai_explanation",
     "audit_prose",
     "build_key",
+    "explain",
+    "finding_request",
     "input_hash",
     "interpret_scenario",
+    "optimization_request",
     "request_structured",
+    "route_request",
+    "simulation_request",
     "suggest",
 ]
