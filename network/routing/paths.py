@@ -23,6 +23,7 @@ alternatives are distinct device sequences. ``k`` is bounded by
 from __future__ import annotations
 
 import heapq
+import math
 from collections.abc import Iterable
 from itertools import pairwise
 
@@ -30,7 +31,7 @@ import networkx as nx
 import numpy as np
 from pydantic import BaseModel, Field
 
-from config.limits import MAX_ALTERNATIVE_PATHS
+from config.limits import MAX_ALTERNATIVE_PATHS, MAX_ECMP_PATHS
 from core.exceptions import DeviceNotFoundError, LimitsExceededError
 from core.schemas.network import Topology
 
@@ -216,6 +217,111 @@ def shortest_path_from_router(
             device_ids=[source],
         )
     return _path_from_sparse(source, destination, router.path(source, destination))
+
+
+def equal_cost_paths_from_router(
+    router: SparseRouter,
+    source: str,
+    destination: str,
+    *,
+    limit: int = MAX_ECMP_PATHS,
+) -> tuple[list[RoutePath], bool]:
+    """Return the lexicographically first equal-cost paths and a truncation flag.
+
+    This function reuses the same sparse arrays and deterministic arc order as
+    :func:`shortest_path_from_router`. Every returned path has the same total
+    cost as the single shortest path, with equal-cost ties resolved by the
+    lexicographically smallest device sequence. Simple paths only: a visited
+    node is never revisited, so zero-cost cycles cannot produce infinite paths.
+
+    At most ``limit`` paths are returned (bounded by ``MAX_ECMP_PATHS``). The
+    boolean is ``True`` when at least one additional equal-cost path exists;
+    callers must surface that truncation instead of silently splitting across a
+    subset. Failed or unknown endpoints return no paths.
+    """
+    if limit < 1:
+        raise ValueError(f"ECMP path limit must be positive, got {limit}")
+    if source not in router.node_ids or destination not in router.node_ids:
+        return [], False
+    if source == destination:
+        return [
+            RoutePath(
+                source=source,
+                destination=destination,
+                reachable=True,
+                device_ids=[source],
+            )
+        ], False
+
+    distances = router.forward_distances
+    target_index = router.node_ids.index(destination)
+    start_index = router.node_ids.index(source)
+    if not math.isfinite(float(distances[start_index, target_index])):
+        return [], False
+
+    results: list[RoutePath] = []
+    found_extra = False
+
+    def visit(
+        current_index: int,
+        nodes: tuple[str, ...],
+        hops: tuple[RouteHop, ...],
+        total_cost: float,
+        visited: frozenset[int],
+    ) -> None:
+        nonlocal found_extra
+        if found_extra:
+            return
+        if current_index == target_index:
+            if len(results) < limit:
+                results.append(
+                    RoutePath(
+                        source=source,
+                        destination=destination,
+                        reachable=True,
+                        device_ids=list(nodes),
+                        hops=list(hops),
+                        total_cost=float(total_cost),
+                        hop_count=len(hops),
+                    )
+                )
+            else:
+                found_extra = True
+            return
+
+        budget = float(distances[current_index, target_index])
+        if not math.isfinite(budget):
+            return
+        for position in range(
+            router.indptr[current_index], router.indptr[current_index + 1]
+        ):
+            neighbor = int(router.indices[position])
+            cost = float(router.costs[position])
+            remaining = float(distances[neighbor, target_index])
+            if not math.isfinite(remaining) or cost + remaining != budget:
+                continue
+            if neighbor in visited:
+                continue
+            visit(
+                neighbor,
+                (*nodes, router.node_ids[neighbor]),
+                (
+                    *hops,
+                    RouteHop(
+                        source=router.node_ids[current_index],
+                        target=router.node_ids[neighbor],
+                        link_id=router.link_ids[position],
+                        cost=cost,
+                    ),
+                ),
+                total_cost + cost,
+                visited | {neighbor},
+            )
+            if found_extra:
+                return
+
+    visit(start_index, (source,), (), 0.0, frozenset({start_index}))
+    return results, found_extra
 
 
 def component_summary_from_router(router: SparseRouter) -> ComponentSummary:

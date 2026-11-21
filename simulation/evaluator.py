@@ -20,7 +20,7 @@ import hashlib
 import json
 import time
 
-from config.limits import MAX_SIMULATION_RUNTIME_SECONDS
+from config.limits import MAX_ECMP_PATHS, MAX_SIMULATION_RUNTIME_SECONDS
 from core.exceptions import LimitsExceededError, SimulationRuntimeExceeded
 from core.schemas.network import Link, Topology
 from core.schemas.routing import TrafficDemand
@@ -30,6 +30,7 @@ from digital_twin.serialization import canonical_payload
 from network.routing.paths import (
     RoutePath,
     component_summary_from_router,
+    equal_cost_paths_from_router,
     shortest_path_from_router,
 )
 from network.routing.sparse import SparseRouter
@@ -39,6 +40,8 @@ from .models import (
     DemandEvaluation,
     LinkLoad,
     NetworkState,
+    PathSplit,
+    RoutingMode,
     SimulationAssumptions,
     TwinReference,
     UnservedDemand,
@@ -210,6 +213,117 @@ def _demand_evaluation(
     )
 
 
+def _equal_shares(total: float, count: int) -> tuple[float, ...]:
+    """Return ``count`` equal shares whose sum is exactly ``total`` in float."""
+    if count < 1:
+        raise ValueError("A split needs at least one path.")
+    share = total / count
+    shares = [share] * (count - 1)
+    shares.append(total - sum(shares))
+    return tuple(shares)
+
+
+def _ecmp_demand_evaluation(
+    demand: TrafficDemand,
+    assumptions: SimulationAssumptions,
+    *,
+    router: SparseRouter,
+    known_devices: set[str],
+) -> tuple[DemandEvaluation, bool]:
+    """Evaluate one demand with equal splitting over all capped equal-cost paths."""
+    name = demand.name
+    source = demand.source
+    destination = demand.destination
+    bandwidth = float(demand.bandwidth_mbps)
+
+    if source not in known_devices:
+        return (
+            DemandEvaluation(
+                name=name,
+                source=source,
+                destination=destination,
+                bandwidth_mbps=bandwidth,
+                served=False,
+                reason=f"Source device {source!r} is not present in the twin topology",
+            ),
+            False,
+        )
+    if destination not in known_devices:
+        return (
+            DemandEvaluation(
+                name=name,
+                source=source,
+                destination=destination,
+                bandwidth_mbps=bandwidth,
+                served=False,
+                reason=(
+                    f"Destination device {destination!r} is not present in the twin "
+                    "topology"
+                ),
+            ),
+            False,
+        )
+
+    paths, truncated = equal_cost_paths_from_router(
+        router,
+        source,
+        destination,
+        limit=MAX_ECMP_PATHS,
+    )
+    if not paths:
+        path = shortest_path_from_router(router, source, destination)
+        _, latency_note = _latency_for(path, assumptions)
+        return (
+            DemandEvaluation(
+                name=name,
+                source=source,
+                destination=destination,
+                bandwidth_mbps=bandwidth,
+                served=False,
+                reason=path.reason or "No path exists under the modeled state",
+                latency_note=latency_note,
+            ),
+            False,
+        )
+
+    first = paths[0]
+    latency, latency_note = _latency_for(first, assumptions)
+    if latency is not None:
+        latency_note = (
+            "ECMP split: latency is shown for the lexicographically first "
+            "equal-cost path. " + latency_note
+        )
+    shares = _equal_shares(bandwidth, len(paths))
+    splits = tuple(
+        PathSplit(
+            path_device_ids=tuple(path.device_ids),
+            link_ids=tuple(hop.link_id for hop in path.hops),
+            bandwidth_mbps=share,
+            share_percent=(100.0 / len(paths)),
+            total_cost=path.total_cost,
+            hop_count=path.hop_count,
+        )
+        for path, share in zip(paths, shares)
+    )
+    return (
+        DemandEvaluation(
+            name=name,
+            source=source,
+            destination=destination,
+            bandwidth_mbps=bandwidth,
+            served=True,
+            path_device_ids=tuple(first.device_ids),
+            link_ids=tuple(hop.link_id for hop in first.hops),
+            total_cost=first.total_cost,
+            hop_count=first.hop_count,
+            latency_ms=latency,
+            latency_note=latency_note,
+            splits=splits,
+        ),
+        truncated,
+    )
+
+
 def _connected_devices(
     topology: Topology,
     *,
@@ -260,23 +374,41 @@ def _link_loads(
     for evaluation in demands:
         if not evaluation.served:
             continue
-        for hop in zip(
-            evaluation.path_device_ids,
-            evaluation.path_device_ids[1:],
-            evaluation.link_ids,
-        ):
-            source, target, link_id = hop
-            if link_id not in loads:
-                loads[link_id] = [0.0, 0.0]
-                forward[link_id] = []
-                reverse[link_id] = []
-            link = link_index[link_id]
-            if _hop_is_forward(link, source, target):
-                loads[link_id][0] += evaluation.bandwidth_mbps
-                forward[link_id].append(evaluation.name)
-            else:
-                loads[link_id][1] += evaluation.bandwidth_mbps
-                reverse[link_id].append(evaluation.name)
+        if evaluation.splits:
+            paths = [
+                (
+                    split.path_device_ids,
+                    split.link_ids,
+                    split.bandwidth_mbps,
+                )
+                for split in evaluation.splits
+            ]
+        else:
+            paths = [
+                (
+                    evaluation.path_device_ids,
+                    evaluation.link_ids,
+                    evaluation.bandwidth_mbps,
+                )
+            ]
+        for path_device_ids, path_link_ids, bandwidth in paths:
+            for hop in zip(
+                path_device_ids,
+                path_device_ids[1:],
+                path_link_ids,
+            ):
+                source, target, link_id = hop
+                if link_id not in loads:
+                    loads[link_id] = [0.0, 0.0]
+                    forward[link_id] = []
+                    reverse[link_id] = []
+                link = link_index[link_id]
+                if _hop_is_forward(link, source, target):
+                    loads[link_id][0] += bandwidth
+                    forward[link_id].append(evaluation.name)
+                else:
+                    loads[link_id][1] += bandwidth
+                    reverse[link_id].append(evaluation.name)
 
     records: list[LinkLoad] = []
     for link in topology.links:
@@ -364,17 +496,34 @@ def evaluate(
 
     known_devices = {device.id for device in twin.topology.devices}
     demands: list[DemandEvaluation] = []
+    mode = resolved_assumptions.routing_mode
+    ecmp_truncated = False
     for demand in twin.demands:
         _check_deadline(deadline, "demand routing")
-        demands.append(
-            _demand_evaluation(
+        if mode is RoutingMode.single_path:
+            demands.append(
+                _demand_evaluation(
+                    demand,
+                    resolved_assumptions,
+                    router=router,
+                    known_devices=known_devices,
+                )
+            )
+        else:
+            evaluation, truncated = _ecmp_demand_evaluation(
                 demand,
                 resolved_assumptions,
                 router=router,
                 known_devices=known_devices,
             )
-        )
+            demands.append(evaluation)
+            ecmp_truncated = ecmp_truncated or truncated
     demand_tuple = tuple(demands)
+    if ecmp_truncated:
+        warnings.append(
+            f"ECMP used the lexicographically first {MAX_ECMP_PATHS} equal-cost "
+            "paths; additional equal-cost paths were not split."
+        )
     unserved = tuple(
         UnservedDemand(
             name=evaluation.name,

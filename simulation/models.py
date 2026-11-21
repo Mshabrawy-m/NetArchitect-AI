@@ -6,10 +6,16 @@ This module models traffic as *flows between devices*, not packets. Every
 number is a modeled estimate from the stated assumptions; nothing here is
 packet-level or hardware-accurate emulation.
 
-* Each :class:`~core.schemas.routing.TrafficDemand` is routed on the single
-  lowest-cost path returned by :func:`network.routing.shortest_path`. The
-  routing engine's deterministic lexicographic tie-break is reused. There is
-  no flow splitting and no ECMP in v1.
+* By default each :class:`~core.schemas.routing.TrafficDemand` is routed on the
+  single lowest-cost path returned by :func:`network.routing.shortest_path`.
+  The routing engine's deterministic lexicographic tie-break is reused. This
+  ``single_path`` mode is the legacy behavior and remains the default.
+* Optional ``ecmp`` mode splits a demand equally across every deterministic
+  lowest-cost simple path (up to ``MAX_ECMP_PATHS``). Directed links carry only
+  their permitted forward share; undirected links sum both directions against
+  one shared capacity, exactly as in the default model. When more equal-cost
+  paths exist than the cap, the first paths are used and an explicit warning is
+  recorded rather than silently truncating.
 * Link load is the sum of the bandwidth of every demand whose chosen path
   traverses the link. Parallel links have already collapsed in the routing
   graph, so load is assigned to the physical link chosen by that engine.
@@ -36,7 +42,14 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 MODEL_NOTE = (
     "Modeled estimates from stated assumptions; not packet-level or "
@@ -51,6 +64,18 @@ class CongestionLevel(str, Enum):
     warning = "warning"  # At or above the warning threshold.
     critical = "critical"  # At or above the critical threshold.
     overloaded = "overloaded"  # Above the overload threshold.
+
+
+class RoutingMode(str, Enum):
+    """Selectable modeled demand-placement rule.
+
+    ``single_path`` is the legacy behavior. The other modes are modeled
+    estimates and are never a protocol or router configuration.
+    """
+
+    single_path = "single_path"
+    ecmp = "ecmp"
+    capacity_aware = "capacity_aware"
 
 
 class CongestionThresholds(BaseModel):
@@ -102,6 +127,10 @@ class SimulationAssumptions(BaseModel):
     traversed link, the result reports an estimated path latency in
     milliseconds. A partial map deliberately produces no latency estimate
     rather than silently treating a missing link as zero delay.
+
+    ``routing_mode`` is additive and defaulted. The default is omitted from
+    serialization so legacy run JSON stays byte-identical; a non-default mode
+    is recorded explicitly for provenance.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -117,6 +146,21 @@ class SimulationAssumptions(BaseModel):
             "latency is not estimated."
         ),
     )
+    routing_mode: RoutingMode = Field(
+        default=RoutingMode.single_path,
+        description=(
+            "Modeled demand-placement rule. Defaults to legacy single-path "
+            "routing; ECMP and capacity-aware modes are modeled estimates."
+        ),
+    )
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: object) -> dict[str, object]:
+        """Omit the default mode so old assumptions/run bytes stay stable."""
+        payload = dict(handler(self))  # type: ignore[operator]
+        if self.routing_mode is RoutingMode.single_path:
+            payload.pop("routing_mode", None)
+        return payload
 
     @field_validator("link_delay_ms")
     @classmethod
@@ -142,6 +186,30 @@ class TwinReference(BaseModel):
     fingerprint: str = Field(
         description="SHA-256 of the twin's canonical JSON serialization.",
     )
+
+
+class PathSplit(BaseModel):
+    """One equal-cost share of a demand under ECMP."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path_device_ids: tuple[str, ...] = Field(
+        description="Device ids along this split path, including endpoints."
+    )
+    link_ids: tuple[str, ...] = Field(
+        description="Physical link ids traversed by this split path."
+    )
+    bandwidth_mbps: float = Field(
+        ge=0,
+        description="Portion of the demand's bandwidth placed on this path.",
+    )
+    share_percent: float = Field(
+        ge=0,
+        le=100,
+        description="Percentage of the demand placed on this path.",
+    )
+    total_cost: float = Field(ge=0, description="Sum of Link.cost along this path.")
+    hop_count: int = Field(ge=0, description="Number of links traversed.")
 
 
 class DemandEvaluation(BaseModel):
@@ -181,6 +249,21 @@ class DemandEvaluation(BaseModel):
         default="",
         description="Why latency was or was not estimated.",
     )
+    splits: tuple[PathSplit, ...] = Field(
+        default_factory=tuple,
+        description=(
+            "Non-empty only for split modes. Each share's bandwidth is included "
+            "in the parent demand's bandwidth, not additional to it."
+        ),
+    )
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: object) -> dict[str, object]:
+        """Omit the additive split field for legacy single-path results."""
+        payload = dict(handler(self))  # type: ignore[operator]
+        if not self.splits:
+            payload.pop("splits", None)
+        return payload
 
 
 class UnservedDemand(BaseModel):

@@ -24,6 +24,11 @@ MAX_HOSTS_PER_SUBNET: int = 1_000_000
 # pair. Keeps k-shortest-path enumeration bounded on the deployment target.
 MAX_ALTERNATIVE_PATHS: int = 10
 
+# Maximum number of equal-cost paths considered by ECMP and capacity-aware
+# admission control. When more paths exist, the lexicographically first paths
+# are used and the result carries an explicit truncation warning.
+MAX_ECMP_PATHS: int = 16
+
 # Maximum number of what-if scenarios retained for comparison. The previous
 # value of 50 could reserve roughly 37 MiB of session data for the largest twin.
 # The default is lowered to 20 for free-tier safety; this is a retained-history
