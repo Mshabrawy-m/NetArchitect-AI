@@ -20,6 +20,7 @@ from .policy import check_flow
 from .reachability import build_reachability_report
 from .remediation import build_proposals
 from .risk import assess_risk, build_summary
+from .segmentation import score_segmentation
 from .templates import render_template
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -130,6 +131,13 @@ def analyze_design(
     proposals = build_proposals(findings)
     template = render_template(security_model, proposals)
     reachability = build_reachability_report(twin, security_model)
+    segmentation = score_segmentation(
+        twin,
+        security_model,
+        flows=flows,
+        matrix=reachability.matrix,
+        blast_radii=reachability.blast_radii,
+    )
     return SecurityAnalysis(
         model=security_model,
         findings=findings,
@@ -139,6 +147,7 @@ def analyze_design(
         proposals=proposals,
         template=template,
         reachability=reachability,
+        segmentation=segmentation,
     )
 
 

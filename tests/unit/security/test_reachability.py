@@ -43,10 +43,10 @@ def _chain_twin():
 def _four_zone_model():
     return SecurityModel(
         zones=(
-            make_zone("z-ext", zone_type=ZoneType.untrusted_external, device_id="d-ext", criticality=2),
-            make_zone("z-guest", zone_type=ZoneType.guest, device_id="d-guest", criticality=2),
-            make_zone("z-app", zone_type=ZoneType.server, device_id="d-app", criticality=4),
-            make_zone("z-db", zone_type=ZoneType.server, device_id="d-db", criticality=5),
+            make_zone("z-ext", zone_type=ZoneType.untrusted_external, device_id="d-ext", criticality=2, vlan_id=10),
+            make_zone("z-guest", zone_type=ZoneType.guest, device_id="d-guest", criticality=2, vlan_id=20),
+            make_zone("z-app", zone_type=ZoneType.server, device_id="d-app", criticality=4, vlan_id=30),
+            make_zone("z-db", zone_type=ZoneType.server, device_id="d-db", criticality=5, vlan_id=40),
         ),
         services=(make_service("http"),),
         rules=(

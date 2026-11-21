@@ -485,6 +485,34 @@ class ReachabilityReport(DisclosedModel):
     hop_limit: int = Field(ge=0)
 
 
+class SegmentationInput(DisclosedModel):
+    """One visible weighted contribution to the segmentation score."""
+
+    name: str
+    subscore: float = Field(ge=0.0, le=1.0)
+    weight: float = Field(ge=0.0, le=1.0)
+    contribution: float = Field(ge=0.0, le=1.0)
+    detail: str
+
+
+class SegmentationScore(DisclosedModel):
+    """Visible 0--100 segmentation score for one modeled design."""
+
+    score: int = Field(ge=0, le=100)
+    formula: str
+    inputs: tuple[SegmentationInput, ...]
+    allowed_count: int = Field(ge=0)
+    needed_count: int = Field(ge=0)
+    excess_count: int = Field(ge=0)
+    need_coverage: float = Field(ge=0.0, le=1.0)
+    violation_weight: float = Field(ge=0.0)
+    total_weight: float = Field(ge=0.0)
+    max_shared_vlan_fraction: float = Field(ge=0.0, le=1.0)
+    trust_ranks: dict[str, int] = Field(default_factory=dict)
+    zone_count: int = Field(ge=0)
+    note: str = POLICY_REACHABILITY_NOTE
+
+
 class SecurityAnalysis(DisclosedModel):
     """Complete deterministic design-time security assessment."""
 
@@ -495,9 +523,10 @@ class SecurityAnalysis(DisclosedModel):
     risk: RiskAssessment
     proposals: ProposalSet
     template: TemplateDocument
-    # Additive optional field. Legacy analysis JSON without this key still
+    # Additive optional fields. Legacy analysis JSON without these keys still
     # parses, and twin JSON/fingerprints are unaffected.
     reachability: ReachabilityReport | None = None
+    segmentation: SegmentationScore | None = None
 
 
 __all__ = [
@@ -527,6 +556,8 @@ __all__ = [
     "SecurityModel",
     "SecurityPosture",
     "SecuritySummary",
+    "SegmentationInput",
+    "SegmentationScore",
     "Service",
     "TemplateDocument",
     "Zone",

@@ -41,6 +41,8 @@ from .models import (
     SecurityModel,
     SecurityPosture,
     SecuritySummary,
+    SegmentationInput,
+    SegmentationScore,
     Service,
     TemplateDocument,
     Zone,
@@ -74,16 +76,29 @@ from .reachability import (
 )
 from .remediation import accept_proposed_rules, build_proposals
 from .risk import DEFAULT_ALLOW_BONUS, SEVERITY_WEIGHTS, assess_risk, build_summary
+from .segmentation import (
+    BROADCAST_WEIGHT,
+    DEFAULT_WEIGHT,
+    LEAST_PRIVILEGE_WEIGHT,
+    TRUST_RANKS,
+    TRUST_WEIGHT,
+    score_segmentation,
+)
 from .templates import TEMPLATE_HEADER, render_template
 
 __all__ = [
+    "BROADCAST_WEIGHT",
     "DEFAULT_ALLOW_BONUS",
+    "DEFAULT_WEIGHT",
+    "LEAST_PRIVILEGE_WEIGHT",
     "OVERSIZED_SUBNET_RATIO",
     "POLICY_REACHABILITY_NOTE",
     "RULE_CATALOG",
     "SECURITY_DISCLAIMER",
     "SEVERITY_WEIGHTS",
     "TEMPLATE_HEADER",
+    "TRUST_RANKS",
+    "TRUST_WEIGHT",
     "UNASSIGNED_ZONE",
     "BlastRadius",
     "CatalogRule",
@@ -109,6 +124,8 @@ __all__ = [
     "SecurityModel",
     "SecurityPosture",
     "SecuritySummary",
+    "SegmentationInput",
+    "SegmentationScore",
     "Service",
     "TemplateDocument",
     "Zone",
@@ -141,6 +158,7 @@ __all__ = [
     "remove_zone",
     "render_template",
     "reorder_rules",
+    "score_segmentation",
     "set_default_action",
     "set_security_model",
     "update_rule",

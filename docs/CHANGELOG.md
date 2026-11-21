@@ -2,6 +2,24 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - S2: visible segmentation score on feature/v2-security
+
+### Added
+- S2: deterministic 0--100 segmentation score with the complete formula in the
+  `security.segmentation` module docstring and every weighted input returned in
+  `SegmentationScore.inputs` for hand checking.
+- Additive optional `SecurityAnalysis.segmentation` field; legacy analysis JSON
+  without the key still parses.
+
+### Changed
+- Criticality weighting is stated exactly as c/5 and applies only to the trust
+  term; the exposure threshold remains a separate S1 finding. No schema version
+  bump, runtime dependency, thread, worker, or app disk write.
+
+### Evidence
+- `pytest -q`: `1228 passed, 6 deselected in 44.13s`.
+- `ruff check .`: `All checks passed!`.
+
 ## 2026-11-21 - S1: policy reachability and blast radius on feature/v2-security
 
 ### Added
