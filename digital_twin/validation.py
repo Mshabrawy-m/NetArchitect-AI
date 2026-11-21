@@ -18,7 +18,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from config.limits import MAX_DEMANDS
+from config.limits import (
+    MAX_DEMANDS,
+    MAX_SHARED_RISK_GROUPS,
+    MAX_SHARED_RISK_MEMBERS,
+)
 from core.schemas.addressing import AddressingPlan, Subnet
 from core.schemas.validation import Finding, Severity, ValidationReport
 from network.addressing.validation import validate_addressing
@@ -143,6 +147,82 @@ def validate_twin(twin: DigitalTwin) -> ValidationReport:
                     remediation=(
                         "Remove the stale state entry or restore the link in the "
                         "topology."
+                    ),
+                )
+            )
+
+    if len(twin.shared_risk_groups) > MAX_SHARED_RISK_GROUPS:
+        findings.append(
+            Finding(
+                severity=Severity.error,
+                code="twin_shared_risk_group_limit_exceeded",
+                affected_entities=[],
+                explanation=(
+                    f"The twin has {len(twin.shared_risk_groups)} shared-risk "
+                    f"groups; the limit is {MAX_SHARED_RISK_GROUPS}."
+                ),
+                remediation="Remove unused shared-risk groups before adding more.",
+            )
+        )
+    seen_groups: set[str] = set()
+    for group in twin.shared_risk_groups:
+        if group.id in seen_groups:
+            findings.append(
+                Finding(
+                    severity=Severity.error,
+                    code="twin_duplicate_shared_risk_group",
+                    affected_entities=[group.id],
+                    explanation=(
+                        f"Shared-risk group id {group.id!r} is repeated."
+                    ),
+                    remediation="Give every shared-risk group a unique id.",
+                )
+            )
+        seen_groups.add(group.id)
+
+        member_count = len(group.device_ids) + len(group.link_ids)
+        if member_count > MAX_SHARED_RISK_MEMBERS:
+            findings.append(
+                Finding(
+                    severity=Severity.error,
+                    code="twin_shared_risk_member_limit_exceeded",
+                    affected_entities=[group.id],
+                    explanation=(
+                        f"Shared-risk group {group.id!r} has {member_count} "
+                        f"members; the limit is {MAX_SHARED_RISK_MEMBERS}."
+                    ),
+                    remediation="Split the group into smaller failure domains.",
+                )
+            )
+        unknown_devices = sorted(set(group.device_ids) - device_ids)
+        if unknown_devices:
+            findings.append(
+                Finding(
+                    severity=Severity.error,
+                    code="twin_shared_risk_group_unknown_device",
+                    affected_entities=[group.id, *unknown_devices],
+                    explanation=(
+                        f"Shared-risk group {group.id!r} references unknown "
+                        f"device(s): {', '.join(unknown_devices)}."
+                    ),
+                    remediation=(
+                        "Update the group or restore the devices in the topology."
+                    ),
+                )
+            )
+        unknown_links = sorted(set(group.link_ids) - link_ids)
+        if unknown_links:
+            findings.append(
+                Finding(
+                    severity=Severity.error,
+                    code="twin_shared_risk_group_unknown_link",
+                    affected_entities=[group.id, *unknown_links],
+                    explanation=(
+                        f"Shared-risk group {group.id!r} references unknown "
+                        f"link(s): {', '.join(unknown_links)}."
+                    ),
+                    remediation=(
+                        "Update the group or restore the links in the topology."
                     ),
                 )
             )

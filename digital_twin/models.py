@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from core.schemas.addressing import AddressingPlan, DhcpScope
 from core.schemas.network import Topology
@@ -93,6 +93,59 @@ class LinkState(BaseModel):
     )
 
 
+class SharedRiskGroup(BaseModel):
+    """A set of devices/links modeled as failing together.
+
+    This is a failure-model annotation, not a live equipment configuration. A
+    sweep that targets any member marks every member of the group down. Member
+    ids are canonicalized (sorted and duplicate-free) so equivalent groups have
+    stable JSON and stable fingerprints.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str = Field(
+        min_length=1,
+        description="Stable identifier for this shared-risk group.",
+    )
+    name: str = Field(
+        default="",
+        description="Optional human-readable label.",
+    )
+    device_ids: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Device ids that fail together with the group.",
+    )
+    link_ids: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Link ids that fail together with the group.",
+    )
+    rationale: str = Field(
+        default="",
+        description="Why these entities share a modeled failure domain.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _canonicalize(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        device_ids = tuple(data.get("device_ids", ()))
+        link_ids = tuple(data.get("link_ids", ()))
+        if not device_ids and not link_ids:
+            raise ValueError(
+                "A shared-risk group must name at least one device or link."
+            )
+        identifier = str(data.get("id", ""))
+        return {
+            **data,
+            "name": data.get("name") or identifier,
+            "rationale": data.get("rationale") or "Modeled shared failure domain.",
+            "device_ids": tuple(sorted(set(device_ids))),
+            "link_ids": tuple(sorted(set(link_ids))),
+        }
+
+
 class DigitalTwin(BaseModel):
     """A complete software model of one network design.
 
@@ -141,6 +194,13 @@ class DigitalTwin(BaseModel):
         description=(
             "Optional design-time security model. It is omitted from JSON and "
             "fingerprints when absent so legacy twin bytes stay compatible."
+        ),
+    )
+    shared_risk_groups: tuple[SharedRiskGroup, ...] = Field(
+        default_factory=tuple,
+        description=(
+            "Optional modeled failure domains. Empty groups are omitted from "
+            "JSON and fingerprints so legacy twin bytes stay compatible."
         ),
     )
 

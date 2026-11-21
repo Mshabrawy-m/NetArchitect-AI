@@ -33,21 +33,30 @@ def _enforce_twin_limits(twin: DigitalTwin) -> None:
         )
 
 
+def _serialization_exclude(twin: DigitalTwin) -> set[str] | None:
+    """Return default-only additive fields that legacy bytes must omit."""
+    exclude: set[str] = set()
+    if twin.security is None:
+        exclude.add("security")
+    if not twin.shared_risk_groups:
+        exclude.add("shared_risk_groups")
+    return exclude or None
+
+
 def canonical_payload(twin: DigitalTwin) -> dict[str, object]:
     """Return the canonical mapping used for fingerprints.
 
-    ``security=None`` is omitted so twins created before Phase 14 have exactly
-    the same fingerprint bytes as before the optional field was added.
+    ``security=None`` and empty ``shared_risk_groups`` are omitted so twins
+    created before those additive fields have exactly the same fingerprint
+    bytes as before the fields were added.
     """
-    exclude = {"security"} if twin.security is None else None
-    return twin.model_dump(mode="json", exclude=exclude)
+    return twin.model_dump(mode="json", exclude=_serialization_exclude(twin))
 
 
 def to_json(twin: DigitalTwin, *, indent: int | None = 2) -> str:
     """Serialize ``twin`` to JSON text after checking resource limits."""
     _enforce_twin_limits(twin)
-    exclude = {"security"} if twin.security is None else None
-    return twin.model_dump_json(indent=indent, exclude=exclude)
+    return twin.model_dump_json(indent=indent, exclude=_serialization_exclude(twin))
 
 
 def json_size_bytes(twin: DigitalTwin) -> int:

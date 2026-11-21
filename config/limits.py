@@ -29,6 +29,19 @@ MAX_ALTERNATIVE_PATHS: int = 10
 # are used and the result carries an explicit truncation warning.
 MAX_ECMP_PATHS: int = 16
 
+# Maximum number of device/link pairs evaluated by an N-2 failure sweep. The
+# chosen subset may be larger, but only the lexicographically first capped pairs
+# are evaluated and the result records the truncation.
+MAX_N2_PAIRS: int = 200
+
+# Maximum number of shared-risk groups stored on one twin. Groups are design
+# annotations, so this keeps validation and sweep planning bounded.
+MAX_SHARED_RISK_GROUPS: int = 20
+
+# Maximum members in one shared-risk group. Reuses the scenario element cap so
+# one modeled correlated failure cannot exceed one scenario's entity budget.
+MAX_SHARED_RISK_MEMBERS: int = 50
+
 # Maximum number of what-if scenarios retained for comparison. The previous
 # value of 50 could reserve roughly 37 MiB of session data for the largest twin.
 # The default is lowered to 20 for free-tier safety; this is a retained-history
