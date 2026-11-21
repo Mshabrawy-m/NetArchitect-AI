@@ -27,10 +27,21 @@ from forecasting import (
     TimeSeries,
     forecast_series,
 )
-from optimization import CostModel, OptimizationRun
+from optimization import (
+    CostModel,
+    OptimizationRun,
+    ParetoReranking,
+    SensitivityReport,
+)
 from security import FlowRequest, SecurityAnalysis, SecurityModel, analyze_design
 from services.validation import DesignHealth, build_design_health
-from simulation import ScenarioRun, SimulationAssumptions, twin_fingerprint
+from simulation import (
+    FailureSweepResult,
+    RoutingModeComparison,
+    ScenarioRun,
+    SimulationAssumptions,
+    twin_fingerprint,
+)
 
 if TYPE_CHECKING:
     from services.reporting import ReportDocument
@@ -48,7 +59,17 @@ def twin_cache_key(twin: DigitalTwin) -> str:
     return twin_fingerprint(twin)
 
 
-def source_payload(source: ScenarioRun | OptimizationRun | None) -> str:
+def source_payload(
+    source: (
+        ScenarioRun
+        | OptimizationRun
+        | FailureSweepResult
+        | RoutingModeComparison
+        | SensitivityReport
+        | ParetoReranking
+        | None
+    ),
+) -> str:
     """Return canonical JSON for an optional cacheable report source.
 
     ``WorkflowState`` is deliberately absent: it holds a live baseline accessor
@@ -174,6 +195,12 @@ def cached_report(
     title: str = "",
     capacity_payload: str = "",
     optimization_source_fingerprint: str = "",
+    sweep_payload: str = "",
+    mode_comparison_payload: str = "",
+    sensitivity_payload: str = "",
+    reranking_payload: str = "",
+    sensitivity_source_fingerprint: str = "",
+    rerank_source_fingerprint: str = "",
 ) -> ReportDocument:
     """Build one report document once per twin revision and source selection."""
     from services.reporting import ReportSources, build_report
@@ -196,7 +223,29 @@ def cached_report(
                 if capacity_payload
                 else None
             ),
+            failure_sweep=(
+                FailureSweepResult.model_validate_json(sweep_payload)
+                if sweep_payload
+                else None
+            ),
+            mode_comparison=(
+                RoutingModeComparison.model_validate_json(mode_comparison_payload)
+                if mode_comparison_payload
+                else None
+            ),
+            sensitivity_report=(
+                SensitivityReport.model_validate_json(sensitivity_payload)
+                if sensitivity_payload
+                else None
+            ),
+            reranking=(
+                ParetoReranking.model_validate_json(reranking_payload)
+                if reranking_payload
+                else None
+            ),
             optimization_source_fingerprint=optimization_source_fingerprint,
+            sensitivity_source_fingerprint=sensitivity_source_fingerprint,
+            rerank_source_fingerprint=rerank_source_fingerprint,
             generated_at=datetime.fromisoformat(generated_at_iso),
             title=title,
         )

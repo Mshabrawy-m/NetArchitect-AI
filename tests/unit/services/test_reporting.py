@@ -20,7 +20,17 @@ from digital_twin import DigitalTwin
 from forecasting import DataProvenance
 from network.analysis import analyze_topology
 from network.routing import reachability_matrix, routing_table
-from optimization import Algorithm, run_optimization
+from optimization import (
+    Algorithm,
+    ObjectiveKind,
+    ObjectiveSpec,
+    ParetoReranking,
+    SensitivityReport,
+    SensitivityScenario,
+    analyze_sensitivity,
+    rerank_pareto_front,
+    run_optimization,
+)
 from services.llm.testing import FakeProvider
 from services.reporting import (
     DISCLOSURE_TEXT,
@@ -41,7 +51,15 @@ from services.reporting import (
     generate_ai_explanation,
     numeric_tokens,
 )
-from simulation import run_scenario, twin_fingerprint
+from simulation import (
+    DEFAULT_COMPARISON_MODES,
+    FailureSweepResult,
+    RoutingModeComparison,
+    compare_routing_modes,
+    run_failure_sweep,
+    run_scenario,
+    twin_fingerprint,
+)
 from simulation.scenarios import ScenarioRun
 from tests.unit.agents.helpers import sample_requirements
 from tests.unit.capacity.helpers import constant_run, line_capacity_twin
@@ -61,6 +79,10 @@ SECTION_IDS = (
     "simulation",
     "capacity",
     "optimization",
+    "failure_sweep",
+    "mode_comparison",
+    "sensitivity",
+    "reranking",
     "security",
     "assumptions",
     "limitations",
@@ -127,6 +149,56 @@ def capacity_case() -> tuple[DigitalTwin, CapacityRun]:
     return twin, evaluate_capacity(twin, forecast, mapping)
 
 
+@pytest.fixture(scope="module")
+def e5_case() -> tuple[
+    DigitalTwin,
+    FailureSweepResult,
+    RoutingModeComparison,
+    SensitivityReport,
+    ParetoReranking,
+]:
+    """One small twin and four bounded E5 results derived from it."""
+    twin = tiny_twin(capacity_mbps=40.0)
+    objectives = (
+        ObjectiveSpec(
+            kind=ObjectiveKind.infrastructure_cost,
+            weight=0.5,
+            lower_bound=0.0,
+            upper_bound=500.0,
+        ),
+        ObjectiveSpec(
+            kind=ObjectiveKind.max_utilization,
+            weight=0.5,
+            lower_bound=0.0,
+            upper_bound=200.0,
+        ),
+    )
+    config = settings(objectives=objectives, max_iterations=8, max_evaluations=250)
+    run = run_optimization(twin, config, Algorithm.nsga2)
+    return (
+        twin,
+        run_failure_sweep(twin, limit=2),
+        compare_routing_modes(twin),
+        analyze_sensitivity(
+            twin,
+            run,
+            scenarios=(
+                SensitivityScenario(
+                    id="demand_up",
+                    label="Higher demand",
+                    demand_multiplier=1.25,
+                ),
+                SensitivityScenario(
+                    id="capacity_down",
+                    label="Lower capacity",
+                    capacity_multiplier=0.8,
+                ),
+            ),
+        ),
+        rerank_pareto_front(run),
+    )
+
+
 def test_report_has_the_required_ordered_sections(base_report: ReportDocument) -> None:
     assert base_report.section_ids() == SECTION_IDS
     assert base_report.generated_at == GENERATED_AT
@@ -141,6 +213,10 @@ def test_sections_without_inputs_are_marked_not_run_with_a_pointer(
         ("simulation", "Simulation Lab"),
         ("capacity", "Capacity Planning"),
         ("optimization", "Optimization Center"),
+        ("failure_sweep", "Simulation Lab"),
+        ("mode_comparison", "Simulation Lab"),
+        ("sensitivity", "Optimization Center"),
+        ("reranking", "Optimization Center"),
         ("security", "Security Analysis"),
         ("agent_trace", "AI Network Designer"),
     ):
@@ -540,6 +616,274 @@ def test_optimization_report_warns_on_source_fingerprint_mismatch() -> None:
         for text in warnings
     )
     assert check_consistency(document).ok
+
+
+def test_e5_sections_are_available_with_engine_values_and_provenance(
+    e5_case: tuple[
+        DigitalTwin,
+        FailureSweepResult,
+        RoutingModeComparison,
+        SensitivityReport,
+        ParetoReranking,
+    ],
+) -> None:
+    twin, sweep, comparison, sensitivity, reranking = e5_case
+    source_fingerprint = twin_fingerprint(twin)
+    document = build_report(
+        ReportSources(
+            twin=twin,
+            failure_sweep=sweep,
+            mode_comparison=comparison,
+            sensitivity_report=sensitivity,
+            reranking=reranking,
+            rerank_source_fingerprint=source_fingerprint,
+            generated_at=GENERATED_AT,
+        )
+    )
+
+    for section_id in ("failure_sweep", "mode_comparison", "sensitivity", "reranking"):
+        section = document.section(section_id)
+        assert section is not None
+        assert section.status.value == "available"
+        assert section.blocks
+
+    assert value(document, "failure_sweep.total_cases").numeric == sweep.total_cases
+    assert value(document, "failure_sweep.evaluated_cases").numeric == (
+        sweep.evaluated_cases
+    )
+    assert value(document, "failure_sweep.stop_reason").display == (
+        sweep.stop_reason.value
+    )
+    assert value(document, "failure_sweep.case.0.rank").numeric == sweep.cases[0].rank
+    assert value(document, "failure_sweep.case.0.served").numeric == (
+        sweep.cases[0].state.served_demand_count
+    )
+
+    assert value(document, "mode_comparison.mode_count").numeric == len(
+        DEFAULT_COMPARISON_MODES
+    )
+    assert value(document, "mode_comparison.mode.0").display == (
+        comparison.results[0].mode.value
+    )
+    assert value(document, "mode_comparison.served.0").numeric == (
+        comparison.results[0].state.served_demand_count
+    )
+
+    assert value(document, "sensitivity.evaluated_candidates").numeric == (
+        sensitivity.evaluated_candidates
+    )
+    assert value(document, "sensitivity.evaluations").numeric == (
+        sensitivity.evaluations
+    )
+    assert value(document, "sensitivity.robust_count").numeric == len(
+        sensitivity.robust_candidate_hashes
+    )
+
+    assert value(document, "reranking.source_evaluations").numeric == (
+        reranking.source_evaluations
+    )
+    assert value(document, "reranking.items").numeric == len(reranking.items)
+    assert value(document, "reranking.source_seed").numeric == reranking.source_seed
+    recommendation = (
+        reranking.recommended_candidate_hash[:12]
+        if reranking.recommended_candidate_hash
+        else "none"
+    )
+    recommend_item = next(
+        item
+        for block in document.section("reranking").blocks
+        for item in getattr(block, "items", ())
+        if item.key == "recommendation"
+    )
+    assert recommend_item.value == recommendation
+
+    e5_prefixes = ("failure_sweep.", "mode_comparison.", "sensitivity.", "reranking.")
+    e5_values = [
+        record for record in document.values if record.key.startswith(e5_prefixes)
+    ]
+    assert e5_values
+    for record in e5_values:
+        assert record.provenance.step
+        assert record.provenance.tool
+        assert record.provenance.twin_version
+    for key, step, tool, version in (
+        (
+            "failure_sweep.total_cases",
+            "simulation",
+            "simulation.plan_failure_sweep",
+            sweep.baseline.fingerprint,
+        ),
+        (
+            "failure_sweep.evaluated_cases",
+            "simulation",
+            "simulation.run_failure_sweep",
+            sweep.baseline.fingerprint,
+        ),
+        (
+            "mode_comparison.mode_count",
+            "simulation",
+            "simulation.compare_routing_modes",
+            comparison.twin.fingerprint,
+        ),
+        (
+            "mode_comparison.served.0",
+            "simulation",
+            "simulation.evaluate",
+            comparison.twin.fingerprint,
+        ),
+        (
+            "sensitivity.evaluated_candidates",
+            "optimization",
+            "optimization.analyze_sensitivity",
+            sensitivity.source_twin_fingerprint,
+        ),
+        (
+            "sensitivity.evaluations",
+            "optimization",
+            "optimization.analyze_sensitivity",
+            sensitivity.source_twin_fingerprint,
+        ),
+        (
+            "reranking.source_evaluations",
+            "optimization",
+            "optimization.rerank_pareto_front",
+            source_fingerprint,
+        ),
+        (
+            "reranking.items",
+            "optimization",
+            "optimization.ParetoReranking",
+            source_fingerprint,
+        ),
+    ):
+        record = value(document, key)
+        assert record.provenance.step == step
+        assert record.provenance.tool == tool
+        assert record.provenance.twin_version == version
+    assert check_consistency(document).ok
+
+
+def test_e5_source_fingerprints_come_from_models_and_passed_values(
+    e5_case: tuple[
+        DigitalTwin,
+        FailureSweepResult,
+        RoutingModeComparison,
+        SensitivityReport,
+        ParetoReranking,
+    ],
+) -> None:
+    twin, sweep, comparison, sensitivity, reranking = e5_case
+    source_fingerprint = twin_fingerprint(twin)
+    assert source_fingerprint == sweep.baseline.fingerprint
+    assert source_fingerprint == comparison.twin.fingerprint
+    assert source_fingerprint == sensitivity.source_twin_fingerprint
+
+    document = build_report(
+        ReportSources(
+            twin=twin,
+            failure_sweep=sweep,
+            mode_comparison=comparison,
+            sensitivity_report=sensitivity,
+            sensitivity_source_fingerprint=sensitivity.source_twin_fingerprint,
+            reranking=reranking,
+            rerank_source_fingerprint=source_fingerprint,
+            generated_at=GENERATED_AT,
+        )
+    )
+    assert (
+        value(document, "failure_sweep.total_cases").provenance.twin_version
+        == sweep.baseline.fingerprint
+    )
+    assert (
+        value(document, "mode_comparison.mode_count").provenance.twin_version
+        == comparison.twin.fingerprint
+    )
+    assert (
+        value(document, "sensitivity.evaluated_candidates").provenance.twin_version
+        == sensitivity.source_twin_fingerprint
+    )
+    assert (
+        value(document, "reranking.source_evaluations").provenance.twin_version
+        == source_fingerprint
+    )
+    assert (
+        value(document, "reranking.items").provenance.twin_version
+        == source_fingerprint
+    )
+    assert check_consistency(document).ok
+
+
+def test_e5_sections_warn_on_stale_source_fingerprint(
+    e5_case: tuple[
+        DigitalTwin,
+        FailureSweepResult,
+        RoutingModeComparison,
+        SensitivityReport,
+        ParetoReranking,
+    ],
+) -> None:
+    source_twin, sweep, comparison, sensitivity, reranking = e5_case
+    current_twin = renamed_twin(source_twin)
+    source_fingerprint = twin_fingerprint(source_twin)
+    current_fingerprint = twin_fingerprint(current_twin)
+    assert source_fingerprint != current_fingerprint
+
+    document = build_report(
+        ReportSources(
+            twin=current_twin,
+            failure_sweep=sweep,
+            mode_comparison=comparison,
+            sensitivity_report=sensitivity,
+            sensitivity_source_fingerprint=source_fingerprint,
+            reranking=reranking,
+            rerank_source_fingerprint=source_fingerprint,
+            generated_at=GENERATED_AT,
+        )
+    )
+    for section_id in ("failure_sweep", "mode_comparison", "sensitivity", "reranking"):
+        warnings = warning_texts(document.section(section_id))
+        assert any(
+            "Source twin mismatch" in text
+            and source_fingerprint in text
+            and current_fingerprint in text
+            for text in warnings
+        ), (section_id, warnings)
+    assert (
+        value(document, "sensitivity.source_warning").provenance.twin_version
+        == source_fingerprint
+    )
+    assert (
+        value(document, "reranking.source_warning").provenance.twin_version
+        == source_fingerprint
+    )
+    assert check_consistency(document).ok
+
+
+def test_e5_sections_stay_not_run_without_their_own_source(
+    e5_case: tuple[
+        DigitalTwin,
+        FailureSweepResult,
+        RoutingModeComparison,
+        SensitivityReport,
+        ParetoReranking,
+    ],
+) -> None:
+    twin, sweep, _, _, _ = e5_case
+    document = build_report(
+        ReportSources(twin=twin, failure_sweep=sweep, generated_at=GENERATED_AT)
+    )
+    assert document.section("failure_sweep").status.value == "available"
+    for section_id, producer_page in (
+        ("mode_comparison", "Simulation Lab"),
+        ("sensitivity", "Optimization Center"),
+        ("reranking", "Optimization Center"),
+    ):
+        section = document.section(section_id)
+        assert section is not None
+        assert section.status.value == "not_run"
+        assert section.unavailable_reason
+        assert section.producer_page == producer_page
+        assert section.blocks == ()
 
 
 def test_workflow_report_matches_the_execution_trace() -> None:

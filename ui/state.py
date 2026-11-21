@@ -4,6 +4,10 @@ The baseline twin lives under exactly one session key (``TWIN_KEY``). Pages and
 tests must not read or write that key directly; they use the functions here.
 Modeled security flow checks are likewise kept behind bounded accessors.
 
+Bounded derived results (failure sweeps, routing-mode comparisons, sensitivity
+reports, and Pareto rerankings) use typed tuple accessors so session memory
+stays small on the free tier.
+
 Legacy sessions that still hold a bare ``Topology`` in ``st.session_state[
 "topology"]`` are migrated once, on first access, into a twin. The legacy key is
 removed so the model never exists twice.
@@ -13,12 +17,16 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypeVar
 
 import streamlit as st
 
 from capacity import CapacityHistory, CapacityRun
-from config.limits import MAX_OPTIMIZATION_RUNS, MAX_SECURITY_FLOW_CHECKS
+from config.limits import (
+    MAX_OPTIMIZATION_RUNS,
+    MAX_SCENARIOS,
+    MAX_SECURITY_FLOW_CHECKS,
+)
 from core.schemas.addressing import AddressingPlan, DhcpScope
 from core.schemas.network import Topology
 from core.schemas.routing import TrafficDemand
@@ -47,10 +55,20 @@ from digital_twin import (
 from forecasting import ForecastRun, TimeSeries
 from network.addressing import VlsmResult
 from network.vlan.plan import VlanPlanResult
-from optimization import OptimizationHistory, OptimizationRun
+from optimization import (
+    OptimizationHistory,
+    OptimizationRun,
+    ParetoReranking,
+    SensitivityReport,
+)
 from security import FlowRequest
 from services.llm import RequestBudget
-from simulation import ScenarioHistory, ScenarioRun
+from simulation import (
+    FailureSweepResult,
+    RoutingModeComparison,
+    ScenarioHistory,
+    ScenarioRun,
+)
 
 TWIN_KEY = "digital_twin"
 SNAPSHOTS_KEY = "digital_twin_snapshots"
@@ -59,6 +77,19 @@ OPTIMIZATION_HISTORY_KEY = "optimization_history"
 # OptimizationRun has no persisted twin fingerprint. This bounded map records
 # the source fingerprint at run creation, keyed by the run's canonical content.
 OPTIMIZATION_SOURCE_FINGERPRINTS_KEY = "optimization_source_fingerprints"
+
+# Bounded derived results from the simulation and optimization engines.
+SIMULATION_SWEEPS_KEY = "simulation_failure_sweeps"
+SIMULATION_MODE_COMPARISONS_KEY = "simulation_mode_comparisons"
+SIMULATION_SWEEP_CURSOR_KEY = "simulation_sweep_cursor"
+OPTIMIZATION_SENSITIVITY_KEY = "optimization_sensitivity_reports"
+OPTIMIZATION_RERANKINGS_KEY = "optimization_rerankings"
+OPTIMIZATION_RERANK_SOURCE_FINGERPRINTS_KEY = "optimization_rerank_source_fingerprints"
+SIMULATION_SWEEP_ENTRIES = MAX_SCENARIOS
+SIMULATION_MODE_COMPARISON_ENTRIES = 4
+OPTIMIZATION_SENSITIVITY_ENTRIES = MAX_OPTIMIZATION_RUNS
+OPTIMIZATION_RERANKING_ENTRIES = MAX_OPTIMIZATION_RUNS
+
 CAPACITY_SERIES_KEY = "capacity_series"
 CAPACITY_FORECAST_KEY = "capacity_forecast"
 CAPACITY_HISTORY_KEY = "capacity_history"
@@ -83,6 +114,7 @@ REPORT_TIME_ENTRIES = 4
 
 _UNSET = object()
 _DEFAULT_TWIN_NAME = "Working design"
+_T = TypeVar("_T")
 
 
 def session_get(key: str, default: Any = None) -> Any:
@@ -108,6 +140,62 @@ def session_has(key: str) -> bool:
 def session_delete(key: str) -> None:
     """Delete a session key if it exists."""
     st.session_state.pop(key, None)
+
+
+def _bounded_tuple_values(
+    key: str,
+    item_type: type[_T],
+    limit: int,
+    *,
+    create: bool = False,
+) -> tuple[_T, ...]:
+    """Return typed, capped values without mutating any stored model."""
+    value = st.session_state.get(key, _UNSET)
+    if isinstance(value, (tuple, list)):
+        typed = tuple(item for item in value if isinstance(item, item_type))
+        stored = typed[-limit:] if limit > 0 else ()
+    else:
+        stored = ()
+    if create and (not isinstance(value, tuple) or stored != value):
+        st.session_state[key] = stored
+    return stored
+
+
+def _bounded_tuple_peek(
+    key: str,
+    item_type: type[_T],
+    limit: int,
+) -> tuple[_T, ...]:
+    """Read a bounded derived-result tuple without creating an empty key."""
+    return _bounded_tuple_values(key, item_type, limit)
+
+
+def _bounded_tuple_get(
+    key: str,
+    item_type: type[_T],
+    limit: int,
+) -> tuple[_T, ...]:
+    """Return a bounded derived-result tuple, creating an empty store if needed."""
+    return _bounded_tuple_values(key, item_type, limit, create=True)
+
+
+def _bounded_tuple_add(
+    key: str,
+    item: _T,
+    item_type: type[_T],
+    limit: int,
+) -> _T:
+    """Append one typed item last, trimming the oldest items past the cap."""
+    if not isinstance(item, item_type):
+        raise TypeError(f"{key} accepts only {item_type.__name__} values.")
+    values = _bounded_tuple_values(key, item_type, limit)
+    st.session_state[key] = (*values, item)[-limit:] if limit > 0 else ()
+    return item
+
+
+def _bounded_tuple_clear(key: str) -> None:
+    """Remove one bounded derived-result store."""
+    session_delete(key)
 
 
 def _now() -> datetime:
@@ -382,6 +470,120 @@ def clear_simulation_history() -> None:
     get_simulation_history().clear()
 
 
+def add_simulation_sweep(result: FailureSweepResult) -> FailureSweepResult:
+    """Append one failure sweep result to the bounded session store."""
+    return _bounded_tuple_add(
+        SIMULATION_SWEEPS_KEY,
+        result,
+        FailureSweepResult,
+        SIMULATION_SWEEP_ENTRIES,
+    )
+
+
+def peek_simulation_sweeps() -> tuple[FailureSweepResult, ...]:
+    """Return stored failure sweeps without creating an empty session key."""
+    return _bounded_tuple_peek(
+        SIMULATION_SWEEPS_KEY,
+        FailureSweepResult,
+        SIMULATION_SWEEP_ENTRIES,
+    )
+
+
+def get_simulation_sweeps() -> tuple[FailureSweepResult, ...]:
+    """Return stored failure sweeps, creating an empty store when needed."""
+    return _bounded_tuple_get(
+        SIMULATION_SWEEPS_KEY,
+        FailureSweepResult,
+        SIMULATION_SWEEP_ENTRIES,
+    )
+
+
+def clear_simulation_sweeps() -> None:
+    """Remove every stored failure sweep result."""
+    _bounded_tuple_clear(SIMULATION_SWEEPS_KEY)
+
+
+def add_mode_comparison(result: RoutingModeComparison) -> RoutingModeComparison:
+    """Append one routing-mode comparison to the bounded session store."""
+    return _bounded_tuple_add(
+        SIMULATION_MODE_COMPARISONS_KEY,
+        result,
+        RoutingModeComparison,
+        SIMULATION_MODE_COMPARISON_ENTRIES,
+    )
+
+
+def peek_mode_comparisons() -> tuple[RoutingModeComparison, ...]:
+    """Return stored mode comparisons without creating an empty session key."""
+    return _bounded_tuple_peek(
+        SIMULATION_MODE_COMPARISONS_KEY,
+        RoutingModeComparison,
+        SIMULATION_MODE_COMPARISON_ENTRIES,
+    )
+
+
+def get_mode_comparisons() -> tuple[RoutingModeComparison, ...]:
+    """Return stored mode comparisons, creating an empty store when needed."""
+    return _bounded_tuple_get(
+        SIMULATION_MODE_COMPARISONS_KEY,
+        RoutingModeComparison,
+        SIMULATION_MODE_COMPARISON_ENTRIES,
+    )
+
+
+def clear_mode_comparisons() -> None:
+    """Remove every stored routing-mode comparison."""
+    _bounded_tuple_clear(SIMULATION_MODE_COMPARISONS_KEY)
+
+
+def set_sweep_cursor(key: str, value: int) -> int:
+    """Store one non-negative sweep cursor, keeping the most recent keys only."""
+    if not isinstance(key, str):
+        raise TypeError("A sweep cursor key must be a string.")
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError("A sweep cursor value must be an integer.")
+    if value < 0:
+        raise ValueError("A sweep cursor value must be non-negative.")
+    cursor = st.session_state.get(SIMULATION_SWEEP_CURSOR_KEY)
+    cleaned = (
+        {
+            name: position
+            for name, position in cursor.items()
+            if isinstance(name, str)
+            and isinstance(position, int)
+            and not isinstance(position, bool)
+            and position >= 0
+        }
+        if isinstance(cursor, dict)
+        else {}
+    )
+    cleaned[key] = value
+    while len(cleaned) > SIMULATION_SWEEP_ENTRIES:
+        del cleaned[next(iter(cleaned))]
+    st.session_state[SIMULATION_SWEEP_CURSOR_KEY] = cleaned
+    return value
+
+
+def get_sweep_cursor(key: str, default: int = 0) -> int:
+    """Return one stored sweep cursor, or ``default`` when it is unknown."""
+    if not isinstance(key, str):
+        raise TypeError("A sweep cursor key must be a string.")
+    if isinstance(default, bool) or not isinstance(default, int) or default < 0:
+        raise ValueError("The default sweep cursor must be a non-negative integer.")
+    cursor = st.session_state.get(SIMULATION_SWEEP_CURSOR_KEY)
+    if not isinstance(cursor, dict):
+        return default
+    value = cursor.get(key, default)
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return default
+
+
+def clear_sweep_cursor() -> None:
+    """Remove every stored sweep cursor."""
+    session_delete(SIMULATION_SWEEP_CURSOR_KEY)
+
+
 def get_optimization_history() -> OptimizationHistory:
     """Return the session optimization history, creating it when needed."""
     history = st.session_state.get(OPTIMIZATION_HISTORY_KEY)
@@ -458,6 +660,117 @@ def clear_optimization_history() -> None:
     """Remove every retained optimization run and source fingerprint."""
     st.session_state.pop(OPTIMIZATION_SOURCE_FINGERPRINTS_KEY, None)
     get_optimization_history().clear()
+
+
+def add_sensitivity_report(report: SensitivityReport) -> SensitivityReport:
+    """Append one sensitivity report to the bounded session store."""
+    return _bounded_tuple_add(
+        OPTIMIZATION_SENSITIVITY_KEY,
+        report,
+        SensitivityReport,
+        OPTIMIZATION_SENSITIVITY_ENTRIES,
+    )
+
+
+def peek_sensitivity_reports() -> tuple[SensitivityReport, ...]:
+    """Return stored sensitivity reports without creating an empty session key."""
+    return _bounded_tuple_peek(
+        OPTIMIZATION_SENSITIVITY_KEY,
+        SensitivityReport,
+        OPTIMIZATION_SENSITIVITY_ENTRIES,
+    )
+
+
+def get_sensitivity_reports() -> tuple[SensitivityReport, ...]:
+    """Return stored sensitivity reports, creating an empty store when needed."""
+    return _bounded_tuple_get(
+        OPTIMIZATION_SENSITIVITY_KEY,
+        SensitivityReport,
+        OPTIMIZATION_SENSITIVITY_ENTRIES,
+    )
+
+
+def clear_sensitivity_reports() -> None:
+    """Remove every stored sensitivity report."""
+    _bounded_tuple_clear(OPTIMIZATION_SENSITIVITY_KEY)
+
+
+def add_reranking(reranking: ParetoReranking) -> ParetoReranking:
+    """Append one Pareto reranking to the bounded session store."""
+    return _bounded_tuple_add(
+        OPTIMIZATION_RERANKINGS_KEY,
+        reranking,
+        ParetoReranking,
+        OPTIMIZATION_RERANKING_ENTRIES,
+    )
+
+
+def peek_rerankings() -> tuple[ParetoReranking, ...]:
+    """Return stored rerankings without creating an empty session key."""
+    return _bounded_tuple_peek(
+        OPTIMIZATION_RERANKINGS_KEY,
+        ParetoReranking,
+        OPTIMIZATION_RERANKING_ENTRIES,
+    )
+
+
+def get_rerankings() -> tuple[ParetoReranking, ...]:
+    """Return stored rerankings, creating an empty store when needed."""
+    return _bounded_tuple_get(
+        OPTIMIZATION_RERANKINGS_KEY,
+        ParetoReranking,
+        OPTIMIZATION_RERANKING_ENTRIES,
+    )
+
+
+def _rerank_key(reranking: ParetoReranking) -> str:
+    """Return a stable content key for one Pareto reranking."""
+    return hashlib.sha256(reranking.model_dump_json().encode("utf-8")).hexdigest()
+
+
+def set_rerank_source_fingerprint(reranking: ParetoReranking, fingerprint: str) -> str:
+    """Remember which source run produced one Pareto reranking."""
+    if not isinstance(reranking, ParetoReranking):
+        raise TypeError("A reranking must be a ParetoReranking.")
+    if not isinstance(fingerprint, str):
+        raise TypeError("A source fingerprint must be a string.")
+    mapping = st.session_state.get(OPTIMIZATION_RERANK_SOURCE_FINGERPRINTS_KEY)
+    cleaned = (
+        {
+            key: value
+            for key, value in mapping.items()
+            if isinstance(key, str) and isinstance(value, str)
+        }
+        if isinstance(mapping, dict)
+        else {}
+    )
+    cleaned[_rerank_key(reranking)] = fingerprint
+    while len(cleaned) > OPTIMIZATION_RERANKING_ENTRIES:
+        del cleaned[next(iter(cleaned))]
+    st.session_state[OPTIMIZATION_RERANK_SOURCE_FINGERPRINTS_KEY] = cleaned
+    return fingerprint
+
+
+def get_rerank_source_fingerprint(reranking: ParetoReranking) -> str:
+    """Return the recorded source fingerprint, or an empty string if unknown."""
+    if not isinstance(reranking, ParetoReranking):
+        raise TypeError("A reranking must be a ParetoReranking.")
+    mapping = st.session_state.get(OPTIMIZATION_RERANK_SOURCE_FINGERPRINTS_KEY)
+    if not isinstance(mapping, dict):
+        return ""
+    value = mapping.get(_rerank_key(reranking), "")
+    return value if isinstance(value, str) else ""
+
+
+def peek_rerank_source_fingerprint(reranking: ParetoReranking) -> str:
+    """Read-only alias used by progress reporting; creates no session state."""
+    return get_rerank_source_fingerprint(reranking)
+
+
+def clear_rerankings() -> None:
+    """Remove every stored reranking and its source fingerprint map."""
+    session_delete(OPTIMIZATION_RERANK_SOURCE_FINGERPRINTS_KEY)
+    _bounded_tuple_clear(OPTIMIZATION_RERANKINGS_KEY)
 
 
 def get_capacity_series() -> tuple[TimeSeries, ...]:

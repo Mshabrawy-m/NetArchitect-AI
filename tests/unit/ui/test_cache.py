@@ -7,13 +7,33 @@ from datetime import UTC, datetime
 import pytest
 
 from capacity import DemandMapping, evaluate_capacity
+from digital_twin import DigitalTwin
 from forecasting import GapPolicy
-from optimization import CostModel
+from optimization import (
+    Algorithm,
+    CostModel,
+    ObjectiveKind,
+    ObjectiveSpec,
+    ParetoReranking,
+    SensitivityReport,
+    SensitivityScenario,
+    analyze_sensitivity,
+    rerank_pareto_front,
+    run_optimization,
+)
 from security import FlowRequest, Protocol
-from simulation import SimulationAssumptions
+from simulation import (
+    DEFAULT_COMPARISON_MODES,
+    FailureSweepResult,
+    RoutingModeComparison,
+    SimulationAssumptions,
+    compare_routing_modes,
+    run_failure_sweep,
+)
 from tests.unit.capacity.helpers import constant_run, line_capacity_twin
 from tests.unit.digital_twin.helpers import make_twin
 from tests.unit.forecasting.helpers import make_series
+from tests.unit.optimization.helpers import settings, tiny_twin
 from tests.unit.security.design_helpers import hardened_design
 from ui import cache
 from ui.cache import (
@@ -29,6 +49,52 @@ from ui.cache import (
     twin_cache_key,
     twin_payload,
 )
+
+
+@pytest.fixture(scope="module")
+def e5_sources() -> tuple[
+    DigitalTwin,
+    FailureSweepResult,
+    RoutingModeComparison,
+    SensitivityReport,
+    ParetoReranking,
+]:
+    """One small twin and four bounded E5 results derived from it."""
+    twin = tiny_twin(capacity_mbps=40.0)
+    objectives = (
+        ObjectiveSpec(
+            kind=ObjectiveKind.infrastructure_cost,
+            weight=0.5,
+            lower_bound=0.0,
+            upper_bound=500.0,
+        ),
+        ObjectiveSpec(
+            kind=ObjectiveKind.max_utilization,
+            weight=0.5,
+            lower_bound=0.0,
+            upper_bound=200.0,
+        ),
+    )
+    config = settings(objectives=objectives, max_iterations=8, max_evaluations=250)
+    run = run_optimization(twin, config, Algorithm.nsga2)
+    return (
+        twin,
+        run_failure_sweep(twin, limit=1),
+        compare_routing_modes(twin, modes=DEFAULT_COMPARISON_MODES[:1]),
+        analyze_sensitivity(
+            twin,
+            run,
+            scenarios=(
+                SensitivityScenario(
+                    id="demand_up",
+                    label="Higher demand",
+                    demand_multiplier=1.25,
+                ),
+            ),
+            max_candidates=1,
+        ),
+        rerank_pareto_front(run),
+    )
 
 
 def test_twin_cache_key_is_stable_for_one_twin_and_changes_with_content() -> None:
@@ -47,6 +113,27 @@ def test_twin_cache_key_is_stable_for_one_twin_and_changes_with_content() -> Non
 
 def test_source_payload_is_empty_only_for_no_source() -> None:
     assert source_payload(None) == ""
+
+
+def test_source_payload_serializes_e5_sources_as_non_empty_json(
+    e5_sources: tuple[
+        DigitalTwin,
+        FailureSweepResult,
+        RoutingModeComparison,
+        SensitivityReport,
+        ParetoReranking,
+    ],
+) -> None:
+    _, sweep, comparison, sensitivity, reranking = e5_sources
+    for source in (sweep, comparison, sensitivity, reranking):
+        payload = source_payload(source)
+        assert payload
+        assert payload == source.model_dump_json()
+        parsed = type(source).model_validate_json(payload)
+        assert type(parsed) is type(source)
+        assert parsed.model_dump(mode="json").keys() == source.model_dump(
+            mode="json"
+        ).keys()
 
 
 def test_cached_design_health_is_reused_until_the_twin_changes(
@@ -185,6 +272,77 @@ def test_cached_report_includes_the_selected_capacity_source() -> None:
         record.key == "capacity.projected_steps"
         for record in with_capacity.values
     )
+
+
+def test_cached_report_includes_each_e5_source_only_when_supplied(
+    e5_sources: tuple[
+        DigitalTwin,
+        FailureSweepResult,
+        RoutingModeComparison,
+        SensitivityReport,
+        ParetoReranking,
+    ],
+) -> None:
+    cached_report.clear()
+    twin, sweep, comparison, sensitivity, reranking = e5_sources
+    generated_at = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
+    base = (twin_payload(twin), "", "", generated_at.isoformat())
+    section_ids = ("failure_sweep", "mode_comparison", "sensitivity", "reranking")
+    payloads = {
+        "sweep_payload": source_payload(sweep),
+        "mode_comparison_payload": source_payload(comparison),
+        "sensitivity_payload": source_payload(sensitivity),
+        "reranking_payload": source_payload(reranking),
+    }
+    fingerprints = {
+        "sensitivity_source_fingerprint": sensitivity.source_twin_fingerprint,
+        "rerank_source_fingerprint": twin_cache_key(twin),
+    }
+
+    empty = cached_report(*base)
+    for section_id in section_ids:
+        assert empty.section(section_id).status.value == "not_run"
+
+    for keyword, section_id in (
+        ("sweep_payload", "failure_sweep"),
+        ("mode_comparison_payload", "mode_comparison"),
+        ("sensitivity_payload", "sensitivity"),
+        ("reranking_payload", "reranking"),
+    ):
+        selected = cached_report(*base, **{keyword: payloads[keyword]}, **fingerprints)
+        assert selected.section(section_id).status.value == "available"
+        for other_id in section_ids:
+            if other_id != section_id:
+                assert selected.section(other_id).status.value == "not_run"
+
+    full = cached_report(*base, **payloads, **fingerprints)
+    for section_id in section_ids:
+        assert full.section(section_id).status.value == "available"
+    for key in (
+        "failure_sweep.total_cases",
+        "mode_comparison.mode_count",
+        "sensitivity.evaluated_candidates",
+        "reranking.items",
+    ):
+        assert any(record.key == key for record in full.values)
+
+    changed_sweep = run_failure_sweep(twin, limit=2)
+    changed = cached_report(
+        *base,
+        **{**payloads, "sweep_payload": source_payload(changed_sweep)},
+        **fingerprints,
+    )
+    assert next(
+        record.numeric
+        for record in full.values
+        if record.key == "failure_sweep.evaluated_cases"
+    ) == sweep.evaluated_cases
+    assert next(
+        record.numeric
+        for record in changed.values
+        if record.key == "failure_sweep.evaluated_cases"
+    ) == changed_sweep.evaluated_cases
+    assert changed != full
 
 
 def test_security_analysis_cache_is_keyed_by_twin_model_and_flows(

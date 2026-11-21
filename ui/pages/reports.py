@@ -23,7 +23,7 @@ from capacity import CapacityRun
 from config.limits import MAX_REPORT_TABLE_ROWS
 from core.exceptions import ReportError
 from digital_twin import DigitalTwin
-from optimization import OptimizationRun
+from optimization import OptimizationRun, ParetoReranking, SensitivityReport
 from services.reporting import (
     KeyValueBlock,
     NoteBlock,
@@ -36,8 +36,13 @@ from services.reporting import (
     check_consistency,
     filter_sections,
 )
-from simulation import ScenarioRun, twin_fingerprint
-from ui import state
+from simulation import (
+    FailureSweepResult,
+    RoutingModeComparison,
+    ScenarioRun,
+    twin_fingerprint,
+)
+from ui import i18n, state
 from ui.cache import (
     cached_exports,
     cached_report,
@@ -52,6 +57,10 @@ WORKFLOW_KEY = "reports_workflow_source"
 SIMULATION_KEY = "reports_simulation_source"
 OPTIMIZATION_KEY = "reports_optimization_source"
 CAPACITY_KEY = "reports_capacity_source"
+SWEEP_KEY = "reports_sweep_source"
+MODE_COMPARE_KEY = "reports_mode_compare_source"
+SENSITIVITY_KEY = "reports_sensitivity_source"
+RERANK_KEY = "reports_rerank_source"
 SECTIONS_KEY = "reports_sections"
 
 NONE_LABEL = "None"
@@ -154,17 +163,100 @@ def _select_capacity() -> CapacityRun | None:
     return runs[labels.index(selected) - 1]
 
 
+def _select_sweep() -> FailureSweepResult | None:
+    results = state.peek_simulation_sweeps()
+    labels = [NONE_LABEL] + [
+        f"{index + 1}. {result.depth.value.upper()} | "
+        f"{result.evaluated_cases}/{result.total_cases} cases | "
+        f"{result.stop_reason.value}"
+        for index, result in enumerate(results)
+    ]
+    selected = st.selectbox(
+        i18n.t("reports.failure_sweep_source"),
+        labels,
+        index=len(labels) - 1,
+        key=SWEEP_KEY,
+        help="Adds one retained N-1/N-2 failure sweep from the Simulation Lab.",
+    )
+    if selected == NONE_LABEL:
+        return None
+    return results[labels.index(selected) - 1]
+
+
+def _select_mode_comparison() -> RoutingModeComparison | None:
+    results = state.peek_mode_comparisons()
+    labels = [NONE_LABEL] + [
+        f"{index + 1}. {len(result.modes)} modes | "
+        f"{result.scenario_id or 'baseline'}"
+        for index, result in enumerate(results)
+    ]
+    selected = st.selectbox(
+        i18n.t("reports.mode_compare_source"),
+        labels,
+        index=len(labels) - 1,
+        key=MODE_COMPARE_KEY,
+        help="Adds one retained side-by-side routing-mode comparison.",
+    )
+    if selected == NONE_LABEL:
+        return None
+    return results[labels.index(selected) - 1]
+
+
+def _select_sensitivity() -> SensitivityReport | None:
+    reports = state.peek_sensitivity_reports()
+    labels = [NONE_LABEL] + [
+        f"{index + 1}. {report.source_algorithm.value} | "
+        f"{len(report.robust_candidate_hashes)} robust | "
+        f"{report.stop_reason.value}"
+        for index, report in enumerate(reports)
+    ]
+    selected = st.selectbox(
+        i18n.t("reports.sensitivity_source"),
+        labels,
+        index=len(labels) - 1,
+        key=SENSITIVITY_KEY,
+        help="Adds one retained demand/capacity sensitivity analysis.",
+    )
+    if selected == NONE_LABEL:
+        return None
+    return reports[labels.index(selected) - 1]
+
+
+def _select_reranking() -> ParetoReranking | None:
+    results = state.peek_rerankings()
+    labels = [NONE_LABEL] + [
+        f"{index + 1}. {result.source_algorithm.value} | "
+        f"{len(result.items)} feasible candidates"
+        for index, result in enumerate(results)
+    ]
+    selected = st.selectbox(
+        i18n.t("reports.rerank_source"),
+        labels,
+        index=len(labels) - 1,
+        key=RERANK_KEY,
+        help="Adds one retained weight-only Pareto re-ranking result.",
+    )
+    if selected == NONE_LABEL:
+        return None
+    return results[labels.index(selected) - 1]
+
+
 def _render_sources() -> tuple[
     WorkflowState | None,
     ScenarioRun | None,
     OptimizationRun | None,
     CapacityRun | None,
+    FailureSweepResult | None,
+    RoutingModeComparison | None,
+    SensitivityReport | None,
+    ParetoReranking | None,
 ]:
     st.subheader("Report sources")
     st.caption(
         "The report always includes the current digital twin. A retained "
-        "workflow, scenario run, optimization run, or capacity run is added only "
-        "when it is selected here."
+        "workflow, scenario run, optimization run, capacity run, failure sweep, "
+        "mode comparison, sensitivity analysis, or re-ranking is added only when "
+        "it is selected here."
     )
     columns = st.columns(4)
     with columns[0]:
@@ -175,7 +267,25 @@ def _render_sources() -> tuple[
         optimization_run = _select_optimization()
     with columns[3]:
         capacity_run = _select_capacity()
-    return workflow, scenario_run, optimization_run, capacity_run
+    derived_columns = st.columns(4)
+    with derived_columns[0]:
+        sweep = _select_sweep()
+    with derived_columns[1]:
+        mode_comparison = _select_mode_comparison()
+    with derived_columns[2]:
+        sensitivity = _select_sensitivity()
+    with derived_columns[3]:
+        reranking = _select_reranking()
+    return (
+        workflow,
+        scenario_run,
+        optimization_run,
+        capacity_run,
+        sweep,
+        mode_comparison,
+        sensitivity,
+        reranking,
+    )
 
 
 def _section_label(document: ReportDocument, section_id: str) -> str:
@@ -480,12 +590,27 @@ def render() -> None:
         _render_empty_state()
         return
 
-    workflow, scenario_run, optimization_run, capacity_run = _render_sources()
+    (
+        workflow,
+        scenario_run,
+        optimization_run,
+        capacity_run,
+        sweep,
+        mode_comparison,
+        sensitivity,
+        reranking,
+    ) = _render_sources()
     generated_at = state.report_generated_at(twin_fingerprint(twin))
     optimization_source_fingerprint = (
         state.get_optimization_source_fingerprint(optimization_run)
         if optimization_run is not None
         else ""
+    )
+    sensitivity_source_fingerprint = (
+        sensitivity.source_twin_fingerprint if sensitivity is not None else ""
+    )
+    rerank_source_fingerprint = (
+        state.peek_rerank_source_fingerprint(reranking) if reranking is not None else ""
     )
     try:
         if workflow is None:
@@ -496,6 +621,12 @@ def render() -> None:
                 generated_at.isoformat(),
                 capacity_payload=capacity_source_payload(capacity_run),
                 optimization_source_fingerprint=optimization_source_fingerprint,
+                sweep_payload=source_payload(sweep),
+                mode_comparison_payload=source_payload(mode_comparison),
+                sensitivity_payload=source_payload(sensitivity),
+                reranking_payload=source_payload(reranking),
+                sensitivity_source_fingerprint=sensitivity_source_fingerprint,
+                rerank_source_fingerprint=rerank_source_fingerprint,
             )
         else:
             # WorkflowState holds a live accessor and is not serializable, so it
@@ -507,7 +638,13 @@ def render() -> None:
                     scenario_run=scenario_run,
                     optimization_run=optimization_run,
                     capacity_run=capacity_run,
+                    failure_sweep=sweep,
+                    mode_comparison=mode_comparison,
+                    sensitivity_report=sensitivity,
+                    reranking=reranking,
                     optimization_source_fingerprint=optimization_source_fingerprint,
+                    sensitivity_source_fingerprint=sensitivity_source_fingerprint,
+                    rerank_source_fingerprint=rerank_source_fingerprint,
                     generated_at=generated_at,
                 )
             )

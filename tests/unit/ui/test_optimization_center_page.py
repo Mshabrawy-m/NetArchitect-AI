@@ -6,17 +6,34 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
-from optimization import SEARCH_NOTE
+from optimization import (
+    SEARCH_NOTE,
+    Algorithm,
+    OptimizationHistory,
+    run_optimization,
+)
+from tests.unit.optimization.helpers import settings, tiny_twin
 from tests.unit.simulation.helpers import diamond_twin, make_demand
 from tests.unit.ui.nav_helpers import open_page
 from ui import state
-from ui.pages.optimization_center import SNAPSHOT_LABEL_KEY
+from ui.pages.optimization_center import ALGORITHM_LABELS, SNAPSHOT_LABEL_KEY
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 
 
 def _twin_with_demand():
     return diamond_twin(demands=(make_demand("a-to-d", "a", "d"),))
+
+
+def _retained_nsga2_run():
+    """Build one small deterministic run with a populated Pareto front."""
+    twin = tiny_twin()
+    config = settings(
+        max_iterations=3,
+        max_evaluations=80,
+        max_runtime_seconds=5.0,
+    )
+    return twin, run_optimization(twin, config, Algorithm.nsga2)
 
 
 def test_optimization_center_requires_a_twin() -> None:
@@ -123,3 +140,49 @@ def test_optimization_center_excludes_infeasible_recommendations() -> None:
         "No evaluated candidate satisfies" in warning.value
         for warning in at.warning
     )
+
+
+def test_optimization_center_renders_e5_controls() -> None:
+    twin, run = _retained_nsga2_run()
+    at = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    at.session_state[state.TWIN_KEY] = twin
+    history = OptimizationHistory()
+    history.add(run)
+    at.session_state[state.OPTIMIZATION_HISTORY_KEY] = history
+    open_page(at, "Optimization Center")
+
+    assert not at.exception
+    algorithm = at.selectbox(key="optimization_algorithm")
+    assert any(
+        ALGORITHM_LABELS[Algorithm.simulated_annealing] in option
+        for option in algorithm.options
+    )
+    assert at.checkbox(key="optimization_sa_greedy_start")
+    assert at.button(key="optimization_rerank_apply")
+    assert at.button(key="optimization_sensitivity_run")
+    assert at.slider(key="optimization_sensitivity_candidates")
+    assert at.number_input(key="optimization_sensitivity_runtime")
+
+
+def test_optimization_center_e5_downloads_after_applying_controls() -> None:
+    twin, run = _retained_nsga2_run()
+    at = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    at.session_state[state.TWIN_KEY] = twin
+    history = OptimizationHistory()
+    history.add(run)
+    at.session_state[state.OPTIMIZATION_HISTORY_KEY] = history
+    open_page(at, "Optimization Center")
+
+    at.button(key="optimization_rerank_apply").click().run()
+
+    assert not at.exception
+    assert at.download_button(key="optimization_download_rerank_json")
+    assert at.download_button(key="optimization_download_rerank_csv")
+
+    at.session_state["optimization_sensitivity_candidates"] = 1
+    at.session_state["optimization_sensitivity_runtime"] = 5.0
+    at.button(key="optimization_sensitivity_run").click().run()
+
+    assert not at.exception
+    assert at.download_button(key="optimization_download_sensitivity_json")
+    assert at.download_button(key="optimization_download_sensitivity_csv")

@@ -162,6 +162,9 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "loading.scenario": "Running scenario...",
         "loading.provider": "Interpreting requirements...",
         "loading.workflow": "Running the deterministic workflow...",
+        "loading.sweep": "Running failure sweep...",
+        "loading.mode_compare": "Comparing routing modes...",
+        "loading.sensitivity": "Running sensitivity analysis...",
         "chart.congestion": "Congestion level",
         # Progress strip
         "progress.title": "Project progress",
@@ -273,6 +276,92 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "dashboard.feasible_best": "feasible best",
         "dashboard.no_feasible_best": "no feasible best",
         "dashboard.no_optimizations": "No optimization runs retained.",
+        # Simulation lab - routing modes, shared risks, and bounded sweeps
+        "simulation.routing_mode": "Routing mode",
+        "simulation.routing_mode.help": (
+            "Models the rule used to place demands on the twin: legacy single "
+            "path by default, ECMP, or capacity-aware placement. This is a "
+            "modeled rule, not device configuration."
+        ),
+        "simulation.routing_mode.single_path": "Single path (legacy)",
+        "simulation.routing_mode.ecmp": "ECMP",
+        "simulation.routing_mode.capacity_aware": "Capacity-aware",
+        "simulation.shared_risk.title": "Shared-risk groups",
+        "simulation.shared_risk.caption": (
+            "Modeled failure domains: devices or links that fail together. "
+            "Groups apply to this analysis only and do not change device "
+            "configuration."
+        ),
+        "simulation.shared_risk.id": "ID",
+        "simulation.shared_risk.name": "Name",
+        "simulation.shared_risk.devices": "Devices",
+        "simulation.shared_risk.links": "Links",
+        "simulation.shared_risk.add": "Add group",
+        "simulation.shared_risk.apply": "Apply groups",
+        "simulation.shared_risk.clear": "Clear groups",
+        "simulation.mode_compare.title": "Routing mode comparison",
+        "simulation.mode_compare.caption": (
+            "Compare the same failures under each modeled demand-placement "
+            "rule. Results are modeled from the current twin."
+        ),
+        "simulation.mode_compare.run": "Compare modes",
+        "simulation.mode_compare.download": "Download comparison",
+        "simulation.sweep.title": "Failure sweep",
+        "simulation.sweep.caption": (
+            "Evaluate failure combinations up to the selected depth against "
+            "the current twin."
+        ),
+        "simulation.sweep.depth": "Failure depth",
+        "simulation.sweep.depth.n1": "N-1",
+        "simulation.sweep.depth.n2": "N-2",
+        "simulation.sweep.subset_links": "Link subset",
+        "simulation.sweep.subset_devices": "Device subset",
+        "simulation.sweep.max_pairs": "Max failure pairs",
+        "simulation.sweep.slice": "Result slice",
+        "simulation.sweep.run": "Run sweep",
+        "simulation.sweep.cancel": "Cancel sweep",
+        "simulation.sweep.progress": "Sweep progress",
+        "simulation.sweep.showing": "Showing results",
+        "simulation.sweep.download_json": "Download JSON",
+        "simulation.sweep.download_csv": "Download CSV",
+        "simulation.sweep.stop_reason": "Stop reason",
+        "simulation.sweep.no_result": "No sweep result retained for this twin.",
+        "simulation.sweep.srgs": "Shared-risk groups (SRGs)",
+        # Optimization center - seeded SA, sensitivity, and re-ranking
+        "optimization.algorithm.simulated_annealing": "Simulated annealing (seeded)",
+        "optimization.sa.hybrid_start": "Hybrid start",
+        "optimization.sa.hybrid_start.help": (
+            "Seed simulated annealing from a retained greedy result before "
+            "bounded local search. The outcome stays deterministic for the "
+            "same seed and twin."
+        ),
+        "optimization.sensitivity.title": "Sensitivity analysis",
+        "optimization.sensitivity.caption": (
+            "Re-evaluate the selected design under bounded parameter changes "
+            "to show which assumptions drive the result."
+        ),
+        "optimization.sensitivity.run": "Run sensitivity",
+        "optimization.sensitivity.download": "Download sensitivity",
+        "optimization.sensitivity.robust": "Robust",
+        "optimization.sensitivity.no_robust": "Not robust",
+        "optimization.sensitivity.complete": "Analysis complete",
+        "optimization.sensitivity.incomplete": "Analysis incomplete",
+        "optimization.rerank.title": "Pareto re-ranking",
+        "optimization.rerank.caption": (
+            "Reorder the retained Pareto front with explicit weights. This "
+            "changes presentation only, not the computed candidates."
+        ),
+        "optimization.rerank.apply": "Apply weights",
+        "optimization.rerank.download": "Download re-ranked front",
+        "optimization.rerank.no_front": "No Pareto front retained in this session.",
+        "optimization.rerank.weights_note": (
+            "Weights affect ranking only; they do not recompute engineering scores."
+        ),
+        # Report source selectors
+        "reports.failure_sweep_source": "Failure sweep result",
+        "reports.mode_compare_source": "Mode comparison result",
+        "reports.sensitivity_source": "Sensitivity result",
+        "reports.rerank_source": "Re-ranked Pareto front",
         # Settings
         "settings.language.label": "Language",
         "settings.language.help": (
@@ -535,6 +624,9 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "loading.scenario": "جارٍ تشغيل السيناريو...",
         "loading.provider": "جارٍ تفسير المتطلبات...",
         "loading.workflow": "جارٍ تشغيل سير العمل الحتمي...",
+        "loading.sweep": "جارٍ تشغيل فحص الأعطال...",
+        "loading.mode_compare": "جارٍ مقارنة أوضاع التوجيه...",
+        "loading.sensitivity": "جارٍ تشغيل تحليل الحساسية...",
         "chart.congestion": "مستوى الازدحام",
         # Progress strip
         "progress.title": "تقدم المشروع",
@@ -634,6 +726,89 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "dashboard.feasible_best": "أفضل حل ممكن",
         "dashboard.no_feasible_best": "لا يوجد أفضل حل ممكن",
         "dashboard.no_optimizations": "لا توجد تشغيلات تحسين محفوظة.",
+        # Simulation lab - routing modes, shared risks, and bounded sweeps
+        "simulation.routing_mode": "وضع التوجيه",
+        "simulation.routing_mode.help": (
+            "نمذجة قاعدة وضع الطلبات على التوأم: المسار المفرد الافتراضي "
+            "القديم، أو ECMP، أو التوزيع حسب السعة. القاعدة نموذجية ولا "
+            "تغيّر إعدادات الأجهزة."
+        ),
+        "simulation.routing_mode.single_path": "المسار المفرد (القديم)",
+        "simulation.routing_mode.ecmp": "ECMP",
+        "simulation.routing_mode.capacity_aware": "حسب السعة",
+        "simulation.shared_risk.title": "مجموعات المخاطر المشتركة",
+        "simulation.shared_risk.caption": (
+            "نطاقات أعطال نموذجية: أجهزة أو روابط تفشل معاً. تُطبق المجموعات "
+            "على هذا التحليل فقط ولا تغيّر إعدادات الأجهزة."
+        ),
+        "simulation.shared_risk.id": "المعرّف",
+        "simulation.shared_risk.name": "الاسم",
+        "simulation.shared_risk.devices": "الأجهزة",
+        "simulation.shared_risk.links": "الروابط",
+        "simulation.shared_risk.add": "إضافة مجموعة",
+        "simulation.shared_risk.apply": "تطبيق المجموعات",
+        "simulation.shared_risk.clear": "مسح المجموعات",
+        "simulation.mode_compare.title": "مقارنة أوضاع التوجيه",
+        "simulation.mode_compare.caption": (
+            "مقارنة الأعطال نفسها تحت كل قاعدة لوضع الطلبات. النتائج نموذجية "
+            "ومشتقة من التوأم الحالي."
+        ),
+        "simulation.mode_compare.run": "مقارنة الأوضاع",
+        "simulation.mode_compare.download": "تنزيل المقارنة",
+        "simulation.sweep.title": "فحص الأعطال",
+        "simulation.sweep.caption": (
+            "تقييم تركيبات الأعطال حتى العمق المختار مقابل التوأم الحالي."
+        ),
+        "simulation.sweep.depth": "عمق الفشل",
+        "simulation.sweep.depth.n1": "N-1",
+        "simulation.sweep.depth.n2": "N-2",
+        "simulation.sweep.subset_links": "مجموعة الروابط",
+        "simulation.sweep.subset_devices": "مجموعة الأجهزة",
+        "simulation.sweep.max_pairs": "أقصى عدد للأزواج",
+        "simulation.sweep.slice": "شريحة النتائج",
+        "simulation.sweep.run": "تشغيل الفحص",
+        "simulation.sweep.cancel": "إلغاء الفحص",
+        "simulation.sweep.progress": "تقدم الفحص",
+        "simulation.sweep.showing": "النتائج المعروضة",
+        "simulation.sweep.download_json": "تنزيل JSON",
+        "simulation.sweep.download_csv": "تنزيل CSV",
+        "simulation.sweep.stop_reason": "سبب التوقف",
+        "simulation.sweep.no_result": "لا توجد نتيجة فحص محفوظة لهذا التوأم.",
+        "simulation.sweep.srgs": "مجموعات المخاطر المشتركة (SRGs)",
+        # Optimization center - seeded SA, sensitivity, and re-ranking
+        "optimization.algorithm.simulated_annealing": "التبريد المحاكى (بذرة ثابتة)",
+        "optimization.sa.hybrid_start": "بداية مختلطة",
+        "optimization.sa.hybrid_start.help": (
+            "تغذية التبريد المحاكى بنتيجة جشية محفوظة قبل بحث محلي محدود. "
+            "النتيجة حتمية عند ثبات البذرة والتوأم."
+        ),
+        "optimization.sensitivity.title": "تحليل الحساسية",
+        "optimization.sensitivity.caption": (
+            "إعادة تقييم التصميم المختار تحت تغييرات محدودة في المعاملات "
+            "لتوضيح الافتراضات المؤثرة على النتيجة."
+        ),
+        "optimization.sensitivity.run": "تشغيل تحليل الحساسية",
+        "optimization.sensitivity.download": "تنزيل نتائج الحساسية",
+        "optimization.sensitivity.robust": "متين",
+        "optimization.sensitivity.no_robust": "غير متين",
+        "optimization.sensitivity.complete": "اكتمل التحليل",
+        "optimization.sensitivity.incomplete": "لم يكتمل التحليل",
+        "optimization.rerank.title": "إعادة ترتيب Pareto",
+        "optimization.rerank.caption": (
+            "إعادة ترتيب جبهة Pareto المحفوظة بأوزان صريحة. هذا يغيّر العرض "
+            "فقط دون تغيير المرشحين المحسوبين."
+        ),
+        "optimization.rerank.apply": "تطبيق الأوزان",
+        "optimization.rerank.download": "تنزيل الجبهة المُعاد ترتيبها",
+        "optimization.rerank.no_front": "لا توجد جبهة Pareto محفوظة في هذه الجلسة.",
+        "optimization.rerank.weights_note": (
+            "الأوزان تؤثر على الترتيب فقط؛ لا تُعيد حساب درجات الهندسة."
+        ),
+        # Report source selectors
+        "reports.failure_sweep_source": "نتيجة فحص الأعطال",
+        "reports.mode_compare_source": "نتيجة مقارنة الأوضاع",
+        "reports.sensitivity_source": "نتيجة تحليل الحساسية",
+        "reports.rerank_source": "جبهة Pareto المُعاد ترتيبها",
         # Settings
         "settings.language.label": "اللغة",
         "settings.language.help": (

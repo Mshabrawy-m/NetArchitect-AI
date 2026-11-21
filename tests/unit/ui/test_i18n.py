@@ -25,6 +25,79 @@ def test_catalogs_have_full_arabic_key_and_placeholder_parity() -> None:
     assert set(i18n.AR) == set(i18n.EN)
 
 
+E5_KEYS = (
+    "loading.sweep",
+    "loading.mode_compare",
+    "loading.sensitivity",
+    "simulation.routing_mode",
+    "simulation.routing_mode.help",
+    "simulation.routing_mode.single_path",
+    "simulation.routing_mode.ecmp",
+    "simulation.routing_mode.capacity_aware",
+    "simulation.shared_risk.title",
+    "simulation.shared_risk.caption",
+    "simulation.shared_risk.id",
+    "simulation.shared_risk.name",
+    "simulation.shared_risk.devices",
+    "simulation.shared_risk.links",
+    "simulation.shared_risk.add",
+    "simulation.shared_risk.apply",
+    "simulation.shared_risk.clear",
+    "simulation.mode_compare.title",
+    "simulation.mode_compare.caption",
+    "simulation.mode_compare.run",
+    "simulation.mode_compare.download",
+    "simulation.sweep.title",
+    "simulation.sweep.caption",
+    "simulation.sweep.depth",
+    "simulation.sweep.depth.n1",
+    "simulation.sweep.depth.n2",
+    "simulation.sweep.subset_links",
+    "simulation.sweep.subset_devices",
+    "simulation.sweep.max_pairs",
+    "simulation.sweep.slice",
+    "simulation.sweep.run",
+    "simulation.sweep.cancel",
+    "simulation.sweep.progress",
+    "simulation.sweep.showing",
+    "simulation.sweep.download_json",
+    "simulation.sweep.download_csv",
+    "simulation.sweep.stop_reason",
+    "simulation.sweep.no_result",
+    "simulation.sweep.srgs",
+    "optimization.algorithm.simulated_annealing",
+    "optimization.sa.hybrid_start",
+    "optimization.sa.hybrid_start.help",
+    "optimization.sensitivity.title",
+    "optimization.sensitivity.caption",
+    "optimization.sensitivity.run",
+    "optimization.sensitivity.download",
+    "optimization.sensitivity.robust",
+    "optimization.sensitivity.no_robust",
+    "optimization.sensitivity.complete",
+    "optimization.sensitivity.incomplete",
+    "optimization.rerank.title",
+    "optimization.rerank.caption",
+    "optimization.rerank.apply",
+    "optimization.rerank.download",
+    "optimization.rerank.no_front",
+    "optimization.rerank.weights_note",
+    "reports.failure_sweep_source",
+    "reports.mode_compare_source",
+    "reports.sensitivity_source",
+    "reports.rerank_source",
+)
+
+
+def test_e5_catalog_keys_are_present_and_parity_is_preserved() -> None:
+    for key in E5_KEYS:
+        assert key in i18n.EN
+        assert key in i18n.AR
+    assert i18n.catalog_parity()
+    assert i18n.missing_translation_keys() == ()
+    assert set(i18n.EN) == set(i18n.AR)
+
+
 def test_translate_falls_back_to_english_for_a_missing_arabic_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

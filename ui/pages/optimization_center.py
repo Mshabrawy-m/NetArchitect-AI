@@ -23,19 +23,26 @@ from pydantic import ValidationError
 import config.limits
 from config.limits import (
     DEFAULT_OPTIMIZATION_RUNTIME_SECONDS,
+    DEFAULT_SENSITIVITY_RUNTIME_SECONDS,
     MAX_EVALUATIONS,
     MAX_OPTIMIZATION_RUNS,
     MAX_OPTIMIZATION_RUNTIME_SECONDS,
     MAX_POPULATION,
+    MAX_SA_INITIAL_CANDIDATES,
+    MAX_SENSITIVITY_CANDIDATES,
+    MAX_SENSITIVITY_RUNTIME_SECONDS,
 )
 from core.exceptions import NetArchitectError
 from core.schemas.network import Link
 from digital_twin import DigitalTwin
 from optimization import (
+    DEFAULT_SENSITIVITY_SCENARIOS,
     DEFAULT_TIERS,
     OBJECTIVE_DEFINITIONS,
+    ROBUST_DEFINITION,
     SEARCH_NOTE,
     Algorithm,
+    Candidate,
     CapacityTier,
     CostModel,
     HardConstraints,
@@ -43,19 +50,28 @@ from optimization import (
     ObjectiveSpec,
     OptimizationRun,
     OptimizationSettings,
+    ParetoReranking,
+    SensitivityReport,
+    analyze_sensitivity,
     build_candidate_twin,
     candidate_changes,
     compare_runs,
     objective_deltas,
     pareto_front,
+    rerank_pareto_front,
+    reranking_to_csv,
+    reranking_to_json,
     run_optimization,
     run_to_csv,
     run_to_json_bytes,
+    sensitivity_to_csv,
+    sensitivity_to_json,
 )
 from simulation import twin_fingerprint
-from ui import formatting, state, theme
+from ui import formatting, i18n, state, theme
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
 from ui.components.editors import bump_editor_key, editor_key
+from ui.components.feedback import working
 
 VIEW_RUN_KEY = "optimization_view_run"
 FLASH_KEY = "optimization_flash"
@@ -67,6 +83,7 @@ ALGORITHM_LABELS: dict[Algorithm, str] = {
     Algorithm.greedy: "Greedy hill-climb (deterministic baseline)",
     Algorithm.genetic: "Genetic algorithm (weighted sum)",
     Algorithm.nsga2: "NSGA-II (Pareto front, no weights in selection)",
+    Algorithm.simulated_annealing: "Simulated annealing (seeded)",
 }
 ALGORITHM_OPTIONS = list(ALGORITHM_LABELS.values())
 ALGORITHM_BY_LABEL = {label: kind for kind, label in ALGORITHM_LABELS.items()}
@@ -524,6 +541,12 @@ def _render_search_controls() -> tuple[Algorithm, int, int, int, int, float]:
             index=0,
             key="optimization_algorithm",
         )
+        st.checkbox(
+            i18n.t("optimization.sa.hybrid_start"),
+            key="optimization_sa_greedy_start",
+            value=False,
+            help=i18n.t("optimization.sa.hybrid_start.help"),
+        )
         seed = st.number_input(
             "Random seed",
             min_value=0,
@@ -716,6 +739,42 @@ def _render_objectives_values(
     return tuple(objectives)
 
 
+def _greedy_initial_candidates(twin: DigitalTwin) -> tuple[Candidate, ...]:
+    """Build a deterministic hybrid start from retained greedy runs or baseline.
+
+    Only runs recorded against this exact twin fingerprint are used. The empty
+    baseline candidate is always first, so simulated annealing never starts from
+    a design the user cannot trace back to the retained history.
+    """
+    fingerprint = twin_fingerprint(twin)
+    candidates: list[Candidate] = [Candidate()]
+    seen = {candidates[0].model_dump_json()}
+    greedy_runs = [
+        run
+        for run in reversed(state.peek_optimization_runs())
+        if run.algorithm is Algorithm.greedy
+        and state.get_optimization_source_fingerprint(run) == fingerprint
+    ]
+    for run in greedy_runs:
+        ranked = sorted(
+            run.candidates,
+            key=lambda record: (
+                not record.evaluation.feasible,
+                record.evaluation.weighted_score,
+                record.evaluation.candidate_hash,
+            ),
+        )
+        for evaluation in (run.baseline, *(item.evaluation for item in ranked)):
+            payload = evaluation.candidate.model_dump_json()
+            if payload in seen:
+                continue
+            seen.add(payload)
+            candidates.append(evaluation.candidate)
+            if len(candidates) >= MAX_SA_INITIAL_CANDIDATES:
+                return tuple(candidates)
+    return tuple(candidates)
+
+
 def _run_and_store(twin: DigitalTwin, settings: OptimizationSettings, algorithm: Algorithm) -> None:
     history = state.get_optimization_history()
     if len(history) >= MAX_OPTIMIZATION_RUNS:
@@ -737,8 +796,19 @@ def _run_and_store(twin: DigitalTwin, settings: OptimizationSettings, algorithm:
             f"{settings.max_runtime_seconds:g} s."
         )
         progress = st.progress(0.0, text="Evaluating the baseline and candidates...")
+        initial_candidates: tuple[Candidate, ...] = ()
+        if (
+            algorithm is Algorithm.simulated_annealing
+            and bool(state.session_get("optimization_sa_greedy_start", False))
+        ):
+            initial_candidates = _greedy_initial_candidates(twin)
         try:
-            run = run_optimization(twin, settings, algorithm)
+            run = run_optimization(
+                twin,
+                settings,
+                algorithm,
+                initial_candidates=initial_candidates,
+            )
         except (NetArchitectError, ValidationError, RuntimeError, ValueError) as error:
             progress.empty()
             status.update(
@@ -1439,6 +1509,209 @@ def _render_comparison() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Post-run sensitivity and re-ranking
+# ---------------------------------------------------------------------------
+
+
+def _render_reranking(twin: DigitalTwin) -> None:
+    st.subheader(i18n.t("optimization.rerank.title"))
+    st.caption(i18n.t("optimization.rerank.caption"))
+    run = _active_run()
+    if run is None:
+        st.info("Run an optimization first to re-rank its Pareto front.")
+        return
+    if not run.pareto_front:
+        st.info(i18n.t("optimization.rerank.no_front"))
+        return
+
+    configured = {objective.kind: objective.weight for objective in run.settings.objectives}
+    weights: dict[ObjectiveKind, float] = {}
+    columns = st.columns(min(len(configured), 4) or 1)
+    for index, (kind, default) in enumerate(configured.items()):
+        with columns[index % len(columns)]:
+            weights[kind] = float(
+                st.number_input(
+                    OBJECTIVE_DEFINITIONS[kind].label,
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=float(default),
+                    step=0.05,
+                    key=f"optimization_rerank_raw_{kind.value}",
+                )
+            )
+    total = sum(weights.values())
+    st.caption(f"{i18n.t('optimization.rerank.weights_note')} Current sum: {total:.2f}.")
+    if st.button(
+        i18n.t("optimization.rerank.apply"),
+        key="optimization_rerank_apply",
+        type="primary",
+    ):
+        try:
+            reranking: ParetoReranking = rerank_pareto_front(run, weights)
+            fingerprint = (
+                state.get_optimization_source_fingerprint(run)
+                or twin_fingerprint(twin)
+            )
+            state.add_reranking(reranking)
+            state.set_rerank_source_fingerprint(reranking, fingerprint)
+        except (NetArchitectError, ValidationError, ValueError) as error:
+            st.error(format_error(error), title="Re-ranking rejected")
+            return
+        _flash("success", "Pareto front re-ranked from stored evaluations only.")
+
+    rerankings = state.peek_rerankings()
+    if not rerankings:
+        return
+    reranking = rerankings[-1]
+    rows = [
+        {
+            "Rank": item.rank,
+            "Candidate": item.candidate_hash[:12],
+            "Weighted score": round(item.evaluation.weighted_score, 6),
+            "Source rank": item.source_rank,
+            "Feasible": item.evaluation.feasible,
+        }
+        for item in reranking.items
+    ]
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    st.caption(reranking.weight_note)
+    st.caption(reranking.rerank_note)
+    if reranking.recommended_candidate_hash:
+        st.success(
+            "Recommended feasible candidate: "
+            f"{reranking.recommended_candidate_hash[:12]}"
+        )
+    else:
+        st.info("No feasible candidate exists on the re-ranked front.")
+    download_columns = st.columns(2)
+    with download_columns[0]:
+        st.download_button(
+            i18n.t("optimization.rerank.download") + " (JSON)",
+            data=reranking_to_json(reranking, indent=2).encode("utf-8"),
+            file_name="pareto-reranking.json",
+            mime="application/json",
+            key="optimization_download_rerank_json",
+        )
+    with download_columns[1]:
+        st.download_button(
+            i18n.t("optimization.rerank.download") + " (CSV)",
+            data=reranking_to_csv(reranking).encode("utf-8"),
+            file_name="pareto-reranking.csv",
+            mime="text/csv",
+            key="optimization_download_rerank_csv",
+        )
+
+
+def _render_sensitivity(twin: DigitalTwin) -> None:
+    st.subheader(i18n.t("optimization.sensitivity.title"))
+    st.caption(i18n.t("optimization.sensitivity.caption"))
+    run = _active_run()
+    if run is None:
+        st.info("Run an optimization first to analyze its robustness.")
+        return
+
+    selected_scenarios = [
+        scenario
+        for scenario in DEFAULT_SENSITIVITY_SCENARIOS
+        if st.checkbox(
+            scenario.label,
+            value=True,
+            key=f"optimization_sensitivity_use_{scenario.id}",
+        )
+    ]
+    columns = st.columns(2)
+    with columns[0]:
+        max_candidates = st.slider(
+            "Candidate subset",
+            min_value=1,
+            max_value=MAX_SENSITIVITY_CANDIDATES,
+            value=MAX_SENSITIVITY_CANDIDATES,
+            key="optimization_sensitivity_candidates",
+        )
+    with columns[1]:
+        runtime = st.number_input(
+            "Runtime limit (seconds)",
+            min_value=1.0,
+            max_value=float(MAX_SENSITIVITY_RUNTIME_SECONDS),
+            value=float(DEFAULT_SENSITIVITY_RUNTIME_SECONDS),
+            step=1.0,
+            key="optimization_sensitivity_runtime",
+        )
+    if st.button(
+        i18n.t("optimization.sensitivity.run"),
+        key="optimization_sensitivity_run",
+        type="primary",
+    ):
+        try:
+            with working(i18n.t("loading.sensitivity")):
+                report = analyze_sensitivity(
+                    twin,
+                    run,
+                    scenarios=tuple(selected_scenarios),
+                    max_candidates=max_candidates,
+                    max_runtime_seconds=runtime,
+                )
+            state.add_sensitivity_report(report)
+        except (NetArchitectError, ValidationError, RuntimeError, ValueError) as error:
+            st.error(format_error(error), title="Sensitivity analysis failed")
+            return
+        _flash("success", "Sensitivity analysis saved for this session.")
+
+    reports = state.peek_sensitivity_reports()
+    if not reports:
+        st.info("No sensitivity analysis has been run in this session.")
+        return
+    report: SensitivityReport = reports[-1]
+    complete = report.stop_reason.value == "completed"
+    if complete:
+        st.success(i18n.t("optimization.sensitivity.complete"))
+    else:
+        st.warning(i18n.t("optimization.sensitivity.incomplete"))
+    st.caption(ROBUST_DEFINITION)
+    st.caption(report.subset_note)
+    st.write(
+        f"Robust candidates: {len(report.robust_candidate_hashes)} of "
+        f"{report.evaluated_candidates} evaluated."
+    )
+    if report.recommended_candidate_hash:
+        st.success(
+            "Recommended robust candidate: "
+            f"{report.recommended_candidate_hash[:12]}"
+        )
+    else:
+        st.info(i18n.t("optimization.sensitivity.no_robust"))
+    scenario_rows = []
+    for result in report.scenarios:
+        scenario_rows.append(
+            {
+                "Scenario": result.scenario.label,
+                "Demand multiplier": result.scenario.demand_multiplier,
+                "Capacity multiplier": result.scenario.capacity_multiplier,
+                "Twin fingerprint": result.twin_fingerprint[:12],
+                "Candidate cases": len(result.cases),
+            }
+        )
+    st.dataframe(pd.DataFrame(scenario_rows), hide_index=True, width="stretch")
+    download_columns = st.columns(2)
+    with download_columns[0]:
+        st.download_button(
+            i18n.t("optimization.sensitivity.download") + " (JSON)",
+            data=sensitivity_to_json(report, indent=2).encode("utf-8"),
+            file_name="sensitivity-report.json",
+            mime="application/json",
+            key="optimization_download_sensitivity_json",
+        )
+    with download_columns[1]:
+        st.download_button(
+            i18n.t("optimization.sensitivity.download") + " (CSV)",
+            data=sensitivity_to_csv(report).encode("utf-8"),
+            file_name="sensitivity-report.csv",
+            mime="text/csv",
+            key="optimization_download_sensitivity_csv",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Page
 # ---------------------------------------------------------------------------
 
@@ -1494,3 +1767,7 @@ def render() -> None:
     _render_history()
     st.divider()
     _render_comparison()
+    st.divider()
+    _render_reranking(twin)
+    st.divider()
+    _render_sensitivity(twin)

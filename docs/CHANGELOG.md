@@ -2,6 +2,47 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - E1-E5: bounded engine power and UI/report wiring
+
+### Added
+- E1: `RoutingMode`, `PathSplit`, bounded ECMP path enumeration, equal split,
+  truncation warnings, and explicit directed/undirected load rules. Legacy
+  twin/run JSON and fingerprint fixtures prove byte compatibility.
+- E2: capacity-aware admission control with exact blocked-path fields, the
+  `insufficient capacity` reason, and deterministic side-by-side mode comparison.
+- E3: `SharedRiskGroup` on the twin, bounded N-1/N-2 failure sweeps, typed case
+  plans/impacts/results/stop reasons, slice JSON/CSV exports, and an `st.fragment`
+  page flow with real progress, Cancel, and "showing X of Y".
+- E4: seeded simulated annealing with an optional hybrid start, bounded
+  demand/capacity sensitivity with a precise robust definition, and pure Pareto
+  re-ranking from stored evaluations only.
+- E5: bounded session stores/accessors, 60 new EN/AR catalog keys, Simulation Lab
+  routing/SRG/comparison/sweep controls, Optimization Center SA/hybrid/rerank/
+  sensitivity controls, and four provenance-tagged report sections.
+
+### Changed
+- No schema-version bump: `TWIN_SCHEMA_VERSION` remains `2`; every added field is
+  optional and defaults to the legacy result. GA/NSGA-II seeded vectors and the
+  pre-E4 optimization JSON/hash fixture are unchanged.
+- The report section order is now architecture, topology, addressing, VLAN/DHCP,
+  routing, graph, simulation, capacity, optimization, failure sweep, mode
+  comparison, sensitivity, re-ranking, security, assumptions, limitations, and
+  agent trace. Missing E5 sources render as `not_run` with producing pages.
+- `docs/V2_SPEC.md` records the additive engine contract. No runtime dependency,
+  worker, thread, or app disk write was added; caches and session stores stay
+  bounded.
+
+### Evidence
+- `pytest -q`: `1130 passed, 5 deselected in 40.59s`.
+- `ruff check .`: `All checks passed!`.
+- `pytest -q -m smoke`: `13 passed, 1122 deselected in 5.87s`.
+- `pytest -q -m perf`: `5 passed, 1130 deselected in 10.85s`.
+- Focused E5: i18n 9 passed, state 7 passed, reporting/cache 43 passed, UI
+  pages 26 passed. EN/AR parity `True`; missing keys `()`.
+- N-1 sweep: medium `0.355934 s` direct to `0.140281 s` sweep; max `1.339096 s`
+  direct to `0.648555 s` sweep. Not verified: browser rendering, Cloud timing/
+  RSS, Linux CI.
+
 ## 2026-11-21 - D5: accessibility and consistent formatting
 
 ### Added

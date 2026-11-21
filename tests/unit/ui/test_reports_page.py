@@ -9,7 +9,7 @@ from streamlit.testing.v1 import AppTest
 from agents import run_structured_design
 from capacity import CapacityHistory, DemandMapping, evaluate_capacity
 from core.schemas.scenario import ScenarioType
-from simulation import ScenarioHistory, run_scenario
+from simulation import ScenarioHistory, run_failure_sweep, run_scenario
 from tests.unit.agents.helpers import sample_requirements
 from tests.unit.capacity.helpers import constant_run, line_capacity_twin
 from tests.unit.digital_twin.helpers import make_twin
@@ -179,7 +179,7 @@ def test_a_retained_scenario_run_fills_the_simulation_section() -> None:
     assert "simulation" in selector.value
     unavailable = _find_frame(at, "Producing page")
     assert unavailable is not None
-    assert "Simulation Lab" not in set(unavailable["Producing page"])
+    assert "Simulation before and after" not in set(unavailable["Section"])
     headings = [markdown.value for markdown in at.markdown]
     assert any("Simulation before and after" in value for value in headings)
 
@@ -209,4 +209,43 @@ def test_a_retained_capacity_run_fills_the_capacity_section() -> None:
     assert "Capacity Planning" not in set(unavailable["Producing page"])
     headings = [markdown.value for markdown in at.markdown]
     assert any("Capacity planning" in value for value in headings)
+    assert any(success.value.startswith("Consistent:") for success in at.success)
+
+
+def test_e5_source_selectors_are_available() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120)
+    at.session_state[state.TWIN_KEY] = make_twin()
+    at.run()
+    open_page(at, "Reports & Documentation")
+
+    assert not at.exception
+    for key in (
+        "reports_sweep_source",
+        "reports_mode_compare_source",
+        "reports_sensitivity_source",
+        "reports_rerank_source",
+    ):
+        selectbox = at.selectbox(key=key)
+        assert selectbox
+        assert "None" in selectbox.options
+
+
+def test_a_retained_failure_sweep_fills_the_failure_sweep_section() -> None:
+    twin = make_twin()
+    sweep = run_failure_sweep(twin, limit=1)
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120)
+    at.session_state[state.TWIN_KEY] = twin
+    at.session_state[state.SIMULATION_SWEEPS_KEY] = (sweep,)
+    at.run()
+    open_page(at, "Reports & Documentation")
+
+    assert not at.exception
+    selector = at.multiselect(key="reports_sections")
+    assert "Failure sweep (available)" in selector.options
+    assert "failure_sweep" in selector.value
+    unavailable = _find_frame(at, "Producing page")
+    assert unavailable is not None
+    assert "Failure sweep" not in set(unavailable["Section"])
+    headings = [markdown.value for markdown in at.markdown]
+    assert any("Failure sweep" in value for value in headings)
     assert any(success.value.startswith("Consistent:") for success in at.success)

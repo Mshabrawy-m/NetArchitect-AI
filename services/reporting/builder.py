@@ -46,7 +46,9 @@ from .models import (
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from agents.models import WorkflowState
     from capacity.models import CapacityRun
-    from optimization.models import OptimizationRun
+    from optimization.models import OptimizationRun, ParetoReranking, SensitivityReport
+    from simulation.comparison import RoutingModeComparison
+    from simulation.failure_sweep import FailureSweepResult
     from simulation.scenarios import ScenarioRun
 
 REPORT_TITLE_PREFIX = "Network design report"
@@ -65,9 +67,15 @@ class ReportSources:
     optimization_run: OptimizationRun | None = None
     capacity_run: CapacityRun | None = None
     security_analysis: SecurityAnalysis | None = None
+    failure_sweep: FailureSweepResult | None = None
+    mode_comparison: RoutingModeComparison | None = None
+    sensitivity_report: SensitivityReport | None = None
+    reranking: ParetoReranking | None = None
     # OptimizationRun has no persisted twin fingerprint. The UI records the
     # fingerprint of its source twin when the run is created and passes it here.
     optimization_source_fingerprint: str | None = None
+    sensitivity_source_fingerprint: str | None = None
+    rerank_source_fingerprint: str | None = None
     generated_at: datetime | None = None
 
 
@@ -176,6 +184,12 @@ class _Builder:
         self.optimization_source_fingerprint = sources.optimization_source_fingerprint
         self.capacity_run = sources.capacity_run
         self.security_analysis = sources.security_analysis
+        self._failure_sweep = sources.failure_sweep
+        self._mode_comparison = sources.mode_comparison
+        self._sensitivity_report = sources.sensitivity_report
+        self._reranking = sources.reranking
+        self.sensitivity_source_fingerprint = sources.sensitivity_source_fingerprint
+        self.rerank_source_fingerprint = sources.rerank_source_fingerprint
         self.fingerprint = fingerprint
         self.numbers = _Collector(fingerprint)
         self._analysis_report: AnalysisReport | None = None
@@ -3099,6 +3113,830 @@ class _Builder:
         return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
 
     # ------------------------------------------------------------------
+    # E5: failure sweep, routing-mode comparison, sensitivity, re-ranking
+    # ------------------------------------------------------------------
+    def failure_sweep(self) -> ReportSection:
+        section_id = "failure_sweep"
+        title = "Failure sweep"
+        result = self._failure_sweep
+        if result is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No failure sweep is selected for this report.",
+                "Simulation Lab",
+            )
+        values = self.numbers
+        source_version = result.baseline.fingerprint
+        stale_note = self.stale_source_note(
+            "failure_sweep",
+            "failure sweep",
+            source_version,
+            step="simulation",
+            tool="simulation.run_failure_sweep",
+        )
+        total = values.number(
+            "failure_sweep.total_cases",
+            "Planned failure cases",
+            result.total_cases,
+            step="simulation",
+            tool="simulation.plan_failure_sweep",
+            digits=0,
+            twin_version=source_version,
+        )
+        evaluated = values.number(
+            "failure_sweep.evaluated_cases",
+            "Evaluated failure cases",
+            result.evaluated_cases,
+            step="simulation",
+            tool="simulation.run_failure_sweep",
+            digits=0,
+            twin_version=source_version,
+        )
+        stop_reason = values.text(
+            "failure_sweep.stop_reason",
+            "Sweep stop reason",
+            result.stop_reason.value,
+            step="simulation",
+            tool="simulation.FailureSweepStopReason",
+            twin_version=source_version,
+        )
+        blocks: list[Any] = []
+        if stale_note is not None:
+            blocks.append(stale_note)
+        kv = KeyValueBlock(
+            title="Sweep scope",
+            items=(
+                KeyValueItem(
+                    key="depth",
+                    value=result.depth.value,
+                    provenance=self.prov(
+                        "simulation", "simulation.FailureSweepDepth", source_version
+                    ),
+                ),
+                KeyValueItem(
+                    key="planned_cases",
+                    value=total,
+                    provenance=self.prov(
+                        "simulation", "simulation.plan_failure_sweep", source_version
+                    ),
+                ),
+                KeyValueItem(
+                    key="evaluated_cases",
+                    value=evaluated,
+                    provenance=self.prov(
+                        "simulation", "simulation.run_failure_sweep", source_version
+                    ),
+                ),
+                KeyValueItem(
+                    key="stop_reason",
+                    value=stop_reason,
+                    provenance=self.prov(
+                        "simulation", "simulation.FailureSweepStopReason", source_version
+                    ),
+                ),
+                KeyValueItem(
+                    key="twin_fingerprint",
+                    value=values.scan(
+                        "failure_sweep.fingerprint",
+                        "Sweep twin fingerprint",
+                        source_version,
+                        step="simulation",
+                        tool="simulation.twin_fingerprint",
+                        twin_version=source_version,
+                    ),
+                    provenance=self.prov(
+                        "simulation", "simulation.twin_fingerprint", source_version
+                    ),
+                ),
+            ),
+        )
+        blocks.append(kv)
+        rows: list[tuple[str, ...]] = []
+        for index, case in enumerate(result.cases):
+            rows.append(
+                (
+                    values.number(
+                        f"failure_sweep.case.{index}.rank",
+                        f"Rank of case {index + 1}",
+                        case.rank,
+                        step="simulation",
+                        tool="simulation.failure_sweep",
+                        digits=0,
+                        twin_version=source_version,
+                    ),
+                    values.scan(
+                        f"failure_sweep.case.{index}.target_links",
+                        "Targeted links",
+                        ", ".join(case.plan.target_link_ids) or "-",
+                        step="simulation",
+                        tool="simulation.failure_sweep",
+                        twin_version=source_version,
+                    ),
+                    values.scan(
+                        f"failure_sweep.case.{index}.target_devices",
+                        "Targeted devices",
+                        ", ".join(case.plan.target_device_ids) or "-",
+                        step="simulation",
+                        tool="simulation.failure_sweep",
+                        twin_version=source_version,
+                    ),
+                    values.scan(
+                        f"failure_sweep.case.{index}.failed_links",
+                        "Failed links",
+                        ", ".join(case.plan.failed_link_ids) or "-",
+                        step="simulation",
+                        tool="simulation.failure_sweep",
+                        twin_version=source_version,
+                    ),
+                    values.scan(
+                        f"failure_sweep.case.{index}.failed_devices",
+                        "Failed devices",
+                        ", ".join(case.plan.failed_device_ids) or "-",
+                        step="simulation",
+                        tool="simulation.failure_sweep",
+                        twin_version=source_version,
+                    ),
+                    values.scan(
+                        f"failure_sweep.case.{index}.groups",
+                        "Shared-risk groups",
+                        ", ".join(case.plan.shared_risk_group_ids) or "-",
+                        step="simulation",
+                        tool="simulation.failure_sweep",
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"failure_sweep.case.{index}.served",
+                        "Served demands after failure",
+                        case.state.served_demand_count,
+                        step="simulation",
+                        tool="simulation.evaluate",
+                        digits=0,
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"failure_sweep.case.{index}.newly_unserved",
+                        "Newly unserved demands",
+                        case.impact.newly_unserved_count,
+                        step="simulation",
+                        tool="simulation.FailureImpact",
+                        digits=0,
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"failure_sweep.case.{index}.score",
+                        "Modeled impact score",
+                        case.impact.impact_score,
+                        step="simulation",
+                        tool="simulation.FailureImpact",
+                        digits=2,
+                        twin_version=source_version,
+                    ),
+                )
+            )
+        blocks.append(
+            self.table(
+                "failure_sweep_cases",
+                "Impact-ranked failure cases",
+                (
+                    "Rank",
+                    "Targeted links",
+                    "Targeted devices",
+                    "Failed links",
+                    "Failed devices",
+                    "SRGs",
+                    "Served demands",
+                    "Newly unserved",
+                    "Impact score",
+                ),
+                rows,
+                step="simulation",
+                tool="simulation.failure_sweep",
+                twin_version=source_version,
+                total_rows=result.evaluated_cases,
+            )
+        )
+        if result.warnings:
+            blocks.append(
+                NoteBlock(
+                    text=values.scan(
+                        "failure_sweep.warnings",
+                        "Sweep warnings",
+                        " ".join(result.warnings),
+                        step="simulation",
+                        tool="simulation.failure_sweep",
+                        twin_version=source_version,
+                    ),
+                    severity="warning",
+                    provenance=self.prov(
+                        "simulation", "simulation.failure_sweep", source_version
+                    ),
+                )
+            )
+        blocks.append(
+            NoteBlock(
+                text=values.scan(
+                    "failure_sweep.model_note",
+                    "Failure sweep model note",
+                    result.model_note,
+                    step="simulation",
+                    tool="simulation.models.MODEL_NOTE",
+                    twin_version=source_version,
+                ),
+                severity="limitation",
+                provenance=self.prov(
+                    "simulation", "simulation.models.MODEL_NOTE", source_version
+                ),
+            )
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def mode_comparison(self) -> ReportSection:
+        section_id = "mode_comparison"
+        title = "Routing mode comparison"
+        result = self._mode_comparison
+        if result is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No routing-mode comparison is selected for this report.",
+                "Simulation Lab",
+            )
+        values = self.numbers
+        source_version = result.twin.fingerprint
+        stale_note = self.stale_source_note(
+            "mode_comparison",
+            "routing-mode comparison",
+            source_version,
+            step="simulation",
+            tool="simulation.compare_routing_modes",
+        )
+        mode_count = values.number(
+            "mode_comparison.mode_count",
+            "Compared routing modes",
+            len(result.modes),
+            step="simulation",
+            tool="simulation.compare_routing_modes",
+            digits=0,
+            twin_version=source_version,
+        )
+        blocks: list[Any] = []
+        if stale_note is not None:
+            blocks.append(stale_note)
+        blocks.append(
+            KeyValueBlock(
+                title="Comparison scope",
+                items=(
+                    KeyValueItem(
+                        key="scenario_id",
+                        value=values.scan(
+                            "mode_comparison.scenario_id",
+                            "Scenario id",
+                            result.scenario_id or "(baseline)",
+                            step="simulation",
+                            tool="simulation.compare_routing_modes",
+                            twin_version=source_version,
+                        ),
+                        provenance=self.prov(
+                            "simulation", "simulation.compare_routing_modes", source_version
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="modes",
+                        value=mode_count,
+                        provenance=self.prov(
+                            "simulation", "simulation.compare_routing_modes", source_version
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="twin_fingerprint",
+                        value=values.scan(
+                            "mode_comparison.fingerprint",
+                            "Comparison twin fingerprint",
+                            source_version,
+                            step="simulation",
+                            tool="simulation.twin_fingerprint",
+                            twin_version=source_version,
+                        ),
+                        provenance=self.prov(
+                            "simulation", "simulation.twin_fingerprint", source_version
+                        ),
+                    ),
+                ),
+            )
+        )
+        rows: list[tuple[str, ...]] = []
+        for index, item in enumerate(result.results):
+            state = item.state
+            rows.append(
+                (
+                    values.text(
+                        f"mode_comparison.mode.{index}",
+                        "Routing mode",
+                        item.mode.value,
+                        step="simulation",
+                        tool="simulation.RoutingMode",
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"mode_comparison.served.{index}",
+                        f"Served demands in {item.mode.value}",
+                        state.served_demand_count,
+                        step="simulation",
+                        tool="simulation.evaluate",
+                        digits=0,
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"mode_comparison.ratio.{index}",
+                        f"Served ratio in {item.mode.value}",
+                        state.served_demand_ratio,
+                        step="simulation",
+                        tool="simulation.evaluate",
+                        digits=3,
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"mode_comparison.mbps.{index}",
+                        f"Served Mbps in {item.mode.value}",
+                        state.served_demand_mbps,
+                        step="simulation",
+                        tool="simulation.evaluate",
+                        digits=2,
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"mode_comparison.util.{index}",
+                        f"Maximum utilization in {item.mode.value}",
+                        state.max_utilization_percent,
+                        step="simulation",
+                        tool="simulation.evaluate",
+                        digits=2,
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"mode_comparison.overloaded.{index}",
+                        f"Overloaded links in {item.mode.value}",
+                        state.overloaded_link_count,
+                        step="simulation",
+                        tool="simulation.evaluate",
+                        digits=0,
+                        twin_version=source_version,
+                    ),
+                )
+            )
+        blocks.append(
+            self.table(
+                "routing_mode_results",
+                "Modeled result by routing mode",
+                (
+                    "Mode",
+                    "Served demands",
+                    "Served ratio",
+                    "Served Mbps",
+                    "Max utilization (%)",
+                    "Overloaded links",
+                ),
+                rows,
+                step="simulation",
+                tool="simulation.compare_routing_modes",
+                twin_version=source_version,
+                total_rows=len(result.results),
+            )
+        )
+        blocks.append(
+            NoteBlock(
+                text=values.scan(
+                    "mode_comparison.model_note",
+                    "Mode comparison model note",
+                    result.model_note,
+                    step="simulation",
+                    tool="simulation.models.MODEL_NOTE",
+                    twin_version=source_version,
+                ),
+                severity="limitation",
+                provenance=self.prov(
+                    "simulation", "simulation.models.MODEL_NOTE", source_version
+                ),
+            )
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def sensitivity(self) -> ReportSection:
+        section_id = "sensitivity"
+        title = "Sensitivity and robustness"
+        report = self._sensitivity_report
+        if report is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No sensitivity analysis is selected for this report.",
+                "Optimization Center",
+            )
+        values = self.numbers
+        source_version = report.source_twin_fingerprint
+        requested_version = (
+            self.sensitivity_source_fingerprint or source_version
+        )
+        stale_note = self.stale_source_note(
+            "sensitivity",
+            "sensitivity analysis",
+            requested_version,
+            step="optimization",
+            tool="optimization.analyze_sensitivity",
+        )
+        blocks: list[Any] = []
+        if stale_note is not None:
+            blocks.append(stale_note)
+        blocks.append(
+            KeyValueBlock(
+                title="Sensitivity scope",
+                items=(
+                    KeyValueItem(
+                        key="source_algorithm",
+                        value=report.source_algorithm.value,
+                        provenance=self.prov(
+                            "optimization", "optimization.analyze_sensitivity", source_version
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="stop_reason",
+                        value=report.stop_reason.value,
+                        provenance=self.prov(
+                            "optimization", "optimization.StopReason", source_version
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="evaluated_candidates",
+                        value=values.number(
+                            "sensitivity.evaluated_candidates",
+                            "Evaluated candidates",
+                            report.evaluated_candidates,
+                            step="optimization",
+                            tool="optimization.analyze_sensitivity",
+                            digits=0,
+                            twin_version=source_version,
+                        ),
+                        provenance=self.prov(
+                            "optimization", "optimization.analyze_sensitivity", source_version
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="evaluations",
+                        value=values.number(
+                            "sensitivity.evaluations",
+                            "Modeled evaluations",
+                            report.evaluations,
+                            step="optimization",
+                            tool="optimization.analyze_sensitivity",
+                            digits=0,
+                            twin_version=source_version,
+                        ),
+                        provenance=self.prov(
+                            "optimization", "optimization.analyze_sensitivity", source_version
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="robust_candidates",
+                        value=values.number(
+                            "sensitivity.robust_count",
+                            "Robust candidates",
+                            len(report.robust_candidate_hashes),
+                            step="optimization",
+                            tool="optimization.SensitivityReport",
+                            digits=0,
+                            twin_version=source_version,
+                        ),
+                        provenance=self.prov(
+                            "optimization", "optimization.SensitivityReport", source_version
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="recommendation",
+                        value=values.scan(
+                            "sensitivity.recommendation",
+                            "Robust recommendation",
+                            (
+                                report.recommended_candidate_hash[:12]
+                                if report.recommended_candidate_hash
+                                else "none"
+                            ),
+                            step="optimization",
+                            tool="optimization.SensitivityReport",
+                            twin_version=source_version,
+                        ),
+                        provenance=self.prov(
+                            "optimization", "optimization.SensitivityReport", source_version
+                        ),
+                    ),
+                ),
+            )
+        )
+        blocks.append(
+            NoteBlock(
+                text=values.scan(
+                    "sensitivity.definition",
+                    "Robust definition",
+                    report.robust_definition,
+                    step="optimization",
+                    tool="optimization.sensitivity.ROBUST_DEFINITION",
+                    twin_version=source_version,
+                ),
+                severity="info",
+                provenance=self.prov(
+                    "optimization",
+                    "optimization.sensitivity.ROBUST_DEFINITION",
+                    source_version,
+                ),
+            )
+        )
+        blocks.append(
+            NoteBlock(
+                text=values.scan(
+                    "sensitivity.subset_note",
+                    "Candidate subset note",
+                    report.subset_note,
+                    step="optimization",
+                    tool="optimization.analyze_sensitivity",
+                    twin_version=source_version,
+                ),
+                severity="info",
+                provenance=self.prov(
+                    "optimization", "optimization.analyze_sensitivity", source_version
+                ),
+            )
+        )
+        rows: list[tuple[str, ...]] = []
+        for index, result in enumerate(report.scenarios):
+            rows.append(
+                (
+                    values.text(
+                        f"sensitivity.scenario.{index}.label",
+                        "Scenario label",
+                        result.scenario.label,
+                        step="optimization",
+                        tool="optimization.SensitivityScenario",
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"sensitivity.scenario.{index}.demand",
+                        "Demand multiplier",
+                        result.scenario.demand_multiplier,
+                        step="optimization",
+                        tool="optimization.SensitivityScenario",
+                        digits=2,
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"sensitivity.scenario.{index}.capacity",
+                        "Capacity multiplier",
+                        result.scenario.capacity_multiplier,
+                        step="optimization",
+                        tool="optimization.SensitivityScenario",
+                        digits=2,
+                        twin_version=source_version,
+                    ),
+                    values.number(
+                        f"sensitivity.scenario.{index}.cases",
+                        "Candidate cases",
+                        len(result.cases),
+                        step="optimization",
+                        tool="optimization.SensitivityScenarioResult",
+                        digits=0,
+                        twin_version=source_version,
+                    ),
+                    values.scan(
+                        f"sensitivity.scenario.{index}.fingerprint",
+                        "Perturbed twin fingerprint",
+                        result.twin_fingerprint,
+                        step="optimization",
+                        tool="simulation.twin_fingerprint",
+                        twin_version=source_version,
+                    ),
+                )
+            )
+        blocks.append(
+            self.table(
+                "sensitivity_scenarios",
+                "Perturbation scenarios",
+                (
+                    "Scenario",
+                    "Demand multiplier",
+                    "Capacity multiplier",
+                    "Candidate cases",
+                    "Perturbed twin fingerprint",
+                ),
+                rows,
+                step="optimization",
+                tool="optimization.analyze_sensitivity",
+                twin_version=source_version,
+                total_rows=len(report.scenarios),
+            )
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def reranking(self) -> ReportSection:
+        section_id = "reranking"
+        title = "Pareto re-ranking"
+        reranking = self._reranking
+        if reranking is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No Pareto re-ranking is selected for this report.",
+                "Optimization Center",
+            )
+        values = self.numbers
+        source_version = self.rerank_source_fingerprint or ""
+        stale_note = self.stale_source_note(
+            "reranking",
+            "Pareto re-ranking",
+            source_version,
+            step="optimization",
+            tool="optimization.rerank_pareto_front",
+        )
+        blocks: list[Any] = []
+        if stale_note is not None:
+            blocks.append(stale_note)
+        evaluated = values.number(
+            "reranking.source_evaluations",
+            "Source evaluations",
+            reranking.source_evaluations,
+            step="optimization",
+            tool="optimization.rerank_pareto_front",
+            digits=0,
+            twin_version=source_version or None,
+        )
+        items = values.number(
+            "reranking.items",
+            "Re-ranked feasible candidates",
+            len(reranking.items),
+            step="optimization",
+            tool="optimization.ParetoReranking",
+            digits=0,
+            twin_version=source_version or None,
+        )
+        blocks.append(
+            KeyValueBlock(
+                title="Re-ranking scope",
+                items=(
+                    KeyValueItem(
+                        key="source_algorithm",
+                        value=reranking.source_algorithm.value,
+                        provenance=self.prov(
+                            "optimization",
+                            "optimization.rerank_pareto_front",
+                            source_version or None,
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="source_seed",
+                        value=values.number(
+                            "reranking.source_seed",
+                            "Source seed",
+                            reranking.source_seed,
+                            step="optimization",
+                            tool="optimization.rerank_pareto_front",
+                            digits=0,
+                            twin_version=source_version or None,
+                        ),
+                        provenance=self.prov(
+                            "optimization",
+                            "optimization.rerank_pareto_front",
+                            source_version or None,
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="source_evaluations",
+                        value=evaluated,
+                        provenance=self.prov(
+                            "optimization",
+                            "optimization.rerank_pareto_front",
+                            source_version or None,
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="items",
+                        value=items,
+                        provenance=self.prov(
+                            "optimization",
+                            "optimization.ParetoReranking",
+                            source_version or None,
+                        ),
+                    ),
+                    KeyValueItem(
+                        key="recommendation",
+                        value=values.scan(
+                            "reranking.recommendation",
+                            "Re-ranked recommendation",
+                            (
+                                reranking.recommended_candidate_hash[:12]
+                                if reranking.recommended_candidate_hash
+                                else "none"
+                            ),
+                            step="optimization",
+                            tool="optimization.ParetoReranking",
+                            twin_version=source_version or None,
+                        ),
+                        provenance=self.prov(
+                            "optimization",
+                            "optimization.ParetoReranking",
+                            source_version or None,
+                        ),
+                    ),
+                ),
+            )
+        )
+        rows: list[tuple[str, ...]] = []
+        for index, item in enumerate(reranking.items):
+            rows.append(
+                (
+                    values.number(
+                        f"reranking.item.{index}.rank",
+                        "Re-ranked rank",
+                        item.rank,
+                        step="optimization",
+                        tool="optimization.ParetoReranking",
+                        digits=0,
+                        twin_version=source_version or None,
+                    ),
+                    values.scan(
+                        f"reranking.item.{index}.candidate",
+                        "Candidate hash",
+                        item.candidate_hash,
+                        step="optimization",
+                        tool="optimization.CandidateEvaluation",
+                        twin_version=source_version or None,
+                    ),
+                    values.number(
+                        f"reranking.item.{index}.score",
+                        "Re-weighted score",
+                        item.evaluation.weighted_score,
+                        step="optimization",
+                        tool="optimization.rerank_pareto_front",
+                        digits=6,
+                        twin_version=source_version or None,
+                    ),
+                    (
+                        values.number(
+                            f"reranking.item.{index}.source_rank",
+                            "Source rank",
+                            item.source_rank,
+                            step="optimization",
+                            tool="optimization.CandidateRecord",
+                            digits=0,
+                            twin_version=source_version or None,
+                        )
+                        if item.source_rank is not None
+                        else "-"
+                    ),
+                    "yes" if item.evaluation.feasible else "no",
+                )
+            )
+        blocks.append(
+            self.table(
+                "pareto_reranking",
+                "Feasible Pareto candidates under the selected weights",
+                (
+                    "Rank",
+                    "Candidate hash",
+                    "Re-weighted score",
+                    "Source rank",
+                    "Feasible",
+                ),
+                rows,
+                step="optimization",
+                tool="optimization.rerank_pareto_front",
+                twin_version=source_version or None,
+                total_rows=len(reranking.items),
+            )
+        )
+        for key, note in (
+            ("weight_note", reranking.weight_note),
+            ("rerank_note", reranking.rerank_note),
+            ("model_note", reranking.model_note),
+        ):
+            blocks.append(
+                NoteBlock(
+                    text=values.scan(
+                        f"reranking.{key}",
+                        f"Re-ranking {key.replace('_', ' ')}",
+                        note,
+                        step="optimization",
+                        tool="optimization.rerank_pareto_front",
+                        twin_version=source_version or None,
+                    ),
+                    severity="info" if key != "model_note" else "limitation",
+                    provenance=self.prov(
+                        "optimization",
+                        "optimization.rerank_pareto_front",
+                        source_version or None,
+                    ),
+                )
+            )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    # ------------------------------------------------------------------
     # Assembly
     # ------------------------------------------------------------------
     def build(self, *, title: str, generated_at: datetime) -> ReportDocument:
@@ -3112,6 +3950,10 @@ class _Builder:
             self.simulation(),
             self.capacity(),
             self.optimization(),
+            self.failure_sweep(),
+            self.mode_comparison(),
+            self.sensitivity(),
+            self.reranking(),
             self.security(),
             self.assumptions(),
             self.limitations(),

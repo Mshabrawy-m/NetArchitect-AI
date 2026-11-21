@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 from collections.abc import Mapping, Sequence
 
 import networkx as nx
@@ -22,19 +23,37 @@ import plotly.graph_objects as go
 import streamlit as st
 from pydantic import ValidationError
 
-from config.limits import MAX_SCENARIOS
+from config.limits import (
+    MAX_N2_PAIRS,
+    MAX_SCENARIOS,
+    MAX_SHARED_RISK_GROUPS,
+    MAX_SHARED_RISK_MEMBERS,
+    MAX_SIMULATION_RUNTIME_SECONDS,
+)
 from core.exceptions import InputError, NetArchitectError
 from core.inputs import parse_json_text
 from core.schemas.routing import TrafficDemand
 from core.schemas.scenario import Scenario, ScenarioType
-from digital_twin import DigitalTwin
+from digital_twin import DigitalTwin, SharedRiskGroup, validate_twin
 from simulation import (
+    DEFAULT_COMPARISON_MODES,
     MODEL_NOTE,
+    FailureSweepDepth,
+    FailureSweepResult,
+    FailureSweepStopReason,
+    RoutingMode,
+    RoutingModeComparison,
     ScenarioRun,
+    compare_routing_modes,
     compare_runs,
+    failure_sweep_rows,
+    failure_sweep_to_csv,
+    failure_sweep_to_json,
     link_comparison_rows,
     metric_rows,
     path_change_rows,
+    plan_failure_sweep,
+    run_failure_sweep,
     run_scenario,
     run_to_csv,
     run_to_json_bytes,
@@ -53,6 +72,25 @@ HISTORY_SELECT_KEY = "simulation_history_select"
 COMPARE_LEFT_KEY = "simulation_compare_left"
 COMPARE_RIGHT_KEY = "simulation_compare_right"
 SHOW_UNCHANGED_PATHS_KEY = "simulation_show_unchanged_paths"
+SWEEP_CANCEL_KEY = "simulation_sweep_cancel"
+SWEEP_CURSOR_KEY = "simulation_sweep_cursor_value"
+SWEEP_SLICE_KEY = "simulation_sweep_slice_size"
+
+ROUTING_MODE_LABELS: dict[RoutingMode, str] = {
+    RoutingMode.single_path: "Single path (legacy)",
+    RoutingMode.ecmp: "Equal-cost multipath (ECMP)",
+    RoutingMode.capacity_aware: "Capacity-aware admission",
+}
+ROUTING_MODE_OPTIONS = [ROUTING_MODE_LABELS[mode] for mode in RoutingMode]
+ROUTING_MODE_BY_LABEL = {label: mode for mode, label in ROUTING_MODE_LABELS.items()}
+SWEEP_DEPTH_LABELS: dict[FailureSweepDepth, str] = {
+    FailureSweepDepth.n1: "N-1 (one link or device)",
+    FailureSweepDepth.n2: "N-2 (pairs from a chosen subset)",
+}
+SWEEP_DEPTH_OPTIONS = [
+    SWEEP_DEPTH_LABELS[depth] for depth in FailureSweepDepth
+]
+SWEEP_DEPTH_BY_LABEL = {label: depth for depth, label in SWEEP_DEPTH_LABELS.items()}
 
 SCENARIO_LABELS: dict[ScenarioType, str] = {
     ScenarioType.single_link_failure: "Single link failure",
@@ -310,6 +348,158 @@ def _render_demand_editor(twin: DigitalTwin) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Shared-risk groups (modeled correlated failures)
+# ---------------------------------------------------------------------------
+
+
+def _srg_frame(twin: DigitalTwin) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "id": group.id,
+                "name": group.name,
+                "device_ids": ", ".join(group.device_ids),
+                "link_ids": ", ".join(group.link_ids),
+                "rationale": group.rationale,
+            }
+            for group in twin.shared_risk_groups
+        ],
+        columns=["id", "name", "device_ids", "link_ids", "rationale"],
+    )
+
+
+def _parse_id_list(value: object, *, known: set[str], label: str) -> tuple[str, ...]:
+    text = _text(value)
+    if not text:
+        return ()
+    ids = tuple(
+        dict.fromkeys(
+            part.strip()
+            for part in re.split(r"[,\n]+", text)
+            if part.strip()
+        )
+    )
+    if len(ids) > MAX_SHARED_RISK_MEMBERS:
+        raise ValueError(
+            f"{label} may name at most {MAX_SHARED_RISK_MEMBERS} entities."
+        )
+    unknown = sorted(set(ids) - known)
+    if unknown:
+        raise ValueError(f"Unknown {label}: " + ", ".join(unknown))
+    return ids
+
+
+def _apply_shared_risk_groups(twin: DigitalTwin, edited: pd.DataFrame) -> int:
+    groups: list[SharedRiskGroup] = []
+    seen: set[str] = set()
+    known_devices = {device.id for device in twin.topology.devices}
+    known_links = {link.id for link in twin.topology.links}
+    for _, row in edited.iterrows():
+        group_id = _text(row["id"])
+        if not group_id:
+            raise ValueError("Every shared-risk group needs a non-empty id.")
+        if group_id in seen:
+            raise ValueError(f"Duplicate shared-risk group id: {group_id!r}.")
+        seen.add(group_id)
+        groups.append(
+            SharedRiskGroup(
+                id=group_id,
+                name=_text(row["name"]),
+                device_ids=_parse_id_list(
+                    row["device_ids"], known=known_devices, label="devices"
+                ),
+                link_ids=_parse_id_list(
+                    row["link_ids"], known=known_links, label="links"
+                ),
+                rationale=_text(row["rationale"]),
+            )
+        )
+    if len(groups) > MAX_SHARED_RISK_GROUPS:
+        raise ValueError(
+            f"At most {MAX_SHARED_RISK_GROUPS} shared-risk groups are allowed."
+        )
+    candidate = twin.model_copy(update={"shared_risk_groups": tuple(groups)})
+    report = validate_twin(candidate)
+    if not report.is_valid:
+        first = next(
+            finding for finding in report.findings
+            if finding.severity.value in {"error", "critical"}
+        )
+        raise ValueError(first.explanation)
+    changed = tuple(groups) != twin.shared_risk_groups
+    if changed:
+        state.replace_twin(candidate)
+    return len(groups)
+
+
+def _render_shared_risk_editor(twin: DigitalTwin) -> None:
+    st.subheader(i18n.t("simulation.shared_risk.title"))
+    st.caption(i18n.t("simulation.shared_risk.caption"))
+    with st.form("simulation_shared_risk_form"):
+        edited = st.data_editor(
+            _srg_frame(twin),
+            key=editor_key("simulation_shared_risk_editor"),
+            num_rows="dynamic",
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "id": st.column_config.TextColumn(
+                    i18n.t("simulation.shared_risk.id"), required=True
+                ),
+                "name": st.column_config.TextColumn(
+                    i18n.t("simulation.shared_risk.name")
+                ),
+                "device_ids": st.column_config.TextColumn(
+                    i18n.t("simulation.shared_risk.devices"),
+                    help="Comma-separated device ids.",
+                ),
+                "link_ids": st.column_config.TextColumn(
+                    i18n.t("simulation.shared_risk.links"),
+                    help="Comma-separated link ids.",
+                ),
+                "rationale": st.column_config.TextColumn(
+                    "Rationale",
+                ),
+            },
+        )
+        columns = st.columns(2)
+        with columns[0]:
+            applied = st.form_submit_button(
+                i18n.t("simulation.shared_risk.apply"),
+                key="simulation_apply_shared_risk_groups",
+                type="primary",
+            )
+        with columns[1]:
+            cleared = st.form_submit_button(
+                i18n.t("simulation.shared_risk.clear"),
+                key="simulation_clear_shared_risk_groups",
+            )
+    if cleared:
+        if twin.shared_risk_groups:
+            state.replace_twin(
+                twin.model_copy(update={"shared_risk_groups": ()})
+            )
+            _flash("success", "Shared-risk groups cleared from the twin.")
+            st.rerun()
+        st.info("No shared-risk groups are stored on the twin.")
+        return
+    if not applied:
+        return
+    try:
+        count = _apply_shared_risk_groups(twin, edited)
+    except (NetArchitectError, ValidationError, ValueError) as error:
+        bump_editor_key("simulation_shared_risk_editor")
+        _flash("error", f"Shared-risk groups rejected: {format_error(error)}")
+        st.rerun()
+        return
+    if count == len(twin.shared_risk_groups):
+        st.info("No shared-risk group changes to apply.")
+    else:
+        _flash("success", f"The twin now has {count} shared-risk group(s).")
+        st.rerun()
+
+
+# ---------------------------------------------------------------------------
 # Scenario and assumptions form
 # ---------------------------------------------------------------------------
 
@@ -435,11 +625,20 @@ def _render_scenario_fields(twin: DigitalTwin) -> None:
         _render_routing_parameters()
 
 
-def _render_assumptions() -> tuple[float, float, float, str]:
+def _render_assumptions() -> tuple[float, float, float, str, RoutingMode]:
     with st.expander("Assumptions and congestion thresholds", expanded=False):
         st.caption(
             "Utilization bands are percentages. Latency is estimated only when "
             "every hop on a path has an explicit one-way delay assumption."
+        )
+        routing_mode = st.selectbox(
+            i18n.t("simulation.routing_mode"),
+            options=tuple(RoutingMode),
+            format_func=lambda mode: i18n.t(
+                f"simulation.routing_mode.{mode.value}"
+            ),
+            key="simulation_routing_mode",
+            help=i18n.t("simulation.routing_mode.help"),
         )
         columns = st.columns(3)
         with columns[0]:
@@ -477,6 +676,7 @@ def _render_assumptions() -> tuple[float, float, float, str]:
         float(critical),
         float(overload),
         delay_text,
+        routing_mode,
     )
 
 
@@ -485,6 +685,7 @@ def _parse_assumptions(
     critical: float,
     overload: float,
     delay_text: str,
+    routing_mode: RoutingMode | str | None = None,
 ) -> SimulationAssumptions:
     try:
         delays = parse_json_text(
@@ -503,6 +704,22 @@ def _parse_assumptions(
             overload_percent=overload,
         ),
         link_delay_ms=delays,
+        routing_mode=(
+            RoutingMode.single_path
+            if routing_mode is None
+            else RoutingMode(routing_mode)
+        ),
+    )
+
+
+def _current_assumptions() -> SimulationAssumptions:
+    """Build the current assumptions from committed widget state."""
+    return _parse_assumptions(
+        float(state.session_get("simulation_warning_percent", 70.0)),
+        float(state.session_get("simulation_critical_percent", 90.0)),
+        float(state.session_get("simulation_overload_percent", 100.0)),
+        str(state.session_get("simulation_link_delays", "{}")),
+        state.session_get("simulation_routing_mode", RoutingMode.single_path),
     )
 
 
@@ -629,6 +846,378 @@ def _render_scenario_builder(twin: DigitalTwin) -> None:
         f"Ran {scenario.name!r}: {run.comparison.summary}",
     )
     st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Routing-mode comparison and failure sweeps
+# ---------------------------------------------------------------------------
+
+
+def _comparison_rows(comparison: RoutingModeComparison) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for result in comparison.results:
+        state_value = result.state
+        rows.append(
+            {
+                "Routing mode": result.mode.value,
+                "Served demands": (
+                    f"{state_value.served_demand_count}/{state_value.demand_count}"
+                ),
+                "Served ratio": round(state_value.served_demand_ratio, 4),
+                "Served Mbps": round(state_value.served_demand_mbps, 2),
+                "Max utilization (%)": round(state_value.max_utilization_percent, 2),
+                "Overloaded links": state_value.overloaded_link_count,
+            }
+        )
+    return rows
+
+
+def _render_mode_comparison(twin: DigitalTwin) -> None:
+    st.subheader(i18n.t("simulation.mode_compare.title"))
+    st.caption(i18n.t("simulation.mode_compare.caption"))
+    use_scenario = st.toggle(
+        "Apply the current scenario to the comparison",
+        key="simulation_mode_compare_use_scenario",
+        value=False,
+    )
+    run_clicked = st.button(
+        i18n.t("simulation.mode_compare.run"),
+        key="simulation_mode_compare_run",
+        type="primary",
+    )
+    if run_clicked:
+        scenario = None
+        if use_scenario:
+            try:
+                scenario = _build_scenario()
+                validate_scenario(twin, scenario)
+            except (NetArchitectError, ValidationError, TypeError, ValueError) as error:
+                st.error(format_error(error), title="Scenario rejected")
+                return
+        try:
+            with working(i18n.t("loading.mode_compare")):
+                comparison = compare_routing_modes(
+                    twin,
+                    _current_assumptions(),
+                    modes=DEFAULT_COMPARISON_MODES,
+                    scenario=scenario,
+                    max_runtime_seconds=MAX_SIMULATION_RUNTIME_SECONDS,
+                )
+            state.add_mode_comparison(comparison)
+        except (NetArchitectError, ValidationError, RuntimeError, ValueError) as error:
+            st.error(format_error(error), title="Mode comparison failed")
+            return
+        _flash("success", "Routing-mode comparison saved for this session.")
+
+    comparisons = state.peek_mode_comparisons()
+    if not comparisons:
+        st.info("Run a routing-mode comparison to see the side-by-side result.")
+        return
+    comparison = comparisons[-1]
+    st.dataframe(
+        pd.DataFrame(_comparison_rows(comparison)),
+        hide_index=True,
+        width="stretch",
+    )
+    st.caption(
+        f"Twin {comparison.twin.fingerprint}; "
+        f"scenario {comparison.scenario_id or 'baseline'}. {comparison.model_note}"
+    )
+    st.download_button(
+        i18n.t("simulation.mode_compare.download"),
+        data=json.dumps(
+            comparison.model_dump(mode="json"),
+            sort_keys=True,
+            indent=2,
+            ensure_ascii=False,
+        ).encode("utf-8"),
+        file_name="routing-mode-comparison.json",
+        mime="application/json",
+        key="simulation_download_mode_compare",
+    )
+
+
+def _cancel_sweep() -> None:
+    state.session_set(SWEEP_CANCEL_KEY, True)
+
+
+def _sweep_cancelled() -> bool:
+    return bool(state.session_get(SWEEP_CANCEL_KEY, False))
+
+
+def _merge_sweep_results(
+    pieces: Sequence[FailureSweepResult],
+    stop_reason: FailureSweepStopReason,
+) -> FailureSweepResult:
+    """Merge bounded slices into one ranked, reportable sweep result."""
+    if not pieces:  # pragma: no cover - callers seed an empty piece
+        raise ValueError("At least one sweep slice is required.")
+    first = pieces[0]
+    cases = sorted(
+        (case for piece in pieces for case in piece.cases),
+        key=lambda case: (
+            -case.impact.impact_score,
+            -case.impact.newly_unserved_count,
+            case.plan.case_id,
+        ),
+    )
+    ranked = tuple(
+        case.model_copy(update={"rank": index + 1})
+        for index, case in enumerate(cases)
+    )
+    warnings = tuple(
+        dict.fromkeys(warning for piece in pieces for warning in piece.warnings)
+    )
+    return first.model_copy(
+        update={
+            "start": 0,
+            "limit": None,
+            "evaluated_cases": len(ranked),
+            "stop_reason": stop_reason,
+            "cases": ranked,
+            "warnings": warnings,
+        }
+    )
+
+
+def _run_sweep_fragment(
+    twin: DigitalTwin,
+    *,
+    depth: FailureSweepDepth,
+    selected_links: Sequence[str],
+    selected_devices: Sequence[str],
+    max_pairs: int,
+    slice_size: int,
+) -> None:
+    """Run bounded slices in this fragment; no worker or thread is used."""
+    try:
+        plan = plan_failure_sweep(
+            twin,
+            depth,
+            selected_link_ids=selected_links,
+            selected_device_ids=selected_devices,
+            max_pairs=max_pairs,
+        )
+    except (NetArchitectError, ValidationError, ValueError) as error:
+        state.session_set("simulation_sweep_running", False)
+        state.session_set(SWEEP_CANCEL_KEY, False)
+        st.error(format_error(error), title="Failure sweep rejected")
+        return
+
+    total = plan.total_cases
+    pieces = list(state.session_get("simulation_sweep_pieces", []))
+    cursor = state.get_sweep_cursor("simulation_sweep", 0)
+    if total == 0 and not pieces:
+        pieces = [
+            run_failure_sweep(
+                twin,
+                _current_assumptions(),
+                depth=depth,
+                selected_link_ids=selected_links,
+                selected_device_ids=selected_devices,
+                max_pairs=max_pairs,
+                start=0,
+                limit=1,
+                max_runtime_seconds=MAX_SIMULATION_RUNTIME_SECONDS,
+            )
+        ]
+    if _sweep_cancelled() and not pieces:
+        pieces = [
+            run_failure_sweep(
+                twin,
+                _current_assumptions(),
+                depth=depth,
+                selected_link_ids=selected_links,
+                selected_device_ids=selected_devices,
+                max_pairs=max_pairs,
+                start=cursor,
+                limit=1,
+                max_runtime_seconds=MAX_SIMULATION_RUNTIME_SECONDS,
+                should_cancel=lambda: True,
+            )
+        ]
+        cursor += len(pieces[0].cases)
+
+    progress = st.progress(
+        min(cursor / total, 1.0) if total else 0.0,
+        text=f"Evaluated {cursor} of {total} modeled failure cases...",
+    )
+    deadline = time.perf_counter() + MAX_SIMULATION_RUNTIME_SECONDS
+    stop_reason = pieces[-1].stop_reason
+    while cursor < total and not _sweep_cancelled():
+        remaining = deadline - time.perf_counter()
+        if remaining <= 0:
+            stop_reason = FailureSweepStopReason.runtime_limit
+            break
+        try:
+            piece = run_failure_sweep(
+                twin,
+                _current_assumptions(),
+                depth=depth,
+                selected_link_ids=selected_links,
+                selected_device_ids=selected_devices,
+                max_pairs=max_pairs,
+                start=cursor,
+                limit=min(slice_size, total - cursor),
+                max_runtime_seconds=remaining,
+                should_cancel=_sweep_cancelled,
+            )
+        except (NetArchitectError, ValidationError, ValueError) as error:
+            state.session_set("simulation_sweep_running", False)
+            state.session_set(SWEEP_CANCEL_KEY, False)
+            st.error(format_error(error), title="Failure sweep failed")
+            return
+        if not piece.cases:
+            stop_reason = piece.stop_reason
+            break
+        pieces.append(piece)
+        cursor += len(piece.cases)
+        stop_reason = piece.stop_reason
+        state.session_set("simulation_sweep_pieces", pieces)
+        state.set_sweep_cursor("simulation_sweep", cursor)
+        progress.progress(
+            cursor / total,
+            text=f"Evaluated {cursor} of {total} modeled failure cases...",
+        )
+        if stop_reason is not FailureSweepStopReason.completed:
+            break
+
+    if _sweep_cancelled():
+        stop_reason = FailureSweepStopReason.cancelled
+    if not pieces:
+        pieces = [
+            run_failure_sweep(
+                twin,
+                _current_assumptions(),
+                depth=depth,
+                selected_link_ids=selected_links,
+                selected_device_ids=selected_devices,
+                max_pairs=max_pairs,
+                start=0,
+                limit=1,
+                should_cancel=lambda: True,
+            )
+        ]
+    result = _merge_sweep_results(pieces, stop_reason)
+    state.add_simulation_sweep(result)
+    state.session_set("simulation_sweep_running", False)
+    state.session_set(SWEEP_CANCEL_KEY, False)
+    state.session_set("simulation_sweep_pieces", [])
+    state.set_sweep_cursor("simulation_sweep", 0)
+    progress.progress(
+        1.0,
+        text=f"Finished {result.evaluated_cases} of {result.total_cases} cases.",
+    )
+    st.rerun()
+
+
+@st.fragment
+def _render_failure_sweep(twin: DigitalTwin) -> None:
+    st.subheader(i18n.t("simulation.sweep.title"))
+    st.caption(i18n.t("simulation.sweep.caption"))
+    link_ids = sorted(link.id for link in twin.topology.links)
+    device_ids = sorted(device.id for device in twin.topology.devices)
+    depth_label = st.radio(
+        i18n.t("simulation.sweep.depth"),
+        SWEEP_DEPTH_OPTIONS,
+        key="simulation_sweep_depth",
+        horizontal=True,
+    )
+    depth = SWEEP_DEPTH_BY_LABEL[depth_label]
+    selected_links: list[str] = []
+    selected_devices: list[str] = []
+    max_pairs = 1
+    if depth is FailureSweepDepth.n2:
+        selected_links = st.multiselect(
+            i18n.t("simulation.sweep.subset_links"),
+            link_ids,
+            key="simulation_sweep_links",
+        )
+        selected_devices = st.multiselect(
+            i18n.t("simulation.sweep.subset_devices"),
+            device_ids,
+            key="simulation_sweep_devices",
+        )
+        max_pairs = st.slider(
+            i18n.t("simulation.sweep.max_pairs"),
+            min_value=1,
+            max_value=MAX_N2_PAIRS,
+            value=min(50, MAX_N2_PAIRS),
+            key="simulation_sweep_max_pairs",
+        )
+    slice_size = st.slider(
+        i18n.t("simulation.sweep.slice"),
+        min_value=1,
+        max_value=25,
+        value=5,
+        key=SWEEP_SLICE_KEY,
+    )
+    running = bool(state.session_get("simulation_sweep_running", False))
+    columns = st.columns(2)
+    with columns[0]:
+        start_clicked = st.button(
+            i18n.t("simulation.sweep.run"),
+            key="simulation_sweep_run",
+            type="primary",
+            disabled=running,
+        )
+    with columns[1]:
+        st.button(
+            i18n.t("simulation.sweep.cancel"),
+            key="simulation_sweep_cancel_button",
+            on_click=_cancel_sweep,
+            disabled=not running,
+        )
+    if start_clicked:
+        state.session_set("simulation_sweep_running", True)
+        state.session_set(SWEEP_CANCEL_KEY, False)
+        state.session_set("simulation_sweep_pieces", [])
+        state.set_sweep_cursor("simulation_sweep", 0)
+        running = True
+    if running:
+        _run_sweep_fragment(
+            twin,
+            depth=depth,
+            selected_links=selected_links,
+            selected_devices=selected_devices,
+            max_pairs=max_pairs,
+            slice_size=slice_size,
+        )
+
+    sweeps = state.peek_simulation_sweeps()
+    if not sweeps:
+        st.info(i18n.t("simulation.sweep.no_result"))
+        return
+    result = sweeps[-1]
+    rows = failure_sweep_rows(result)
+    if rows:
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    else:
+        st.info("No failure case was evaluated.")
+    st.caption(
+        f"Showing {result.shown_cases} of {result.total_cases} modeled failure "
+        f"cases. Stop reason: {result.stop_reason.value}. "
+        f"Twin {result.baseline.fingerprint}. {result.model_note}"
+    )
+    if result.warnings:
+        st.warning(" ".join(result.warnings), title="Sweep warnings")
+    download_columns = st.columns(2)
+    with download_columns[0]:
+        st.download_button(
+            i18n.t("simulation.sweep.download_json"),
+            data=failure_sweep_to_json(result, indent=2).encode("utf-8"),
+            file_name="failure-sweep.json",
+            mime="application/json",
+            key="simulation_download_sweep_json",
+        )
+    with download_columns[1]:
+        st.download_button(
+            i18n.t("simulation.sweep.download_csv"),
+            data=failure_sweep_to_csv(result).encode("utf-8"),
+            file_name="failure-sweep.csv",
+            mime="text/csv",
+            key="simulation_download_sweep_csv",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1341,7 +1930,13 @@ def render() -> None:
 
     _render_demand_editor(twin)
     st.divider()
+    _render_shared_risk_editor(twin)
+    st.divider()
     _render_scenario_builder(twin)
+    st.divider()
+    _render_mode_comparison(twin)
+    st.divider()
+    _render_failure_sweep(twin)
     st.divider()
     _render_results(twin)
     st.divider()

@@ -70,3 +70,48 @@ safety net.
 - Consider a small local CLI for batch checks and exports, kept out of the
   Streamlit runtime import path.
 - Keep all reports in-memory on Cloud; never require a writable disk.
+
+## V2 engine additions (feature/v2-engine)
+
+The engine work on `feature/v2-engine` implements roadmap items 2.1 and 2.4 with
+additive, deterministic, modeled estimates. It obeys the same free-tier rules:
+no new runtime dependency, no worker or thread, no disk write by the app, and
+bounded session/cache/sweep state. The default path remains byte-identical to
+the v1 engine: an old twin JSON, an old run JSON, and their fingerprints are
+unchanged.
+
+- **E1 - routing modes.** `single_path` remains the default. `ecmp` splits a
+  demand equally across all deterministic lowest-cost paths up to
+  `MAX_ECMP_PATHS`, with an explicit truncation warning. Directed links carry
+  only their forward share; undirected links sum both directions against one
+  capacity. Unserved reasons are unchanged.
+- **E2 - capacity-aware admission.** A deterministic largest-first admission
+  model accepts demands on the lowest-cost path with residual capacity and reports
+  `unserved: insufficient capacity` with the best blocked path when none fits.
+  This is an admission-control model, not a routing protocol.
+- **E3 - bounded failure sweeps.** N-1 covers links and devices up to
+  `MAX_NODES`/`MAX_EDGES`. N-2 uses a caller-chosen subset capped by
+  `MAX_N2_PAIRS`. Additive shared-risk groups expand targets, not case counts.
+  Slice-based `st.fragment` rendering, Cancel, real progress, a typed stop reason,
+  and "showing X of Y" stay on the script thread.
+- **E4 - bounded optimization.** A seeded simulated-annealing algorithm supports
+  an optional hybrid start from retained greedy/baseline candidates. Bounded
+  demand/capacity sensitivity re-evaluates a small candidate subset and reports a
+  candidate as robust only when it is feasible in the source run and every
+  completed perturbation scenario and stays within the documented score
+  tolerance. Weight changes re-rank only stored Pareto evaluations; no candidate
+  is re-evaluated and no infeasible design is recommended.
+- **E5 - UI and report wiring.** Simulation Lab exposes routing mode, shared-risk
+  groups, mode comparison, and failure sweeps. Optimization Center exposes the
+  seeded annealer, hybrid start, sensitivity, and instant re-ranking. Reports can
+  select those results, print their provenance and not-run states, and keep the
+  consistency checker green.
+
+All added fields are optional and default to legacy behavior. New schema names
+are `RoutingMode`, `PathSplit`, `SimulationAssumptions.routing_mode`,
+`DemandEvaluation.splits`, blocked-path fields on demand evaluations and
+unserved demands, `SharedRiskGroup`, `DigitalTwin.shared_risk_groups`, the sweep
+case/plan/impact/result models, `Algorithm.simulated_annealing`,
+`RerankedCandidate`, `ParetoReranking`, `SensitivityScenario`, `SensitivityCase`,
+`SensitivityScenarioResult`, and `SensitivityReport`. `TWIN_SCHEMA_VERSION`
+remains `2`.

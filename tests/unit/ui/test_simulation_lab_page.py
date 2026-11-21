@@ -6,10 +6,17 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
-from simulation import MODEL_NOTE
+from simulation import (
+    MODEL_NOTE,
+    RoutingMode,
+    compare_routing_modes,
+    run_failure_sweep,
+)
 from tests.unit.simulation.helpers import diamond_twin, make_demand
 from tests.unit.ui.nav_helpers import open_page
-from ui import state
+from ui import i18n, state
+from ui.components import editors
+from ui.pages import simulation_lab
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 
@@ -127,3 +134,60 @@ def test_simulation_lab_runs_and_compares_scenarios() -> None:
     assert at.selectbox(key="simulation_compare_right")
     assert at.download_button(key="simulation_download_json")
     assert at.download_button(key="simulation_download_comparison")
+
+
+def test_simulation_lab_renders_e5_controls() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = _twin_with_demand()
+    open_page(at, "Simulation Lab")
+
+    assert not at.exception
+    assert at.selectbox(key="simulation_routing_mode")
+    assert at.data_editor(key=editors.editor_key("simulation_shared_risk_editor"))
+    assert at.button(key="simulation_apply_shared_risk_groups")
+    assert at.button(key="simulation_clear_shared_risk_groups")
+    assert at.button(key="simulation_mode_compare_run")
+    assert at.radio(key="simulation_sweep_depth")
+    assert at.button(key="simulation_sweep_run")
+    assert at.button(key="simulation_sweep_cancel_button")
+
+
+def test_routing_mode_selector_changes_parsed_assumptions() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = _twin_with_demand()
+    open_page(at, "Simulation Lab")
+
+    assert not at.exception
+    selector = at.selectbox(key="simulation_routing_mode")
+    assert i18n.t("simulation.routing_mode.single_path") in selector.options
+    assert i18n.t("simulation.routing_mode.ecmp") in selector.options
+
+    single = simulation_lab._parse_assumptions(
+        70.0, 90.0, 100.0, "{}", RoutingMode.single_path
+    )
+    ecmp = simulation_lab._parse_assumptions(
+        70.0, 90.0, 100.0, "{}", RoutingMode.ecmp
+    )
+    assert single.routing_mode is RoutingMode.single_path
+    assert ecmp.routing_mode is RoutingMode.ecmp
+
+
+def test_simulation_lab_renders_injected_sweep_and_mode_comparison() -> None:
+    twin = _twin_with_demand()
+    sweep = run_failure_sweep(twin, limit=1)
+    comparison = compare_routing_modes(
+        twin, modes=(RoutingMode.single_path, RoutingMode.ecmp)
+    )
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = twin
+    at.session_state[state.SIMULATION_SWEEPS_KEY] = (sweep,)
+    at.session_state[state.SIMULATION_MODE_COMPARISONS_KEY] = (comparison,)
+    open_page(at, "Simulation Lab")
+
+    assert not at.exception
+    headings = [subheader.value for subheader in at.subheader]
+    assert any("Failure sweep" in value for value in headings)
+    assert any("Routing mode comparison" in value for value in headings)
+    assert at.download_button(key="simulation_download_sweep_json")
+    assert at.download_button(key="simulation_download_sweep_csv")
+    assert at.download_button(key="simulation_download_mode_compare")

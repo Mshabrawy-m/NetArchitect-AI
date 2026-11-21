@@ -1,11 +1,11 @@
 # Current Project Status
 
 ## Overall
-- Current phase: v1.0.0 released; V2 design package on `feature/v2-design`
-- Current task: D1-D5 complete; final verification/report package delivered
-- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`). `feature/v2-design` adds a token-based design system, grouped native navigation, shared presentation components, a six-step project progress strip, confirmation-gated sample projects, a deterministic layered topology diagram with click/keyboard inspection, session-scoped ar/en interface text with RTL support, and consistent accessibility/formatting behavior. All 15 pages still render through `AppTest`, now via `st.navigation` page files.
+- Current phase: v1.0.0 released; V2 engine package on `feature/v2-engine`
+- Current task: E1-E5 complete; final verification/report package delivered
+- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`), followed by `feature/v2-design` (`52ef456`). `feature/v2-engine` adds bounded ECMP/capacity-aware routing, N-1/N-2 failure sweeps with shared-risk groups, seeded annealing with sensitivity and pure Pareto re-ranking, and UI/report wiring. All changes are additive modeled estimates: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
 - Last updated: 2026-11-21
-- Branch: `feature/v2-design` (created from updated `main`)
+- Branch: `feature/v2-engine` (created from updated `main`)
 
 ## V2 package (feature/v2-tech)
 
@@ -129,6 +129,51 @@
   verbatim final command output, before/after Dashboard timing, six real-browser
   screens in `docs/screenshots/`, and the remaining unverified items. The live
   Streamlit server and CDP browser used for the screens were stopped afterward.
+
+## V2 engine package (feature/v2-engine)
+
+- Scope: E1-E5 additive engine, UI, and report wiring. No schema-version bump;
+  `TWIN_SCHEMA_VERSION` stays `2`. All new fields are optional and default to
+  legacy behavior. Free-tier rules are unchanged: flat `requirements.txt`, no
+  new runtime dependency, no workers/threads, no app disk writes, and bounded
+  session/cache/sweep state.
+- E1: `single_path` remains the default. Bounded `ecmp` splits equally across
+  all deterministic lowest-cost paths up to `MAX_ECMP_PATHS` with an explicit
+  truncation warning; directed links carry only forward load, undirected links
+  sum both directions, and unserved reasons are unchanged. Legacy twin/run JSON
+  and fingerprint fixtures stay byte-identical.
+- E2: `capacity_aware` is a deterministic largest-first admission-control model
+  (ties by demand id) on the lowest-cost path with residual capacity. It emits
+  `unserved: insufficient capacity` with the best blocked path and supports a
+  side-by-side mode comparison.
+- E3: N-1 and caller-subset N-2 sweeps are bounded by `MAX_NODES`/`MAX_EDGES`
+  and `MAX_N2_PAIRS`. Additive shared-risk groups expand targets, not case count.
+  The page uses slice-based `st.fragment`, Cancel, real progress, typed stop
+  reason, and "showing X of Y" without threads. Medium N-1 went from
+  `0.355934 s` (direct repeated runs) to `0.140281 s` (sweep); max N-1 went from
+  `1.339096 s` to `0.648555 s`.
+- E4: seeded bounded simulated annealing supports an optional hybrid start from
+  retained greedy/baseline candidates. Bounded demand/capacity sensitivity uses
+  the documented robust definition; weight changes re-rank stored Pareto
+  evaluations only. GA/NSGA-II seeded vectors and the pre-E4 optimization
+  JSON/hash fixture remain byte-identical.
+- E5: Simulation Lab exposes routing mode, shared-risk groups, mode comparison,
+  and sweeps. Optimization Center exposes SA, hybrid start, sensitivity, and
+  re-ranking. Reports select all four new result types with provenance, stale
+  warnings, and not-run states. EN/AR catalog parity remains green.
+- Schema additions reported to the user: `RoutingMode`, `PathSplit`,
+  `SimulationAssumptions.routing_mode`, `DemandEvaluation.splits`, blocked-path
+  fields on demand evaluations and unserved demands, `SharedRiskGroup`,
+  `DigitalTwin.shared_risk_groups`, sweep case/plan/impact/result models,
+  `Algorithm.simulated_annealing`, `RerankedCandidate`, `ParetoReranking`,
+  `SensitivityScenario`, `SensitivityCase`, `SensitivityScenarioResult`, and
+  `SensitivityReport`.
+- Final evidence: `pytest -q` -> `1130 passed, 5 deselected in 40.59s`;
+  `ruff check .` -> `All checks passed!`; `pytest -q -m smoke` ->
+  `13 passed, 1122 deselected in 5.87s`; `pytest -q -m perf` ->
+  `5 passed, 1130 deselected in 10.85s`. Focused E5 evidence: i18n 9 passed,
+  state 7 passed, reporting/cache 43 passed, UI pages 26 passed. Not verified in
+  this package: real-browser rendering, Cloud timing/RSS, and Linux CI.
 
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
