@@ -601,6 +601,44 @@ class MicrosegmentationPlan(DisclosedModel):
     proposals: tuple[MicrosegmentationProposal, ...] = Field(default_factory=tuple)
 
 
+DESIGN_CHECKLIST_VERSION = "1.0"
+
+_DESIGN_CHECKLIST_NOTE = (
+    "Design checklist aligned with common practice (design-level). Statuses are "
+    "derived only from modeled facts; not-modeled is used when the design model "
+    "has no fact for an item. No compliance or certification is claimed."
+)
+
+
+class ChecklistStatus(str, Enum):
+    """The only three statuses a design checklist item may have."""
+
+    pass_ = "pass"
+    fail = "fail"
+    not_modeled = "not-modeled"
+
+
+class DesignChecklistItem(DisclosedModel):
+    """One fixed, versioned checklist item with a linked rule and evidence."""
+
+    id: str
+    text: str
+    rule_linkage: tuple[str, ...] = Field(default_factory=tuple)
+    status: ChecklistStatus
+    evidence: tuple[str, ...] = Field(default_factory=tuple)
+
+
+class DesignChecklist(DisclosedModel):
+    """Fixed design checklist result for one modeled design."""
+
+    version: str = DESIGN_CHECKLIST_VERSION
+    note: str = _DESIGN_CHECKLIST_NOTE
+    items: tuple[DesignChecklistItem, ...]
+    pass_count: int = Field(ge=0)
+    fail_count: int = Field(ge=0)
+    not_modeled_count: int = Field(ge=0)
+
+
 class SegmentationInput(DisclosedModel):
     """One visible weighted contribution to the segmentation score."""
 
@@ -645,16 +683,21 @@ class SecurityAnalysis(DisclosedModel):
     segmentation: SegmentationScore | None = None
     optimizer: OptimizationPlan | None = None
     microsegmentation: MicrosegmentationPlan | None = None
+    checklist: DesignChecklist | None = None
 
 
 __all__ = [
+    "DESIGN_CHECKLIST_VERSION",
     "MICROSEGMENTATION_NOTE",
     "POLICY_OPTIMIZER_NOTE",
     "POLICY_REACHABILITY_NOTE",
     "SECURITY_DISCLAIMER",
     "BlastRadius",
     "CatalogRule",
+    "ChecklistStatus",
     "DecisionProof",
+    "DesignChecklist",
+    "DesignChecklistItem",
     "DisclosedModel",
     "FindingCategory",
     "FirewallRule",

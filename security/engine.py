@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from core.schemas.validation import Severity
 
 from .catalog import evaluate_design_rules
+from .checklist import build_design_checklist
 from .microsegmentation import build_microsegmentation_plan
 from .models import (
     FlowCheckResult,
@@ -142,7 +143,7 @@ def analyze_design(
     )
     optimizer = build_optimization_plan(twin, security_model, flows=flows)
     microsegmentation = build_microsegmentation_plan(twin, security_model, flows=flows)
-    return SecurityAnalysis(
+    analysis = SecurityAnalysis(
         model=security_model,
         findings=findings,
         flow_checks=flow_checks,
@@ -154,6 +155,9 @@ def analyze_design(
         segmentation=segmentation,
         optimizer=optimizer,
         microsegmentation=microsegmentation,
+    )
+    return analysis.model_copy(
+        update={"checklist": build_design_checklist(twin, analysis)}
     )
 
 

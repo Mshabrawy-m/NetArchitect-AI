@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: v1.0.0 released; V2 security package on `feature/v2-security`
-- Current task: S1-S4 complete; S5-S6 in progress
-- Overall status: `feature/v2-tech` (`ed3312f`), `feature/v2-design` (`52ef456`), `feature/v2-engine`, and `feature/v2-copilot` were merged and pushed to `main` (latest `54ba6a2`). `feature/v2-security` adds deterministic, offline design-time security modeling: S1 zone policy reachability/bounded blast radius, S2 segmentation scoring, S3 policy optimization, and S4 microsegmentation suggestions are complete. All additions are additive optional fields: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
+- Current task: S1-S5 complete; S6 in progress
+- Overall status: `feature/v2-tech` (`ed3312f`), `feature/v2-design` (`52ef456`), `feature/v2-engine`, and `feature/v2-copilot` were merged and pushed to `main` (latest `54ba6a2`). `feature/v2-security` adds deterministic, offline design-time security modeling: S1 zone policy reachability/bounded blast radius, S2 segmentation scoring, S3 policy optimization, S4 microsegmentation suggestions, and S5 the fixed design checklist are complete. All additions are additive optional fields: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
 - Last updated: 2026-11-21
 - Branch: `feature/v2-security` (created from updated `main`)
 
@@ -60,6 +60,16 @@
   `MAX_MICROSEGMENTATION_PROPOSALS=4`, `MAX_MICROSEGMENTATION_RULES=48`.
   `SecurityAnalysis.microsegmentation` is additive and optional. `pytest -q`
   1249 passed, 6 deselected; `ruff check .` clean.
+- S5: `security/checklist.py` adds a fixed, versioned (`DESIGN_CHECKLIST_VERSION=1.0`)
+  eight-item design checklist derived only from modeled facts. Each item has a
+  stable ID, fixed text, explicit rule linkage, evidence, and exactly one of
+  `pass` / `fail` / `not-modeled`. The logging item is always `not-modeled`
+  because the model has no logging field; absence is never a pass or failure.
+  Wording is limited to "design checklist aligned with common practice
+  (design-level)" with no compliance claim. `SecurityAnalysis.checklist` is an
+  additive optional field. Tests cover every item's three possible statuses,
+  version stability, counts, disclosure, and legacy JSON. `pytest -q` 1260
+  passed, 6 deselected; `ruff check .` clean.
 
 ## V2 package (feature/v2-tech)
 

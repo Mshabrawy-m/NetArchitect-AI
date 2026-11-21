@@ -2,6 +2,24 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - S5: fixed design checklist on feature/v2-security
+
+### Added
+- S5: fixed, versioned (`1.0`) eight-item design checklist with stable IDs, fixed
+  text, explicit rule linkage, evidence, and only `pass` / `fail` /
+  `not-modeled` statuses derived from modeled facts.
+- Additive optional `SecurityAnalysis.checklist` field. The logging item is
+  always `not-modeled` because the design model has no logging field.
+
+### Changed
+- No schema version bump (`TWIN_SCHEMA_VERSION` stays `2`); no new runtime
+  dependency, thread, worker, or app disk write. Wording is limited to a design
+  checklist aligned with common practice (design-level); no compliance claim.
+
+### Evidence
+- `pytest -q`: `1260 passed, 6 deselected in 51.13s`.
+- `ruff check .`: `All checks passed!`.
+
 ## 2026-11-21 - S4: zero-trust microsegmentation on feature/v2-security
 
 ### Added

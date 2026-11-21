@@ -12,6 +12,7 @@ from .catalog import (
     catalog_rule,
     evaluate_design_rules,
 )
+from .checklist import DESIGN_CHECKLIST_VERSION, build_design_checklist
 from .derivation import derive_default_security_model
 from .engine import analyze_design
 from .microsegmentation import (
@@ -26,7 +27,10 @@ from .models import (
     SECURITY_DISCLAIMER,
     BlastRadius,
     CatalogRule,
+    ChecklistStatus,
     DecisionProof,
+    DesignChecklist,
+    DesignChecklistItem,
     DisclosedModel,
     FindingCategory,
     FirewallRule,
@@ -113,6 +117,7 @@ __all__ = [
     "BROADCAST_WEIGHT",
     "DEFAULT_ALLOW_BONUS",
     "DEFAULT_WEIGHT",
+    "DESIGN_CHECKLIST_VERSION",
     "LEAST_PRIVILEGE_WEIGHT",
     "MICROSEGMENTATION_NOTE",
     "OVERSIZED_SUBNET_RATIO",
@@ -127,7 +132,10 @@ __all__ = [
     "UNASSIGNED_ZONE",
     "BlastRadius",
     "CatalogRule",
+    "ChecklistStatus",
     "DecisionProof",
+    "DesignChecklist",
+    "DesignChecklistItem",
     "DisclosedModel",
     "FindingCategory",
     "FirewallRule",
@@ -178,6 +186,7 @@ __all__ = [
     "assess_risk",
     "build_blast_radii",
     "build_decision_table",
+    "build_design_checklist",
     "build_exposure_findings",
     "build_microsegmentation_plan",
     "build_optimization_plan",
