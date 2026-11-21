@@ -1,11 +1,31 @@
 # Current Project Status
 
 ## Overall
-- Current phase: v1.0.0 released; V2 engine package on `feature/v2-engine`
-- Current task: E1-E5 complete; final verification/report package delivered
-- Overall status: `feature/v2-tech` was merged and pushed to `main` (`ed3312f`), followed by `feature/v2-design` (`52ef456`). `feature/v2-engine` adds bounded ECMP/capacity-aware routing, N-1/N-2 failure sweeps with shared-risk groups, seeded annealing with sensitivity and pure Pareto re-ranking, and UI/report wiring. All changes are additive modeled estimates: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
+- Current phase: v1.0.0 released; V2 security package on `feature/v2-security`
+- Current task: S1 reachability complete; S2-S6 in progress
+- Overall status: `feature/v2-tech` (`ed3312f`), `feature/v2-design` (`52ef456`), `feature/v2-engine`, and `feature/v2-copilot` were merged and pushed to `main` (latest `54ba6a2`). `feature/v2-security` adds deterministic, offline design-time security modeling: S1 zone policy reachability and bounded blast radius is complete. All additions are additive optional fields: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
 - Last updated: 2026-11-21
-- Branch: `feature/v2-engine` (created from updated `main`)
+- Branch: `feature/v2-security` (created from updated `main`)
+
+## V2 security package (feature/v2-security)
+
+- Scope: deterministic, offline design-time zero-trust/security modeling only.
+  No scanning, probing, CVE lookup, exploit/attack description, pentesting, SOC
+  analysis, device access, or network I/O. Every output carries the exact
+  `SECURITY_DISCLAIMER`. `TWIN_SCHEMA_VERSION` stays `2` and all additions are
+  additive optional fields.
+- S1: `security/reachability.py` builds a full zone x zone x service modeled
+  **policy reachability** matrix, a bounded transitive-closure blast radius
+  (`MAX_BLAST_RADIUS_HOPS=8`), and exposure highlights for `untrusted_external`,
+  `guest`, and `iot` zones whose closure reaches a designer-set criticality >= 4.
+  Results are explicitly labeled policy reachability, not an attack path or
+  exploit chain. Routing is probed from bounded zone member devices
+  (`MAX_ROUTE_PROBE_DEVICES=8`); VLAN-only cells are marked policy-only.
+  `SecurityAnalysis.reachability` is an additive optional field. Tests cover the
+  4-zone matrix, transitive closure, deny removes reachability, routing-absent,
+  exposure findings, hop limit, and legacy JSON. Max-count timing (32 zones x 32
+  services = 32,768 cells): 0.241 s. `pytest -q` 1219 passed, 6 deselected;
+  `ruff check .` clean.
 
 ## V2 package (feature/v2-tech)
 

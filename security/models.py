@@ -416,6 +416,75 @@ class TemplateDocument(DisclosedModel):
         return "\n".join(self.lines)
 
 
+POLICY_REACHABILITY_NOTE = (
+    "Modeled policy reachability between design zones. It is a design-time "
+    "policy model, not an attack path, exploit chain, or scan of a live network."
+)
+
+
+class ReachabilityCell(DisclosedModel):
+    """One zone x zone x service cell of the modeled reachability matrix."""
+
+    source_zone: str
+    destination_zone: str
+    service: str
+    policy_permitted: bool
+    route_exists: bool
+    routing_modeled: bool
+    reachable: bool
+    reason: str
+
+
+class ReachabilityMatrix(DisclosedModel):
+    """Complete zone x zone x service modeled policy reachability matrix."""
+
+    zones: tuple[str, ...] = Field(default_factory=tuple, max_length=MAX_ZONES)
+    services: tuple[str, ...] = Field(default_factory=tuple, max_length=MAX_SERVICES)
+    cells: tuple[ReachabilityCell, ...] = Field(default_factory=tuple)
+
+    def cell(
+        self, source_zone: str, destination_zone: str, service: str
+    ) -> ReachabilityCell | None:
+        """Return one matrix cell, or ``None`` for an unknown triple."""
+        return next(
+            (
+                cell
+                for cell in self.cells
+                if cell.source_zone == source_zone
+                and cell.destination_zone == destination_zone
+                and cell.service == service
+            ),
+            None,
+        )
+
+    def is_reachable(self, source_zone: str, destination_zone: str, service: str) -> bool:
+        """Return whether the modeled policy and route permit one triple."""
+        cell = self.cell(source_zone, destination_zone, service)
+        return bool(cell and cell.reachable)
+
+
+class BlastRadius(DisclosedModel):
+    """Bounded modeled closure of policy reachability from one origin zone."""
+
+    origin_zone: str
+    origin_zone_type: ZoneType
+    directly_reachable: tuple[str, ...] = Field(default_factory=tuple)
+    closure_zones: tuple[str, ...] = Field(default_factory=tuple)
+    max_criticality_reached: int = Field(ge=0)
+    exposure: bool = False
+    hop_count: int = Field(ge=0)
+
+
+class ReachabilityReport(DisclosedModel):
+    """Zone reachability and bounded blast radius for one modeled design."""
+
+    note: str = POLICY_REACHABILITY_NOTE
+    matrix: ReachabilityMatrix
+    blast_radii: tuple[BlastRadius, ...] = Field(default_factory=tuple)
+    exposure_findings: tuple[SecurityFinding, ...] = Field(default_factory=tuple)
+    hop_limit: int = Field(ge=0)
+
+
 class SecurityAnalysis(DisclosedModel):
     """Complete deterministic design-time security assessment."""
 
@@ -426,10 +495,15 @@ class SecurityAnalysis(DisclosedModel):
     risk: RiskAssessment
     proposals: ProposalSet
     template: TemplateDocument
+    # Additive optional field. Legacy analysis JSON without this key still
+    # parses, and twin JSON/fingerprints are unaffected.
+    reachability: ReachabilityReport | None = None
 
 
 __all__ = [
+    "POLICY_REACHABILITY_NOTE",
     "SECURITY_DISCLAIMER",
+    "BlastRadius",
     "CatalogRule",
     "DisclosedModel",
     "FindingCategory",
@@ -442,6 +516,9 @@ __all__ = [
     "ProposalSet",
     "ProposedRule",
     "Protocol",
+    "ReachabilityCell",
+    "ReachabilityMatrix",
+    "ReachabilityReport",
     "RiskAssessment",
     "RiskLevel",
     "RiskTerm",

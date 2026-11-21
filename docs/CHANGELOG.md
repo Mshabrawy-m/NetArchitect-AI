@@ -2,6 +2,27 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - S1: policy reachability and blast radius on feature/v2-security
+
+### Added
+- S1: deterministic, offline `security/reachability.py` with a zone x zone x
+  service modeled policy reachability matrix, bounded transitive-closure blast
+  radius, and exposure highlights for lower-trust zones reaching criticality >= 4.
+- Additive optional `SecurityAnalysis.reachability` field; legacy analysis JSON
+  without the key still parses, and twin JSON/fingerprints are unchanged.
+- Bounded constants `MAX_BLAST_RADIUS_HOPS` and `MAX_ROUTE_PROBE_DEVICES`.
+
+### Changed
+- No schema version bump (`TWIN_SCHEMA_VERSION` stays `2`); no new runtime
+  dependency, thread, worker, or app disk write. Results are labeled policy
+  reachability, never an attack path or exploit chain.
+
+### Evidence
+- `pytest -q`: `1219 passed, 6 deselected in 49.51s`.
+- `ruff check .`: `All checks passed!`.
+- `pytest -q -m perf -o addopts= ...::test_s1_max_zone_count_timing -s`:
+  `S1 max-zone reachability (32 zones, 32 services): 0.241s`.
+
 ## 2026-11-21 - C1-C5: deterministic copilot on feature/v2-copilot
 
 ### Added

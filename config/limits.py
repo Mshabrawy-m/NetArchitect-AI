@@ -66,6 +66,16 @@ MAX_SERVICES: int = 32
 # Maximum assumptions recorded with one security model.
 MAX_SECURITY_ASSUMPTIONS: int = 50
 
+# Maximum hop depth for the bounded modeled reachability closure used by the
+# security blast-radius view. The closure is also bounded by the zone count, so
+# this is an explicit, visible cap rather than an unbounded graph traversal.
+MAX_BLAST_RADIUS_HOPS: int = 8
+
+# Maximum member devices probed per zone when deciding whether a routed path
+# exists between two modeled zones. Keeps pairwise routing probes bounded on
+# the free tier even if a zone names many devices.
+MAX_ROUTE_PROBE_DEVICES: int = 8
+
 # Maximum number of snapshots retained for one digital twin.
 MAX_SNAPSHOTS: int = 20
 

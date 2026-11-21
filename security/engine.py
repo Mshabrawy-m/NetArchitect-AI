@@ -17,6 +17,7 @@ from .models import (
 )
 from .operations import get_security_model
 from .policy import check_flow
+from .reachability import build_reachability_report
 from .remediation import build_proposals
 from .risk import assess_risk, build_summary
 from .templates import render_template
@@ -128,6 +129,7 @@ def analyze_design(
     summary = build_summary(security_model, findings, risk)
     proposals = build_proposals(findings)
     template = render_template(security_model, proposals)
+    reachability = build_reachability_report(twin, security_model)
     return SecurityAnalysis(
         model=security_model,
         findings=findings,
@@ -136,6 +138,7 @@ def analyze_design(
         risk=risk,
         proposals=proposals,
         template=template,
+        reachability=reachability,
     )
 
 

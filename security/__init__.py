@@ -15,7 +15,9 @@ from .catalog import (
 from .derivation import derive_default_security_model
 from .engine import analyze_design
 from .models import (
+    POLICY_REACHABILITY_NOTE,
     SECURITY_DISCLAIMER,
+    BlastRadius,
     CatalogRule,
     DisclosedModel,
     FindingCategory,
@@ -28,6 +30,9 @@ from .models import (
     ProposalSet,
     ProposedRule,
     Protocol,
+    ReachabilityCell,
+    ReachabilityMatrix,
+    ReachabilityReport,
     RiskAssessment,
     RiskLevel,
     RiskTerm,
@@ -61,6 +66,12 @@ from .operations import (
     update_zone,
 )
 from .policy import UNASSIGNED_ZONE, check_flow, device_zone_map, evaluate_policy
+from .reachability import (
+    build_blast_radii,
+    build_exposure_findings,
+    build_reachability_matrix,
+    build_reachability_report,
+)
 from .remediation import accept_proposed_rules, build_proposals
 from .risk import DEFAULT_ALLOW_BONUS, SEVERITY_WEIGHTS, assess_risk, build_summary
 from .templates import TEMPLATE_HEADER, render_template
@@ -68,11 +79,13 @@ from .templates import TEMPLATE_HEADER, render_template
 __all__ = [
     "DEFAULT_ALLOW_BONUS",
     "OVERSIZED_SUBNET_RATIO",
+    "POLICY_REACHABILITY_NOTE",
     "RULE_CATALOG",
     "SECURITY_DISCLAIMER",
     "SEVERITY_WEIGHTS",
     "TEMPLATE_HEADER",
     "UNASSIGNED_ZONE",
+    "BlastRadius",
     "CatalogRule",
     "DisclosedModel",
     "FindingCategory",
@@ -85,6 +98,9 @@ __all__ = [
     "ProposalSet",
     "ProposedRule",
     "Protocol",
+    "ReachabilityCell",
+    "ReachabilityMatrix",
+    "ReachabilityReport",
     "RiskAssessment",
     "RiskLevel",
     "RiskTerm",
@@ -105,7 +121,11 @@ __all__ = [
     "add_zone",
     "analyze_design",
     "assess_risk",
+    "build_blast_radii",
+    "build_exposure_findings",
     "build_proposals",
+    "build_reachability_matrix",
+    "build_reachability_report",
     "build_summary",
     "catalog_rule",
     "check_flow",
