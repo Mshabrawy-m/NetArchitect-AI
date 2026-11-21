@@ -6,7 +6,19 @@ pure evaluation of its inputs. All numbers are modeled estimates from stated
 assumptions, not packet-level or hardware-accurate measurements.
 """
 
-from .evaluator import evaluate, link_by_id, twin_fingerprint, twin_reference
+from .comparison import (
+    DEFAULT_COMPARISON_MODES,
+    ModeState,
+    RoutingModeComparison,
+    compare_routing_modes,
+)
+from .evaluator import (
+    INSUFFICIENT_CAPACITY_REASON,
+    evaluate,
+    link_by_id,
+    twin_fingerprint,
+    twin_reference,
+)
 from .export import run_to_csv, run_to_json, run_to_json_bytes
 from .history import ScenarioHistory
 from .models import (
@@ -28,6 +40,7 @@ from .scenarios import (
     PathChange,
     ScenarioComparison,
     ScenarioRun,
+    build_scenario_twin,
     compare_runs,
     run_scenario,
     validate_scenario,
@@ -43,6 +56,8 @@ from .tables import (
 )
 
 __all__ = [
+    "DEFAULT_COMPARISON_MODES",
+    "INSUFFICIENT_CAPACITY_REASON",
     "MODEL_NOTE",
     "CongestionLevel",
     "CongestionThresholds",
@@ -50,16 +65,20 @@ __all__ = [
     "LinkChange",
     "LinkChangeKind",
     "LinkLoad",
+    "ModeState",
     "NetworkState",
     "PathChange",
     "PathSplit",
     "RoutingMode",
+    "RoutingModeComparison",
     "ScenarioComparison",
     "ScenarioHistory",
     "ScenarioRun",
     "SimulationAssumptions",
     "TwinReference",
     "UnservedDemand",
+    "build_scenario_twin",
+    "compare_routing_modes",
     "compare_runs",
     "demand_rows",
     "evaluate",

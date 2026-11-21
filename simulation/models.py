@@ -16,6 +16,11 @@ packet-level or hardware-accurate emulation.
   one shared capacity, exactly as in the default model. When more equal-cost
   paths exist than the cap, the first paths are used and an explicit warning is
   recorded rather than silently truncating.
+* Optional ``capacity_aware`` mode is an admission-control model, not a
+  protocol or router configuration. Demands are considered largest-first with
+  ties broken by demand id. Each is placed on the first deterministic
+  lowest-cost path with enough residual capacity; a rejected demand records
+  ``insufficient capacity`` plus the best blocked path and its bottleneck.
 * Link load is the sum of the bandwidth of every demand whose chosen path
   traverses the link. Parallel links have already collapsed in the routing
   graph, so load is assigned to the physical link chosen by that engine.
@@ -256,13 +261,35 @@ class DemandEvaluation(BaseModel):
             "in the parent demand's bandwidth, not additional to it."
         ),
     )
+    blocked_path_device_ids: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Best path considered when capacity admission rejected the demand.",
+    )
+    blocked_link_ids: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Physical links on the best blocked path.",
+    )
+    bottleneck_link_id: str = Field(
+        default="",
+        description="Most constrained link on the best blocked path, if any.",
+    )
+    bottleneck_available_mbps: float | None = Field(
+        default=None,
+        ge=0,
+        description="Residual Mbps at the bottleneck when the demand was rejected.",
+    )
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: object) -> dict[str, object]:
-        """Omit the additive split field for legacy single-path results."""
+        """Omit additive mode fields when they carry no modeled information."""
         payload = dict(handler(self))  # type: ignore[operator]
         if not self.splits:
             payload.pop("splits", None)
+        if not self.blocked_path_device_ids:
+            payload.pop("blocked_path_device_ids", None)
+            payload.pop("blocked_link_ids", None)
+            payload.pop("bottleneck_link_id", None)
+            payload.pop("bottleneck_available_mbps", None)
         return payload
 
 
@@ -276,6 +303,34 @@ class UnservedDemand(BaseModel):
     destination: str = Field(description="Destination device id.")
     bandwidth_mbps: float = Field(ge=0, description="Requested bandwidth, in Mbps.")
     reason: str = Field(description="Why the demand could not be served.")
+    blocked_path_device_ids: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Best path considered when capacity admission rejected the demand.",
+    )
+    blocked_link_ids: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Physical links on the best blocked path.",
+    )
+    bottleneck_link_id: str = Field(
+        default="",
+        description="Most constrained link on the best blocked path, if any.",
+    )
+    bottleneck_available_mbps: float | None = Field(
+        default=None,
+        ge=0,
+        description="Residual Mbps at the bottleneck when the demand was rejected.",
+    )
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: object) -> dict[str, object]:
+        """Omit additive blocked-path fields for legacy unserved reasons."""
+        payload = dict(handler(self))  # type: ignore[operator]
+        if not self.blocked_path_device_ids:
+            payload.pop("blocked_path_device_ids", None)
+            payload.pop("blocked_link_ids", None)
+            payload.pop("bottleneck_link_id", None)
+            payload.pop("bottleneck_available_mbps", None)
+        return payload
 
 
 class LinkLoad(BaseModel):

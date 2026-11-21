@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 
 from config.limits import MAX_ECMP_PATHS, MAX_SIMULATION_RUNTIME_SECONDS
@@ -46,6 +47,8 @@ from .models import (
     TwinReference,
     UnservedDemand,
 )
+
+INSUFFICIENT_CAPACITY_REASON = "insufficient capacity"
 
 
 def twin_fingerprint(twin: DigitalTwin) -> str:
@@ -324,6 +327,196 @@ def _ecmp_demand_evaluation(
     )
 
 
+def _hop_available_mbps(
+    link: Link,
+    source: str,
+    target: str,
+    loads: dict[str, list[float]],
+) -> float:
+    """Return residual Mbps for one directed hop under the shared-capacity rule."""
+    forward, reverse = loads.get(link.id, [0.0, 0.0])
+    if link.directed:
+        if not _hop_is_forward(link, source, target):
+            return 0.0
+        return max(0.0, float(link.capacity_mbps) - forward)
+    return max(0.0, float(link.capacity_mbps) - forward - reverse)
+
+
+def _consume_hop(
+    link: Link,
+    source: str,
+    target: str,
+    bandwidth: float,
+    loads: dict[str, list[float]],
+) -> None:
+    """Add an admitted demand's bandwidth to the correct direction of a link."""
+    if link.id not in loads:
+        loads[link.id] = [0.0, 0.0]
+    if _hop_is_forward(link, source, target):
+        loads[link.id][0] += bandwidth
+    else:
+        loads[link.id][1] += bandwidth
+
+
+def _path_bottleneck(
+    path: RoutePath,
+    link_index: dict[str, Link],
+    loads: dict[str, list[float]],
+) -> tuple[float, str]:
+    """Return ``(residual Mbps, bottleneck link id)`` for one candidate path."""
+    available = float("inf")
+    bottleneck_id = ""
+    for source, target, link_id in zip(
+        path.device_ids,
+        path.device_ids[1:],
+        (hop.link_id for hop in path.hops),
+    ):
+        link = link_index[link_id]
+        residual = _hop_available_mbps(link, source, target, loads)
+        if residual < available or (residual == available and link_id < bottleneck_id):
+            available = residual
+            bottleneck_id = link_id
+    return available, bottleneck_id
+
+
+def _capacity_aware_evaluations(
+    twin: DigitalTwin,
+    *,
+    router: SparseRouter,
+    known_devices: set[str],
+    deadline: float,
+) -> tuple[tuple[DemandEvaluation, ...], bool]:
+    """Place demands by capacity-aware admission control, in deterministic order.
+
+    Demands are sorted by descending bandwidth, then by demand id. Each demand
+    takes the first lexicographic lowest-cost path with enough residual
+    capacity. Residual accounting follows the modeled direction rules: directed
+    links consume only their permitted direction; undirected links consume one
+    shared pool from both directions. A rejected demand keeps the best blocked
+    path, defined as the equal-cost path with the largest bottleneck residual,
+    with lexicographic path order as the tie-break.
+    """
+    link_index = {link.id: link for link in twin.topology.links}
+    loads: dict[str, list[float]] = {}
+    ordered = sorted(
+        enumerate(twin.demands),
+        key=lambda item: (-float(item[1].bandwidth_mbps), item[1].name),
+    )
+    results: list[DemandEvaluation | None] = [None] * len(twin.demands)
+    truncated = False
+
+    for index, demand in ordered:
+        _check_deadline(deadline, "capacity-aware admission")
+        name = demand.name
+        source = demand.source
+        destination = demand.destination
+        bandwidth = float(demand.bandwidth_mbps)
+
+        if source not in known_devices:
+            results[index] = DemandEvaluation(
+                name=name,
+                source=source,
+                destination=destination,
+                bandwidth_mbps=bandwidth,
+                served=False,
+                reason=f"Source device {source!r} is not present in the twin topology",
+            )
+            continue
+        if destination not in known_devices:
+            results[index] = DemandEvaluation(
+                name=name,
+                source=source,
+                destination=destination,
+                bandwidth_mbps=bandwidth,
+                served=False,
+                reason=(
+                    f"Destination device {destination!r} is not present in the twin "
+                    "topology"
+                ),
+            )
+            continue
+
+        paths, path_truncated = equal_cost_paths_from_router(
+            router,
+            source,
+            destination,
+            limit=MAX_ECMP_PATHS,
+        )
+        truncated = truncated or path_truncated
+        if not paths:
+            unreachable = shortest_path_from_router(router, source, destination)
+            results[index] = DemandEvaluation(
+                name=name,
+                source=source,
+                destination=destination,
+                bandwidth_mbps=bandwidth,
+                served=False,
+                reason=unreachable.reason or "No path exists under the modeled state",
+            )
+            continue
+
+        admitted = None
+        for path in paths:
+            residual, bottleneck_id = _path_bottleneck(path, link_index, loads)
+            if bandwidth <= residual:
+                admitted = (path, residual, bottleneck_id)
+                break
+
+        if admitted is None:
+            best_path = paths[0]
+            best_residual, best_bottleneck = _path_bottleneck(
+                best_path, link_index, loads
+            )
+            for path in paths[1:]:
+                residual, bottleneck_id = _path_bottleneck(path, link_index, loads)
+                if residual > best_residual:
+                    best_path = path
+                    best_residual = residual
+                    best_bottleneck = bottleneck_id
+            results[index] = DemandEvaluation(
+                name=name,
+                source=source,
+                destination=destination,
+                bandwidth_mbps=bandwidth,
+                served=False,
+                reason=INSUFFICIENT_CAPACITY_REASON,
+                blocked_path_device_ids=tuple(best_path.device_ids),
+                blocked_link_ids=tuple(hop.link_id for hop in best_path.hops),
+                bottleneck_link_id=best_bottleneck,
+                bottleneck_available_mbps=(
+                    None if math.isinf(best_residual) else max(0.0, best_residual)
+                ),
+            )
+            continue
+
+        path, _, _ = admitted
+        for source_id, target_id, link_id in zip(
+            path.device_ids,
+            path.device_ids[1:],
+            (hop.link_id for hop in path.hops),
+        ):
+            _consume_hop(
+                link_index[link_id],
+                source_id,
+                target_id,
+                bandwidth,
+                loads,
+            )
+        results[index] = DemandEvaluation(
+            name=name,
+            source=source,
+            destination=destination,
+            bandwidth_mbps=bandwidth,
+            served=True,
+            path_device_ids=tuple(path.device_ids),
+            link_ids=tuple(hop.link_id for hop in path.hops),
+            total_cost=path.total_cost,
+            hop_count=path.hop_count,
+        )
+
+    return tuple(item for item in results if item is not None), truncated
+
+
 def _connected_devices(
     topology: Topology,
     *,
@@ -495,12 +688,12 @@ def evaluate(
         router_cache[routing_key] = router
 
     known_devices = {device.id for device in twin.topology.devices}
-    demands: list[DemandEvaluation] = []
     mode = resolved_assumptions.routing_mode
-    ecmp_truncated = False
-    for demand in twin.demands:
-        _check_deadline(deadline, "demand routing")
-        if mode is RoutingMode.single_path:
+    truncated = False
+    if mode is RoutingMode.single_path:
+        demands: list[DemandEvaluation] = []
+        for demand in twin.demands:
+            _check_deadline(deadline, "demand routing")
             demands.append(
                 _demand_evaluation(
                     demand,
@@ -509,21 +702,40 @@ def evaluate(
                     known_devices=known_devices,
                 )
             )
-        else:
-            evaluation, truncated = _ecmp_demand_evaluation(
+        demand_tuple = tuple(demands)
+    elif mode is RoutingMode.ecmp:
+        ecmp_evaluations: list[DemandEvaluation] = []
+        for demand in twin.demands:
+            _check_deadline(deadline, "demand routing")
+            evaluation, path_truncated = _ecmp_demand_evaluation(
                 demand,
                 resolved_assumptions,
                 router=router,
                 known_devices=known_devices,
             )
-            demands.append(evaluation)
-            ecmp_truncated = ecmp_truncated or truncated
-    demand_tuple = tuple(demands)
-    if ecmp_truncated:
-        warnings.append(
-            f"ECMP used the lexicographically first {MAX_ECMP_PATHS} equal-cost "
-            "paths; additional equal-cost paths were not split."
+            ecmp_evaluations.append(evaluation)
+            truncated = truncated or path_truncated
+        demand_tuple = tuple(ecmp_evaluations)
+    else:
+        demand_tuple, truncated = _capacity_aware_evaluations(
+            twin,
+            router=router,
+            known_devices=known_devices,
+            deadline=deadline,
         )
+
+    if truncated:
+        if mode is RoutingMode.ecmp:
+            warnings.append(
+                f"ECMP used the lexicographically first {MAX_ECMP_PATHS} "
+                "equal-cost paths; additional equal-cost paths were not split."
+            )
+        else:
+            warnings.append(
+                "Capacity-aware admission considered the lexicographically "
+                f"first {MAX_ECMP_PATHS} equal-cost paths; additional "
+                "equal-cost paths were not considered."
+            )
     unserved = tuple(
         UnservedDemand(
             name=evaluation.name,
@@ -531,6 +743,10 @@ def evaluate(
             destination=evaluation.destination,
             bandwidth_mbps=evaluation.bandwidth_mbps,
             reason=evaluation.reason,
+            blocked_path_device_ids=evaluation.blocked_path_device_ids,
+            blocked_link_ids=evaluation.blocked_link_ids,
+            bottleneck_link_id=evaluation.bottleneck_link_id,
+            bottleneck_available_mbps=evaluation.bottleneck_available_mbps,
         )
         for evaluation in demand_tuple
         if not evaluation.served

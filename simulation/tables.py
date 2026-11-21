@@ -62,17 +62,26 @@ def demand_rows(state: NetworkState) -> list[dict[str, object]]:
 
 
 def unserved_rows(state: NetworkState) -> list[dict[str, object]]:
-    """Return one row per unserved demand."""
-    return [
-        {
+    """Return one row per unserved demand, with blocked-path detail when modeled."""
+    rows: list[dict[str, object]] = []
+    for demand in state.unserved_demands:
+        row: dict[str, object] = {
             "Demand": demand.name,
             "Source": demand.source,
             "Destination": demand.destination,
             "Bandwidth (Mbps)": round(demand.bandwidth_mbps, 2),
             "Reason": demand.reason,
         }
-        for demand in state.unserved_demands
-    ]
+        if demand.blocked_path_device_ids:
+            row["Blocked path"] = " -> ".join(demand.blocked_path_device_ids)
+            row["Bottleneck link"] = demand.bottleneck_link_id
+            row["Available (Mbps)"] = (
+                round(demand.bottleneck_available_mbps, 2)
+                if demand.bottleneck_available_mbps is not None
+                else "not estimated"
+            )
+        rows.append(row)
+    return rows
 
 
 def link_comparison_rows(

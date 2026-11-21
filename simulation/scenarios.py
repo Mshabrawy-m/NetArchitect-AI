@@ -817,6 +817,18 @@ def _compare(
     )
 
 
+def build_scenario_twin(
+    baseline_twin: DigitalTwin,
+    scenario: Scenario,
+) -> DigitalTwin:
+    """Validate ``scenario`` and return the modeled post-change twin.
+
+    This is the same translation used by :func:`run_scenario`; exposing it lets
+    pure comparisons evaluate several routing modes against one scenario state.
+    """
+    return _apply_plan(baseline_twin, _plan_scenario(baseline_twin, scenario))
+
+
 def run_scenario(
     baseline_twin: DigitalTwin,
     scenario: Scenario,
@@ -881,6 +893,7 @@ __all__ = [
     "PathChange",
     "ScenarioComparison",
     "ScenarioRun",
+    "build_scenario_twin",
     "compare_runs",
     "run_scenario",
     "validate_scenario",
