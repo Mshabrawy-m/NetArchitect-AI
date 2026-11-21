@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import streamlit as st
 
@@ -63,6 +63,9 @@ from optimization import (
 )
 from security import FlowRequest
 from services.llm import RequestBudget
+
+if TYPE_CHECKING:  # pragma: no cover - typing only; copilot import stays lazy
+    from services.copilot import CopilotCache, PromptTrace
 from simulation import (
     FailureSweepResult,
     RoutingModeComparison,
@@ -99,6 +102,8 @@ FLASH_KEY = "topology_editor_flash"
 
 LLM_SESSION_KEY = "llm_session_api_key"
 LLM_BUDGET_KEY = "llm_request_budget"
+COPILOT_CACHE_KEY = "copilot_response_cache"
+COPILOT_TRACE_KEY = "copilot_prompt_trace"
 
 CIDR_KEY = "ip_cidr_result"
 VLSM_KEY = "addressing_result"
@@ -968,3 +973,40 @@ def reset_llm_budget() -> RequestBudget:
     budget = get_llm_budget()
     budget.reset()
     return budget
+
+
+def get_copilot_cache() -> CopilotCache:
+    """Return the session copilot cache, creating it when needed."""
+    from services.copilot import CopilotCache
+
+    cache = st.session_state.get(COPILOT_CACHE_KEY)
+    if not isinstance(cache, CopilotCache):
+        cache = CopilotCache()
+        st.session_state[COPILOT_CACHE_KEY] = cache
+    return cache
+
+
+def reset_copilot_cache() -> CopilotCache:
+    """Clear cached copilot responses without changing the LLM budget."""
+    cache = get_copilot_cache()
+    cache.clear()
+    return cache
+
+
+def get_copilot_trace() -> PromptTrace:
+    """Return the session prompt trace, creating it when needed."""
+    from services.copilot import PromptTrace
+
+    trace = st.session_state.get(COPILOT_TRACE_KEY)
+    if not isinstance(trace, PromptTrace):
+        trace = PromptTrace()
+        st.session_state[COPILOT_TRACE_KEY] = trace
+    return trace
+
+
+def peek_copilot_trace() -> PromptTrace:
+    """Return a prompt trace view without creating a session key."""
+    from services.copilot import PromptTrace
+
+    trace = st.session_state.get(COPILOT_TRACE_KEY)
+    return trace if isinstance(trace, PromptTrace) else PromptTrace()

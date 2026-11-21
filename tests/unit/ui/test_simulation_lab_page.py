@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
+from services.llm.testing import FakeProvider
 from simulation import (
     MODEL_NOTE,
     RoutingMode,
@@ -134,6 +136,64 @@ def test_simulation_lab_runs_and_compares_scenarios() -> None:
     assert at.selectbox(key="simulation_compare_right")
     assert at.download_button(key="simulation_download_json")
     assert at.download_button(key="simulation_download_comparison")
+
+
+def test_copilot_interprets_without_key_and_only_fills_the_form() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = _twin_with_demand()
+    open_page(at, "Simulation Lab")
+
+    assert not at.exception
+    assert at.text_input(key="simulation_copilot_sentence")
+    at.text_input(key="simulation_copilot_sentence").set_value("fail link ab")
+    at.button(key="simulation_copilot_interpret").click().run()
+
+    assert not at.exception
+    assert at.text_area(key="simulation_copilot_preview")
+    assert len(at.session_state[state.SIMULATION_HISTORY_KEY].runs) == 0
+
+    at.button(key="simulation_copilot_apply").click().run()
+    assert not at.exception
+    assert at.session_state["simulation_scenario_type"] == "Single link failure"
+    assert at.session_state["simulation_affected_links"] == ["ab"]
+    assert len(at.session_state[state.SIMULATION_HISTORY_KEY].runs) == 0
+
+
+def test_copilot_with_key_uses_audited_ai_draft(monkeypatch) -> None:
+    reply = json.dumps(
+        {
+            "intent": "fail_link",
+            "entity_ids": ["ab"],
+            "numeric_literals": [],
+            "demand_names": [],
+            "question": "",
+            "reason": "",
+        }
+    )
+    monkeypatch.setattr(
+        simulation_lab,
+        "_copilot_provider",
+        lambda: FakeProvider([reply]),
+    )
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = _twin_with_demand()
+    at.session_state[state.LLM_SESSION_KEY] = "session-only-test-key"
+    open_page(at, "Simulation Lab")
+
+    at.text_input(key="simulation_copilot_sentence").set_value(
+        "please take the ab link down"
+    )
+    at.button(key="simulation_copilot_interpret").click().run()
+
+    assert not at.exception
+    assert at.text_area(key="simulation_copilot_preview")
+    assert any("AI draft" in caption.value for caption in at.caption)
+    assert len(at.session_state[state.SIMULATION_HISTORY_KEY].runs) == 0
+    rendered = "\n".join(
+        [caption.value for caption in at.caption]
+        + [element.value for element in at.markdown]
+    )
+    assert "session-only-test-key" not in rendered
 
 
 def test_simulation_lab_renders_e5_controls() -> None:

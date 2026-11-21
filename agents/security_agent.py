@@ -42,13 +42,17 @@ SECURITY_EXPLANATION_PROMPT = (
 )
 
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
-_FORBIDDEN_EXPLANATION_TERMS = (
+
+# Public aliases let the copilot prose auditor reuse the exact numeric-token
+# and out-of-scope vocabulary already enforced for security explanations.
+FORBIDDEN_EXPLANATION_TERMS: tuple[str, ...] = (
     "attack",
     "cve-",
     "exploit",
     "penetration test",
     "vulnerability scan",
 )
+_FORBIDDEN_EXPLANATION_TERMS = FORBIDDEN_EXPLANATION_TERMS
 
 
 class SecurityGate(str, Enum):
@@ -233,14 +237,20 @@ def _deterministic_explanation(
     )
 
 
-def _numeric_tokens(text: str) -> tuple[str, ...]:
+def numeric_tokens(text: str) -> tuple[str, ...]:
+    """Return numeric tokens using the security agent's existing rule."""
     return tuple(match.group() for match in _NUMBER.finditer(text))
 
 
+_numeric_tokens = numeric_tokens
+
+
 __all__ = [
+    "FORBIDDEN_EXPLANATION_TERMS",
     "SECURITY_EXPLANATION_PROMPT",
     "SecurityAgent",
     "SecurityAgentInput",
     "SecurityAgentOutput",
     "SecurityGate",
+    "numeric_tokens",
 ]

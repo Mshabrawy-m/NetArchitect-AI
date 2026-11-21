@@ -24,17 +24,21 @@ import streamlit as st
 from pydantic import ValidationError
 
 from config.limits import (
+    MAX_COPILOT_TEXT_CHARS,
     MAX_N2_PAIRS,
     MAX_SCENARIOS,
     MAX_SHARED_RISK_GROUPS,
     MAX_SHARED_RISK_MEMBERS,
     MAX_SIMULATION_RUNTIME_SECONDS,
 )
+from config.settings import get_settings
 from core.exceptions import InputError, NetArchitectError
 from core.inputs import parse_json_text
 from core.schemas.routing import TrafficDemand
 from core.schemas.scenario import Scenario, ScenarioType
 from digital_twin import DigitalTwin, SharedRiskGroup, validate_twin
+from services.copilot import interpret_scenario
+from services.llm import GroqProvider
 from simulation import (
     DEFAULT_COMPARISON_MODES,
     MODEL_NOTE,
@@ -75,6 +79,9 @@ SHOW_UNCHANGED_PATHS_KEY = "simulation_show_unchanged_paths"
 SWEEP_CANCEL_KEY = "simulation_sweep_cancel"
 SWEEP_CURSOR_KEY = "simulation_sweep_cursor_value"
 SWEEP_SLICE_KEY = "simulation_sweep_slice_size"
+COPILOT_SENTENCE_KEY = "simulation_copilot_sentence"
+COPILOT_RESULT_KEY = "simulation_copilot_result"
+COPILOT_PREVIEW_KEY = "simulation_copilot_preview"
 
 ROUTING_MODE_LABELS: dict[RoutingMode, str] = {
     RoutingMode.single_path: "Single path (legacy)",
@@ -783,6 +790,110 @@ def _build_scenario() -> Scenario:
         affected_nodes=nodes,
         parameters=parameters,
     )
+
+
+def _copilot_provider():
+    """Build a bounded provider, or ``None`` on the deterministic no-key path."""
+    key = state.get_llm_session_key() or get_settings().GROQ_API_KEY.strip()
+    if not key:
+        return None
+    return GroqProvider.from_settings(
+        api_key=key,
+        budget=state.get_llm_budget(),
+    )
+
+
+def _apply_interpreted_scenario(scenario: Scenario) -> None:
+    """Fill the manual form only after the user confirms an editable preview."""
+    state.session_set("simulation_scenario_id", scenario.id)
+    state.session_set("simulation_scenario_name", scenario.name)
+    state.session_set("simulation_scenario_description", scenario.description)
+    state.session_set("simulation_scenario_type", SCENARIO_LABELS[scenario.type])
+    state.session_set("simulation_affected_links", list(scenario.affected_links))
+    state.session_set("simulation_affected_nodes", list(scenario.affected_nodes))
+    factor = scenario.parameters.get("factor")
+    if factor is not None:
+        state.session_set("simulation_traffic_factor", float(factor))
+    demand_names = scenario.parameters.get("demand_names")
+    if demand_names is not None:
+        state.session_set("simulation_traffic_demands", list(demand_names))
+
+
+def _render_copilot_interpretation(twin: DigitalTwin) -> None:
+    st.subheader("Describe a scenario")
+    st.caption(
+        "One short sentence in English or Arabic becomes an editable scenario "
+        "draft. Deterministic parsing runs first and needs no API key; free-form "
+        "sentences use the optional AI interpreter. Nothing is run until you "
+        "confirm the scenario in the form below."
+    )
+    st.text_input(
+        "Scenario sentence",
+        key=COPILOT_SENTENCE_KEY,
+        max_chars=MAX_COPILOT_TEXT_CHARS,
+        placeholder="fail link ab  ·  scale traffic by 50%  ·  عطل الجهاز a",
+    )
+    if st.button("Interpret sentence", key="simulation_copilot_interpret"):
+        sentence = str(state.session_get(COPILOT_SENTENCE_KEY, ""))
+        try:
+            result = interpret_scenario(
+                sentence,
+                twin,
+                provider=_copilot_provider(),
+                cache=state.get_copilot_cache(),
+                trace=state.get_copilot_trace(),
+            )
+        except (NetArchitectError, ValidationError, ValueError) as error:
+            st.error(format_error(error), title="Interpretation failed")
+            return
+        state.session_set(COPILOT_RESULT_KEY, result)
+        state.session_set(
+            COPILOT_PREVIEW_KEY,
+            result.scenario.model_dump_json(indent=2) if result.scenario else "",
+        )
+
+    result = state.session_get(COPILOT_RESULT_KEY)
+    if result is None:
+        return
+    for clarification in result.clarifications:
+        st.info(clarification.question)
+    if result.scenario is None:
+        st.caption(
+            f"Interpretation source: {result.source.value}. No scenario was run."
+        )
+        return
+
+    source_label = {
+        "deterministic": "deterministic parser",
+        "ai": "AI draft (audited)",
+        "unavailable": "unavailable",
+    }.get(result.source.value, result.source.value)
+    st.caption(
+        f"Draft from {source_label} · prompt {result.prompt_id} v{result.prompt_version}"
+        + (" · cache hit" if result.cache_hit else "")
+    )
+    edited = st.text_area(
+        "Editable scenario (JSON)",
+        key=COPILOT_PREVIEW_KEY,
+        height=180,
+    )
+    if st.button(
+        "Use in scenario form",
+        key="simulation_copilot_apply",
+        type="primary",
+    ):
+        try:
+            scenario = Scenario.model_validate_json(edited)
+            validate_scenario(twin, scenario)
+        except (NetArchitectError, ValidationError, ValueError) as error:
+            st.error(format_error(error), title="Scenario draft rejected")
+            return
+        _apply_interpreted_scenario(scenario)
+        st.success(
+            "The scenario was copied into the form. Review it below, then run "
+            "it explicitly with 'Run scenario'."
+        )
+        st.rerun()
 
 
 def _render_scenario_builder(twin: DigitalTwin) -> None:
@@ -1931,6 +2042,8 @@ def render() -> None:
     _render_demand_editor(twin)
     st.divider()
     _render_shared_risk_editor(twin)
+    st.divider()
+    _render_copilot_interpretation(twin)
     st.divider()
     _render_scenario_builder(twin)
     st.divider()

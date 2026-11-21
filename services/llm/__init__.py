@@ -14,10 +14,20 @@ from .models import (
     MessageRole,
     ProviderStatus,
 )
+from .prompts import (
+    EXPLAIN_RESULT,
+    INTERPRET_SCENARIO,
+    PROMPTS,
+    PromptSpec,
+    get_prompt,
+)
 from .provider import LLMProvider
 from .structured import extract_json, validate_structured
 
 __all__ = [
+    "EXPLAIN_RESULT",
+    "INTERPRET_SCENARIO",
+    "PROMPTS",
     "GroqProvider",
     "HTTPResult",
     "LLMMessage",
@@ -25,10 +35,12 @@ __all__ = [
     "LLMResponse",
     "LLMUsage",
     "MessageRole",
+    "PromptSpec",
     "ProviderStatus",
     "RequestBudget",
     "default_transport",
     "extract_json",
+    "get_prompt",
     "provider_status",
     "validate_structured",
 ]

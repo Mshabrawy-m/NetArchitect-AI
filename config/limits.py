@@ -257,3 +257,19 @@ MAX_IDENTIFIER_CHARS: int = 128
 # Largest absolute numeric magnitude accepted from untrusted JSON or CSV input.
 # Values beyond this are rejected with a typed finding before model projection.
 MAX_INPUT_NUMERIC_MAGNITUDE: float = 1e12
+
+# Maximum characters accepted in one copilot scenario sentence. This is a UI
+# input bound, not a token budget; deterministic parsing always runs first.
+MAX_COPILOT_TEXT_CHARS: int = 1_000
+
+# Maximum optional AI explanation characters shown by a copilot "why?" button.
+MAX_COPILOT_EXPLANATION_CHARS: int = 1_200
+
+# Maximum deterministic suggestions produced by one copilot suggest call. Every
+# suggestion is re-evaluated by an engineering engine before it is ranked.
+MAX_COPILOT_SUGGESTIONS: int = 8
+
+# Bounded session stores used by the copilot features. None grows without limit.
+MAX_COPILOT_DECISIONS: int = 40
+MAX_COPILOT_CACHE_ENTRIES: int = 24
+MAX_COPILOT_TRACE_ENTRIES: int = 40
