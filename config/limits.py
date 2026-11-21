@@ -81,6 +81,15 @@ MAX_ROUTE_PROBE_DEVICES: int = 8
 # enough for an interactive free-tier session.
 MAX_OPTIMIZATION_PROPOSALS: int = 12
 
+# Maximum high-criticality zones with an individual inert microsegmentation
+# suggestion. Each suggestion recomputes before/after modeled metrics, so the
+# cap keeps interactive analysis bounded on the free tier.
+MAX_MICROSEGMENTATION_PROPOSALS: int = 4
+
+# Maximum inert rules emitted across one microsegmentation suggestion. The grid
+# is large on paper, so the cap keeps the proposal list reviewable.
+MAX_MICROSEGMENTATION_RULES: int = 48
+
 # Maximum number of snapshots retained for one digital twin.
 MAX_SNAPSHOTS: int = 20
 

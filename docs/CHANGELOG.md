@@ -2,6 +2,28 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - S4: zero-trust microsegmentation on feature/v2-security
+
+### Added
+- S4: inert microsegmentation suggestions for high-criticality zones. Allow
+  rules are strictly limited to demand-implied zone pairs and named services;
+  lower-trust pairs with no modeled need get explicit denies. Each suggestion
+  shows before/after segmentation score, reachable pair count, and max criticality
+  reached.
+- Additive optional `SecurityAnalysis.microsegmentation` field and bounded
+  `MAX_MICROSEGMENTATION_PROPOSALS=4`, `MAX_MICROSEGMENTATION_RULES=48`.
+- Explicit selection creates a NEW twin and can emit a C4
+  `security_proposal_accepted` decision through an injected callback.
+
+### Changed
+- No schema version bump (`TWIN_SCHEMA_VERSION` stays `2`); no new runtime
+  dependency, thread, worker, or app disk write. Described as design-level
+  alignment with common practice only, with no compliance claim.
+
+### Evidence
+- `pytest -q`: `1249 passed, 6 deselected in 47.72s`.
+- `ruff check .`: `All checks passed!`.
+
 ## 2026-11-21 - S3: deterministic policy optimizer on feature/v2-security
 
 ### Added

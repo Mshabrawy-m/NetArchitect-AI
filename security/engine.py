@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from core.schemas.validation import Severity
 
 from .catalog import evaluate_design_rules
+from .microsegmentation import build_microsegmentation_plan
 from .models import (
     FlowCheckResult,
     FlowRequest,
@@ -140,6 +141,7 @@ def analyze_design(
         blast_radii=reachability.blast_radii,
     )
     optimizer = build_optimization_plan(twin, security_model, flows=flows)
+    microsegmentation = build_microsegmentation_plan(twin, security_model, flows=flows)
     return SecurityAnalysis(
         model=security_model,
         findings=findings,
@@ -151,6 +153,7 @@ def analyze_design(
         reachability=reachability,
         segmentation=segmentation,
         optimizer=optimizer,
+        microsegmentation=microsegmentation,
     )
 
 

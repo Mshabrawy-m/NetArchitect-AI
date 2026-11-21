@@ -14,6 +14,12 @@ from .catalog import (
 )
 from .derivation import derive_default_security_model
 from .engine import analyze_design
+from .microsegmentation import (
+    MICROSEGMENTATION_NOTE,
+    MicrosegmentationDecision,
+    accept_microsegmentation_proposals,
+    build_microsegmentation_plan,
+)
 from .models import (
     POLICY_OPTIMIZER_NOTE,
     POLICY_REACHABILITY_NOTE,
@@ -27,6 +33,8 @@ from .models import (
     FlowCheckResult,
     FlowRequest,
     FlowVerdict,
+    MicrosegmentationPlan,
+    MicrosegmentationProposal,
     OptimizationKind,
     OptimizationPlan,
     OptimizationProposal,
@@ -41,6 +49,7 @@ from .models import (
     RiskAssessment,
     RiskLevel,
     RiskTerm,
+    RuleAddition,
     RuleChange,
     SecurityAnalysis,
     SecurityFinding,
@@ -105,6 +114,7 @@ __all__ = [
     "DEFAULT_ALLOW_BONUS",
     "DEFAULT_WEIGHT",
     "LEAST_PRIVILEGE_WEIGHT",
+    "MICROSEGMENTATION_NOTE",
     "OVERSIZED_SUBNET_RATIO",
     "POLICY_OPTIMIZER_NOTE",
     "POLICY_REACHABILITY_NOTE",
@@ -124,6 +134,9 @@ __all__ = [
     "FlowCheckResult",
     "FlowRequest",
     "FlowVerdict",
+    "MicrosegmentationDecision",
+    "MicrosegmentationPlan",
+    "MicrosegmentationProposal",
     "OptimizationDecision",
     "OptimizationKind",
     "OptimizationPlan",
@@ -139,6 +152,7 @@ __all__ = [
     "RiskAssessment",
     "RiskLevel",
     "RiskTerm",
+    "RuleAddition",
     "RuleChange",
     "SecurityAnalysis",
     "SecurityFinding",
@@ -152,6 +166,7 @@ __all__ = [
     "Zone",
     "ZoneTransition",
     "ZoneType",
+    "accept_microsegmentation_proposals",
     "accept_optimization_proposals",
     "accept_proposed_rules",
     "add_assumption",
@@ -164,6 +179,7 @@ __all__ = [
     "build_blast_radii",
     "build_decision_table",
     "build_exposure_findings",
+    "build_microsegmentation_plan",
     "build_optimization_plan",
     "build_proposals",
     "build_reachability_matrix",

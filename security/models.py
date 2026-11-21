@@ -560,6 +560,47 @@ class OptimizationPlan(DisclosedModel):
     proposals: tuple[OptimizationProposal, ...] = Field(default_factory=tuple)
 
 
+MICROSEGMENTATION_NOTE = (
+    "Modeled design-time zero-trust microsegmentation. Suggestions are inert "
+    "rule additions derived only from demand-implied needs; they are not device "
+    "configuration and do not describe an attack path or exploit chain."
+)
+
+
+class RuleAddition(DisclosedModel):
+    """One inert modeled rule addition with its design-time reason."""
+
+    rule: FirewallRule
+    reason: str
+
+
+class MicrosegmentationProposal(DisclosedModel):
+    """Inert microsegmentation suggestion for one high-criticality zone."""
+
+    id: str
+    zone_id: str
+    title: str
+    explanation: str
+    new_rules: tuple[RuleAddition, ...] = Field(min_length=1)
+    allow_pairs: tuple[str, ...] = Field(default_factory=tuple)
+    default_deny_requested: bool = False
+    before_score: int = Field(ge=0, le=100)
+    after_score: int = Field(ge=0, le=100)
+    before_reachable_count: int = Field(ge=0)
+    after_reachable_count: int = Field(ge=0)
+    before_max_criticality_reached: int = Field(ge=0)
+    after_max_criticality_reached: int = Field(ge=0)
+
+
+class MicrosegmentationPlan(DisclosedModel):
+    """Bounded inert microsegmentation suggestions for one modeled design."""
+
+    note: str = MICROSEGMENTATION_NOTE
+    model: SecurityModel
+    flows_modeled: int = Field(ge=0)
+    proposals: tuple[MicrosegmentationProposal, ...] = Field(default_factory=tuple)
+
+
 class SegmentationInput(DisclosedModel):
     """One visible weighted contribution to the segmentation score."""
 
@@ -603,9 +644,11 @@ class SecurityAnalysis(DisclosedModel):
     reachability: ReachabilityReport | None = None
     segmentation: SegmentationScore | None = None
     optimizer: OptimizationPlan | None = None
+    microsegmentation: MicrosegmentationPlan | None = None
 
 
 __all__ = [
+    "MICROSEGMENTATION_NOTE",
     "POLICY_OPTIMIZER_NOTE",
     "POLICY_REACHABILITY_NOTE",
     "SECURITY_DISCLAIMER",
@@ -618,6 +661,8 @@ __all__ = [
     "FlowCheckResult",
     "FlowRequest",
     "FlowVerdict",
+    "MicrosegmentationPlan",
+    "MicrosegmentationProposal",
     "OptimizationKind",
     "OptimizationPlan",
     "OptimizationProposal",
@@ -632,6 +677,7 @@ __all__ = [
     "RiskAssessment",
     "RiskLevel",
     "RiskTerm",
+    "RuleAddition",
     "RuleChange",
     "SecurityAnalysis",
     "SecurityFinding",

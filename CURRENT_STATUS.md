@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: v1.0.0 released; V2 security package on `feature/v2-security`
-- Current task: S1-S3 complete; S4-S6 in progress
-- Overall status: `feature/v2-tech` (`ed3312f`), `feature/v2-design` (`52ef456`), `feature/v2-engine`, and `feature/v2-copilot` were merged and pushed to `main` (latest `54ba6a2`). `feature/v2-security` adds deterministic, offline design-time security modeling: S1 zone policy reachability/bounded blast radius, S2 segmentation scoring, and S3 policy optimization are complete. All additions are additive optional fields: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
+- Current task: S1-S4 complete; S5-S6 in progress
+- Overall status: `feature/v2-tech` (`ed3312f`), `feature/v2-design` (`52ef456`), `feature/v2-engine`, and `feature/v2-copilot` were merged and pushed to `main` (latest `54ba6a2`). `feature/v2-security` adds deterministic, offline design-time security modeling: S1 zone policy reachability/bounded blast radius, S2 segmentation scoring, S3 policy optimization, and S4 microsegmentation suggestions are complete. All additions are additive optional fields: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
 - Last updated: 2026-11-21
 - Branch: `feature/v2-security` (created from updated `main`)
 
@@ -49,6 +49,17 @@
   proposal kind, proof correctness, NEW-twin/C4 behavior, legacy JSON, bounds,
   and a bounded Hypothesis cross-check against `evaluate_policy`. `pytest -q`
   1241 passed, 6 deselected; `ruff check .` clean.
+- S4: `security/microsegmentation.py` adds inert, demand-scoped zero-trust
+  suggestions for zones with designer-set criticality >= 4. New allow rules are
+  a strict subset of demand-implied zone-pair/services needs; explicit denies
+  cover lower-trust pairs with no modeled need, and default deny is requested
+  when the baseline default is allow. Each proposal shows before/after
+  segmentation score, reachable inter-zone pair count, and max criticality
+  reached (S1/S2 engines). Selection applies to a NEW twin only and optionally
+  emits a C4 `security_proposal_accepted` decision. Bounds:
+  `MAX_MICROSEGMENTATION_PROPOSALS=4`, `MAX_MICROSEGMENTATION_RULES=48`.
+  `SecurityAnalysis.microsegmentation` is additive and optional. `pytest -q`
+  1249 passed, 6 deselected; `ruff check .` clean.
 
 ## V2 package (feature/v2-tech)
 
