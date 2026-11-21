@@ -12,17 +12,30 @@ from optimization import (
     OptimizationHistory,
     run_optimization,
 )
+from simulation import twin_fingerprint
 from tests.unit.optimization.helpers import settings, tiny_twin
-from tests.unit.simulation.helpers import diamond_twin, make_demand
+from tests.unit.simulation.helpers import diamond_twin, line_twin, make_demand
 from tests.unit.ui.nav_helpers import open_page
 from ui import state
-from ui.pages.optimization_center import ALGORITHM_LABELS, SNAPSHOT_LABEL_KEY
+from ui.pages.optimization_center import (
+    ALGORITHM_LABELS,
+    SNAPSHOT_LABEL_KEY,
+    SUGGESTION_APPLIED_KEY,
+    SUGGESTION_REPORT_KEY,
+)
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 
 
 def _twin_with_demand():
     return diamond_twin(demands=(make_demand("a-to-d", "a", "d"),))
+
+
+def _overloaded_twin():
+    return line_twin(
+        demands=(make_demand("a-to-c", "a", "c", bandwidth_mbps=150.0),),
+        capacity_mbps=100.0,
+    )
 
 
 def _retained_nsga2_run():
@@ -186,3 +199,35 @@ def test_optimization_center_e5_downloads_after_applying_controls() -> None:
     assert not at.exception
     assert at.download_button(key="optimization_download_sensitivity_json")
     assert at.download_button(key="optimization_download_sensitivity_csv")
+
+
+def test_copilot_suggestions_work_without_key_and_require_confirmation() -> None:
+    twin = _overloaded_twin()
+    baseline = twin_fingerprint(twin)
+    at = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    at.session_state[state.TWIN_KEY] = twin
+    open_page(at, "Optimization Center")
+
+    assert not at.exception
+    assert at.button(key="copilot_suggest")
+    assert at.session_state.get(state.LLM_SESSION_KEY, "") == ""
+
+    at.button(key="copilot_suggest").click().run()
+
+    assert not at.exception
+    assert SUGGESTION_REPORT_KEY in at.session_state
+    assert at.selectbox(key="copilot_suggestion_select")
+    assert at.button(key="copilot_apply_suggestion")
+    assert state.SNAPSHOTS_KEY not in at.session_state
+    assert twin_fingerprint(at.session_state[state.TWIN_KEY]) == baseline
+
+    at.button(key="copilot_apply_suggestion").click().run()
+
+    assert not at.exception
+    snapshots = at.session_state[state.SNAPSHOTS_KEY].snapshots
+    assert len(snapshots) == 1
+    assert twin_fingerprint(at.session_state[state.TWIN_KEY]) == baseline
+    assert at.session_state[SUGGESTION_APPLIED_KEY] != baseline
+    assert at.session_state[SUGGESTION_APPLIED_KEY] == twin_fingerprint(
+        snapshots[0].twin
+    )

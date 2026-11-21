@@ -24,6 +24,7 @@ import config.limits
 from config.limits import (
     DEFAULT_OPTIMIZATION_RUNTIME_SECONDS,
     DEFAULT_SENSITIVITY_RUNTIME_SECONDS,
+    MAX_COPILOT_SUGGESTIONS,
     MAX_EVALUATIONS,
     MAX_OPTIMIZATION_RUNS,
     MAX_OPTIMIZATION_RUNTIME_SECONDS,
@@ -67,7 +68,8 @@ from optimization import (
     sensitivity_to_csv,
     sensitivity_to_json,
 )
-from simulation import twin_fingerprint
+from services.copilot import SuggestionReport, apply_suggestion, suggest
+from simulation import FailureSweepDepth, run_failure_sweep, twin_fingerprint
 from ui import formatting, i18n, state, theme
 from ui.components import csv_bytes, format_error, model_estimate_note, page_header
 from ui.components.editors import bump_editor_key, editor_key
@@ -78,6 +80,10 @@ FLASH_KEY = "optimization_flash"
 HISTORY_SELECT_KEY = "optimization_history_select"
 INSPECT_KEY = "optimization_candidate_select"
 SNAPSHOT_LABEL_KEY = "optimization_snapshot_label"
+SUGGESTION_REPORT_KEY = "copilot_suggestion_report"
+SUGGESTION_SELECT_KEY = "copilot_suggestion_select"
+SUGGESTION_APPLIED_KEY = "copilot_suggestion_applied_fingerprint"
+SUGGESTION_SWEEP_LIMIT = MAX_COPILOT_SUGGESTIONS
 
 ALGORITHM_LABELS: dict[Algorithm, str] = {
     Algorithm.greedy: "Greedy hill-climb (deterministic baseline)",
@@ -1712,6 +1718,109 @@ def _render_sensitivity(twin: DigitalTwin) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Deterministic suggestions
+# ---------------------------------------------------------------------------
+
+
+def _build_suggestion_report(twin: DigitalTwin) -> SuggestionReport:
+    """Evaluate bounded fixes with the deterministic engines; no LLM is used."""
+    sweep = run_failure_sweep(
+        twin,
+        depth=FailureSweepDepth.n1,
+        limit=SUGGESTION_SWEEP_LIMIT,
+    )
+    return suggest(twin, sweep=sweep)
+
+
+def _render_suggestions(twin: DigitalTwin) -> None:
+    st.subheader("Deterministic suggestions")
+    st.caption(
+        "Findings from single points of failure, overloaded links, security "
+        "design rules, and the worst failure-sweep case are re-evaluated by the "
+        "existing engines. No API key is needed and no language model writes a "
+        "score or a twin. Applying a suggestion creates a NEW twin snapshot; the "
+        "baseline stays unchanged."
+    )
+    if st.button("Suggest fixes", key="copilot_suggest"):
+        try:
+            report = _build_suggestion_report(twin)
+        except (NetArchitectError, ValidationError, ValueError) as error:
+            st.error(format_error(error), title="Suggestion failed")
+        else:
+            state.session_set(SUGGESTION_REPORT_KEY, report)
+            state.session_delete(SUGGESTION_SELECT_KEY)
+            state.session_delete(SUGGESTION_APPLIED_KEY)
+
+    report = state.session_get(SUGGESTION_REPORT_KEY)
+    if not isinstance(report, SuggestionReport):
+        return
+
+    if twin_fingerprint(twin) != report.baseline_fingerprint:
+        st.warning(
+            "The baseline twin changed since these suggestions were computed. "
+            "Run 'Suggest fixes' again before applying one."
+        )
+        return
+    for warning in report.warnings:
+        st.info(warning)
+
+    if not report.suggestions:
+        st.info("No fix improved a deterministic metric for this twin.")
+        return
+
+    selected_id = st.selectbox(
+        "Suggestion",
+        [item.id for item in report.suggestions],
+        format_func=lambda item: (
+            f"{next(s.title for s in report.suggestions if s.id == item)} "
+            f"(score {next(s.score for s in report.suggestions if s.id == item):g})"
+        ),
+        key=SUGGESTION_SELECT_KEY,
+    )
+    suggestion = next(item for item in report.suggestions if item.id == selected_id)
+    st.markdown(f"**{suggestion.title}**")
+    st.caption(suggestion.rationale)
+
+    metric_rows = [
+        {
+            "metric": metric,
+            "baseline": value,
+            "suggested": suggestion.after.get(metric, value),
+        }
+        for metric, value in suggestion.before.items()
+    ]
+    st.dataframe(pd.DataFrame(metric_rows), hide_index=True, width="stretch")
+    direction = "lower" if suggestion.direction == "lower" else "higher"
+    st.caption(
+        f"Ranking metric: {suggestion.primary_metric} "
+        f"({suggestion.primary_before:g} → {suggestion.primary_after:g}, "
+        f"{direction} is better) · score {suggestion.score:g}"
+    )
+
+    applied = state.session_get(SUGGESTION_APPLIED_KEY, "")
+    if applied:
+        st.caption(f"Last applied suggestion created twin {applied[:12]}.")
+    if st.button(
+        "Confirm and save suggested twin",
+        key="copilot_apply_suggestion",
+        type="primary",
+    ):
+        try:
+            built = apply_suggestion(twin, suggestion)
+            fingerprint = twin_fingerprint(built)
+            state.save_twin_snapshot(
+                built,
+                f"{twin.metadata.name} · {suggestion.id}"[:120],
+            )
+        except (NetArchitectError, ValidationError, ValueError) as error:
+            st.error(format_error(error), title="Suggestion was not applied")
+            return
+        state.session_set(SUGGESTION_APPLIED_KEY, fingerprint)
+        _flash("success", f"Saved suggested twin {fingerprint[:12]} as a snapshot.")
+        st.rerun()
+
+
+# ---------------------------------------------------------------------------
 # Page
 # ---------------------------------------------------------------------------
 
@@ -1761,6 +1870,8 @@ def render() -> None:
         settings, algorithm = prepared
         _run_and_store(twin, settings, algorithm)
 
+    st.divider()
+    _render_suggestions(twin)
     st.divider()
     _render_results(twin)
     st.divider()

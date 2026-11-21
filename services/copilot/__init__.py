@@ -22,11 +22,21 @@ from .models import (
     TwinAllowlist,
     audit_prose,
 )
+from .suggest import (
+    CandidateProposal,
+    SecurityProposal,
+    Suggestion,
+    SuggestionKind,
+    SuggestionReport,
+    apply_suggestion,
+    suggest,
+)
 from .trace import PromptTrace, PromptTraceRecord
 
 __all__ = [
     "AIExplanationDraft",
     "CacheKey",
+    "CandidateProposal",
     "Clarification",
     "ClarificationCode",
     "CopilotCache",
@@ -36,10 +46,16 @@ __all__ = [
     "PromptTraceRecord",
     "ScenarioIntent",
     "ScenarioInterpretation",
+    "SecurityProposal",
+    "Suggestion",
+    "SuggestionKind",
+    "SuggestionReport",
     "TwinAllowlist",
+    "apply_suggestion",
     "audit_prose",
     "build_key",
     "input_hash",
     "interpret_scenario",
     "request_structured",
+    "suggest",
 ]
