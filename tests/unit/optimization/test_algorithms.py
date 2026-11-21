@@ -1,4 +1,4 @@
-"""GA/NSGA-II behaviour: feasibility, limits, determinism, and immutability."""
+"""Heuristic algorithm behaviour: feasibility, limits, determinism, immutability."""
 
 from __future__ import annotations
 
@@ -24,12 +24,15 @@ from optimization import (
     run_genetic,
     run_nsga2,
     run_optimization,
+    run_simulated_annealing,
 )
 from simulation import twin_fingerprint
 from tests.unit.optimization.helpers import settings, tiny_twin
 
 
-@pytest.mark.parametrize("runner", [run_genetic, run_nsga2])
+@pytest.mark.parametrize(
+    "runner", [run_genetic, run_nsga2, run_simulated_annealing]
+)
 def test_runs_are_reproducible_for_identical_seed_and_settings(runner) -> None:
     config = settings(max_iterations=6, max_evaluations=300)
     first = runner(tiny_twin(), config)
@@ -37,7 +40,9 @@ def test_runs_are_reproducible_for_identical_seed_and_settings(runner) -> None:
     assert first.model_dump() == second.model_dump()
 
 
-@pytest.mark.parametrize("runner", [run_genetic, run_nsga2])
+@pytest.mark.parametrize(
+    "runner", [run_genetic, run_nsga2, run_simulated_annealing]
+)
 def test_algorithm_never_mutates_the_baseline(runner) -> None:
     baseline = tiny_twin()
     before = twin_fingerprint(baseline)
@@ -46,14 +51,18 @@ def test_algorithm_never_mutates_the_baseline(runner) -> None:
     assert len(baseline.topology.links) == 2
 
 
-@pytest.mark.parametrize("runner", [run_genetic, run_nsga2])
+@pytest.mark.parametrize(
+    "runner", [run_genetic, run_nsga2, run_simulated_annealing]
+)
 def test_algorithm_stops_at_max_evaluations(runner) -> None:
     run = runner(tiny_twin(), settings(max_evaluations=3, max_iterations=20))
     assert run.stop_reason is StopReason.max_evaluations
     assert run.evaluations == 3
 
 
-@pytest.mark.parametrize("runner", [run_genetic, run_nsga2])
+@pytest.mark.parametrize(
+    "runner", [run_genetic, run_nsga2, run_simulated_annealing]
+)
 def test_algorithm_stops_at_runtime_limit(runner) -> None:
     run = runner(
         tiny_twin(),
@@ -64,7 +73,9 @@ def test_algorithm_stops_at_runtime_limit(runner) -> None:
     assert run.baseline.metrics.link_count == 2
 
 
-@pytest.mark.parametrize("runner", [run_genetic, run_nsga2])
+@pytest.mark.parametrize(
+    "runner", [run_genetic, run_nsga2, run_simulated_annealing]
+)
 def test_algorithm_stops_at_max_iterations(runner) -> None:
     run = runner(
         tiny_twin(),
@@ -73,7 +84,9 @@ def test_algorithm_stops_at_max_iterations(runner) -> None:
     assert run.stop_reason is StopReason.max_iterations
 
 
-@pytest.mark.parametrize("runner", [run_genetic, run_nsga2])
+@pytest.mark.parametrize(
+    "runner", [run_genetic, run_nsga2, run_simulated_annealing]
+)
 def test_algorithm_never_recommends_infeasible_candidates(runner) -> None:
     config = settings(
         pool=(),
@@ -90,7 +103,9 @@ def test_algorithm_never_recommends_infeasible_candidates(runner) -> None:
     assert run.pareto_front == ()
 
 
-@pytest.mark.parametrize("runner", [run_genetic, run_nsga2])
+@pytest.mark.parametrize(
+    "runner", [run_genetic, run_nsga2, run_simulated_annealing]
+)
 def test_recommendation_is_the_best_feasible_weighted_candidate(runner) -> None:
     run = runner(tiny_twin(), settings(max_iterations=5, max_evaluations=400))
     feasible = [
@@ -110,6 +125,7 @@ def test_algorithm_enum_has_no_unsound_pso() -> None:
         "greedy",
         "genetic",
         "nsga2",
+        "simulated_annealing",
     }
 
 

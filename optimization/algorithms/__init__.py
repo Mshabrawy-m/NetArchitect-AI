@@ -1,7 +1,8 @@
 """Seeded heuristic algorithms over the discrete optimization design space.
 
-Implemented: the deterministic greedy baseline, a Genetic Algorithm, and
-NSGA-II. Particle Swarm Optimization is intentionally omitted because a
+Implemented: the deterministic greedy baseline, a Genetic Algorithm, NSGA-II,
+and seeded simulated annealing with an optional hybrid start. Particle Swarm
+Optimization is intentionally omitted because a
 continuous velocity vector has no sound mapping onto link-presence bits,
 per-link capacity tiers, and optional cost multipliers without introducing an
 undocumented hybrid scheme.
@@ -36,9 +37,18 @@ from .common import (
 from .dispatch import run_optimization
 from .genetic import run_genetic
 from .nsga2 import run_nsga2
+from .simulated_annealing import (
+    FINAL_TEMPERATURE,
+    INITIAL_TEMPERATURE,
+    NEIGHBOR_ATTEMPTS,
+    run_simulated_annealing,
+)
 
 __all__ = [
+    "FINAL_TEMPERATURE",
+    "INITIAL_TEMPERATURE",
     "MAX_EXHAUSTIVE_SEED",
+    "NEIGHBOR_ATTEMPTS",
     "GenomeSpace",
     "SearchBudget",
     "best_feasible",
@@ -64,5 +74,6 @@ __all__ = [
     "run_genetic",
     "run_nsga2",
     "run_optimization",
+    "run_simulated_annealing",
     "tournament",
 ]

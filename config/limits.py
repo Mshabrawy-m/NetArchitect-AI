@@ -102,6 +102,19 @@ MAX_OPTIMIZATION_RUNTIME_SECONDS: int = 60
 # serializes to about 2.4 MiB, so the worst case is roughly 48 MiB.
 MAX_OPTIMIZATION_RUNS: int = 20
 
+# Maximum number of caller-supplied hybrid-start candidates accepted by one
+# simulated-annealing run. The first candidates are evaluated in order; an
+# over-long list is rejected rather than silently truncated.
+MAX_SA_INITIAL_CANDIDATES: int = 8
+
+# Bounded robustness analysis defaults. Sensitivity runs re-evaluate a small
+# subset of an existing run against perturbed demand/capacity twins, so both the
+# candidate count and the wall-clock budget are capped.
+DEFAULT_SENSITIVITY_RUNTIME_SECONDS: float = 10.0
+MAX_SENSITIVITY_RUNTIME_SECONDS: float = 30.0
+MAX_SENSITIVITY_SCENARIOS: int = 4
+MAX_SENSITIVITY_CANDIDATES: int = 8
+
 # Maximum wall-clock seconds for a single simulation run.
 MAX_SIMULATION_RUNTIME_SECONDS: int = 30
 

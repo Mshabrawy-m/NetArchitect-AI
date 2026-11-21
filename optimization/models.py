@@ -141,6 +141,7 @@ class Algorithm(str, Enum):
     greedy = "greedy"
     genetic = "genetic"
     nsga2 = "nsga2"
+    simulated_annealing = "simulated_annealing"
 
 
 class StopReason(str, Enum):

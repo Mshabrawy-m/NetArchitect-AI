@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +17,8 @@ from optimization import (
     run_to_json_bytes,
 )
 from tests.unit.optimization.helpers import settings, tiny_twin
+
+_FIXTURES = Path(__file__).with_name("fixtures")
 
 
 def _run():
@@ -100,3 +104,13 @@ def test_csv_export_has_seed_settings_baseline_and_candidates() -> None:
     seed_index = header.index("seed")
     assert {row[seed_index] for row in rows} == {str(run.seed)}
     assert first.endswith("\n")
+
+
+def test_default_run_json_and_hash_match_the_pre_e4_fixture() -> None:
+    run = _run()
+    payload = run_to_json_bytes(run)
+
+    assert payload == (_FIXTURES / "e4_legacy_run.json").read_bytes()
+    assert hashlib.sha256(payload).hexdigest() == (
+        _FIXTURES / "e4_legacy_run_hash.txt"
+    ).read_text(encoding="utf-8").strip()

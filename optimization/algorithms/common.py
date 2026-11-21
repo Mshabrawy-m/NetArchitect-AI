@@ -3,7 +3,8 @@
 PSO is intentionally not implemented. A continuous velocity has no sound,
 documented mapping onto the mixed discrete decisions used here (link presence,
 per-link capacity tier, and optional cost multiplier). Implemented algorithms
-are the deterministic greedy baseline, a seeded Genetic Algorithm, and NSGA-II.
+are the deterministic greedy baseline, a seeded Genetic Algorithm, NSGA-II, and
+seeded simulated annealing.
 """
 
 from __future__ import annotations

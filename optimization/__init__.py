@@ -1,9 +1,9 @@
 """Bounded, reproducible multi-objective optimization.
 
 The package is pure Python: no Streamlit, no LLM client, and no new dependency.
-GA, NSGA-II, and the deterministic greedy baseline use only Python and NumPy.
-Every value is a modeled estimate from stated assumptions. A heuristic result
-is never a claim of a global optimum.
+GA, NSGA-II, simulated annealing, and the deterministic greedy baseline use
+only Python and NumPy. Every value is a modeled estimate from stated assumptions.
+A heuristic result is never a claim of a global optimum.
 """
 
 from .algorithms import (
@@ -26,6 +26,7 @@ from .algorithms import (
     run_genetic,
     run_nsga2,
     run_optimization,
+    run_simulated_annealing,
 )
 from .compare import (
     AlgorithmComparison,
@@ -75,13 +76,37 @@ from .objectives import (
     objective_value,
     weighted_score,
 )
+from .rerank import (
+    RERANK_NOTE,
+    ParetoReranking,
+    RerankedCandidate,
+    rerank_pareto_front,
+    reranking_to_csv,
+    reranking_to_json,
+)
+from .sensitivity import (
+    DEFAULT_SENSITIVITY_SCENARIOS,
+    ROBUST_DEFINITION,
+    ROBUST_SCORE_TOLERANCE,
+    SensitivityCase,
+    SensitivityReport,
+    SensitivityScenario,
+    SensitivityScenarioResult,
+    analyze_sensitivity,
+    sensitivity_to_csv,
+    sensitivity_to_json,
+)
 from .space import build_candidate_twin, candidate_changes
 
 __all__ = [
     "COST_NOTE",
+    "DEFAULT_SENSITIVITY_SCENARIOS",
     "DEFAULT_TIERS",
     "MAX_EXHAUSTIVE_SEED",
     "OBJECTIVE_DEFINITIONS",
+    "RERANK_NOTE",
+    "ROBUST_DEFINITION",
+    "ROBUST_SCORE_TOLERANCE",
     "SEARCH_NOTE",
     "Algorithm",
     "AlgorithmComparison",
@@ -106,8 +131,15 @@ __all__ = [
     "OptimizationLimits",
     "OptimizationRun",
     "OptimizationSettings",
+    "ParetoReranking",
+    "RerankedCandidate",
     "SearchBudget",
+    "SensitivityCase",
+    "SensitivityReport",
+    "SensitivityScenario",
+    "SensitivityScenarioResult",
     "StopReason",
+    "analyze_sensitivity",
     "build_candidate_twin",
     "candidate_changes",
     "candidate_hash",
@@ -131,14 +163,20 @@ __all__ = [
     "pareto_front",
     "random_genome",
     "rank_population",
+    "rerank_pareto_front",
+    "reranking_to_csv",
+    "reranking_to_json",
     "resolve_deadline",
     "run_genetic",
     "run_greedy",
     "run_nsga2",
     "run_optimization",
+    "run_simulated_annealing",
     "run_to_csv",
     "run_to_json",
     "run_to_json_bytes",
+    "sensitivity_to_csv",
+    "sensitivity_to_json",
     "trade_off_messages",
     "weighted_score",
 ]
