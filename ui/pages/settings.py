@@ -122,7 +122,7 @@ def _render_budget() -> None:
     budget = state.get_llm_budget()
     snapshot = budget.snapshot()
     st.markdown(f"**{i18n.t('settings.budget')}**")
-    columns = st.columns(3)
+    columns = st.columns(4)
     columns[0].metric(
         i18n.t("settings.requests_used"),
         f"{snapshot['used_calls']}/{snapshot['max_calls']}",
@@ -133,6 +133,9 @@ def _render_budget() -> None:
     )
     columns[2].metric(
         i18n.t("settings.requests_remaining"), snapshot["remaining_calls"]
+    )
+    columns[3].metric(
+        i18n.t("settings.tokens_remaining"), snapshot["remaining_tokens"]
     )
     st.progress(
         min(1.0, snapshot["used_calls"] / max(1, snapshot["max_calls"])),
@@ -147,6 +150,33 @@ def _render_budget() -> None:
         key="llm_budget_reset",
         on_click=state.reset_llm_budget,
     )
+
+
+def _render_cache_and_trace() -> None:
+    """Show bounded cache counters and non-secret prompt trace metadata."""
+    cache = state.get_copilot_cache().snapshot()
+    st.markdown(f"**{i18n.t('settings.cache_title')}**")
+    st.caption(i18n.t("settings.cache_caption"))
+    columns = st.columns(3)
+    columns[0].metric(i18n.t("settings.cache_hits"), cache["hits"])
+    columns[1].metric(i18n.t("settings.cache_misses"), cache["misses"])
+    columns[2].metric(
+        i18n.t("settings.cache_entries"),
+        f"{cache['entries']}/{cache['max_entries']}",
+    )
+    st.button(
+        i18n.t("settings.cache_reset"),
+        key="copilot_cache_reset",
+        on_click=state.reset_copilot_cache,
+    )
+
+    st.markdown(f"**{i18n.t('settings.trace_title')}**")
+    st.caption(i18n.t("settings.trace_caption"))
+    rows = state.peek_copilot_trace().rows()
+    if rows:
+        st.dataframe(list(rows), hide_index=True, width="stretch")
+    else:
+        st.info(i18n.t("settings.trace_empty"))
 
 
 def _render_test_connection(active_key: str) -> None:
@@ -242,6 +272,7 @@ def render() -> None:
     active_key, _ = _render_key_status(settings_key, session_key)
     _render_key_entry()
     _render_budget()
+    _render_cache_and_trace()
     _render_test_connection(active_key)
 
     st.subheader(i18n.t("settings.needs_key"))

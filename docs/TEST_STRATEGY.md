@@ -10,12 +10,13 @@ Run from the repository root:
 & ".venv\Scripts\python.exe" -m pytest -q
 & ".venv\Scripts\python.exe" -m pytest -q -m smoke
 & ".venv\Scripts\python.exe" -m pytest -q -m perf
+& ".venv\Scripts\python.exe" -m pytest -q tests/eval
 & ".venv\Scripts\python.exe" -m ruff check .
 & ".venv\Scripts\python.exe" scripts\profile_phase12.py
 & ".venv\Scripts\python.exe" scripts\profile_phase12.py --no-memory
 ```
 
-`pytest.ini` defines the `smoke` marker, which selects a fast regression subset, and the `perf` marker, which holds opt-in timing budgets with a 2x margin. `addopts = -m "not perf"` excludes timing budgets from default and smoke runs; run them explicitly with `-m perf`. Neither marker replaces the full suite.
+`pytest.ini` defines the `smoke` marker, which selects a fast regression subset, and the `perf` marker, which holds opt-in timing budgets with a 2x margin. `addopts = -m "not perf"` excludes timing budgets from default and smoke runs; run them explicitly with `-m perf`. Neither marker replaces the full suite. Real-provider recording (`scripts/record_llm_responses.py`) is a manual local-only command documented in [LLM evaluation](LLM_EVALUATION.md); it is never run by CI and never commits a key or raw response.
 
 ## Test layers
 
@@ -27,6 +28,7 @@ Run from the repository root:
 | Agent tests | Tool registry, plan validation, orchestrator retries/replans/stop reasons, critic, documentation and security agents | `tests/unit/agents/` |
 | UI tests with `AppTest` | All 15 pages, no-key states, empty states, widget flows, navigation, cache behavior, disclosures | `tests/unit/ui/` |
 | Release acceptance | Blueprint §11/§16 invariants, adversarial input, secret containment, deployment artifacts | `tests/unit/release/` |
+| Copilot golden evaluation | Offline EN/AR interpretation cases with scripted provider, cache/budget verification | `tests/eval/` |
 
 ## Suite composition at `v1.0.0-rc1`
 

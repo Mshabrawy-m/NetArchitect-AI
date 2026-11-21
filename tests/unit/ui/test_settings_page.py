@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 
 from agents import WorkflowState, WorkflowStopReason
 from core.exceptions import LLMProviderError
+from services.copilot import AIExplanationDraft, CopilotCache, PromptTrace, build_key
 from services.llm import LLMResponse, LLMUsage, RequestBudget
 from tests.unit.simulation.helpers import diamond_twin
 from tests.unit.ui.nav_helpers import open_page
@@ -123,10 +124,58 @@ def test_settings_page_shows_and_resets_the_session_budget() -> None:
     assert _metric(at, "Requests used") == f"3/{budget.max_calls}"
     assert _metric(at, "Tokens used") == f"1200/{budget.max_tokens}"
     assert _metric(at, "Requests remaining") == str(budget.max_calls - 3)
+    assert _metric(at, "Tokens remaining") == str(budget.max_tokens - 1_200)
 
     at.button(key="llm_budget_reset").click().run()
     assert _metric(at, "Requests used") == f"0/{budget.max_calls}"
     assert _metric(at, "Requests remaining") == str(budget.max_calls)
+    assert _metric(at, "Tokens remaining") == str(budget.max_tokens)
+
+
+def test_settings_page_shows_and_clears_cache_hits_and_prompt_trace() -> None:
+    cache = CopilotCache(max_entries=3)
+    key = build_key(
+        model="fake-model",
+        prompt_id="copilot.explain",
+        prompt_version="1",
+        schema_name="AIExplanationDraft",
+        payload={"text": "hello"},
+    )
+    cache.put(key, AIExplanationDraft(text="one"))
+    assert cache.get(key, AIExplanationDraft) is not None
+
+    trace = PromptTrace()
+    trace.add(
+        prompt_id="copilot.explain",
+        prompt_version="1",
+        schema_name="AIExplanationDraft",
+        model="fake-model",
+        cache_hit=True,
+    )
+    at = AppTest.from_file(str(APP_PATH), default_timeout=60)
+    at.session_state[state.COPILOT_CACHE_KEY] = cache
+    at.session_state[state.COPILOT_TRACE_KEY] = trace
+    at.run()
+    open_page(at, "Settings")
+
+    assert not at.exception
+    assert _metric(at, "Cache hits") == "1"
+    assert _metric(at, "Cache misses") == "0"
+    assert _metric(at, "Cached entries") == "1/3"
+    trace_frames = [
+        frame.value
+        for frame in at.get("dataframe")
+        if "Prompt" in getattr(frame.value, "columns", [])
+    ]
+    assert trace_frames
+    assert "copilot.explain" in trace_frames[0].to_string()
+    assert at.button(key="copilot_cache_reset")
+
+    at.button(key="copilot_cache_reset").click().run()
+
+    assert not at.exception
+    assert _metric(at, "Cache hits") == "0"
+    assert _metric(at, "Cached entries") == "0/3"
 
 
 def test_settings_page_test_connection_reports_provider_failure(

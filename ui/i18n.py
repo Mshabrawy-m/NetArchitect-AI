@@ -391,9 +391,26 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "settings.requests_used": "Requests used",
         "settings.tokens_used": "Tokens used",
         "settings.requests_remaining": "Requests remaining",
+        "settings.tokens_remaining": "Tokens remaining",
         "settings.request_budget_used": "Request budget used",
         "settings.token_budget_used": "Token budget used",
         "settings.budget_reset": "Reset session budget",
+        "settings.cache_title": "Copilot response cache",
+        "settings.cache_caption": (
+            "Bounded in-session cache keyed by model, prompt version, schema, and "
+            "a hash of the typed input. A cache hit never calls the provider and "
+            "never spends session budget."
+        ),
+        "settings.cache_hits": "Cache hits",
+        "settings.cache_misses": "Cache misses",
+        "settings.cache_entries": "Cached entries",
+        "settings.cache_reset": "Clear response cache",
+        "settings.trace_title": "Prompt trace",
+        "settings.trace_caption": (
+            "Prompt ids, versions, schemas, models, and cache outcomes only. No "
+            "API key, user sentence, or raw model response is recorded."
+        ),
+        "settings.trace_empty": "No copilot language request has been made yet.",
         "settings.connection": "Connection test",
         "settings.connection_caption": (
             "Bounded test: one request, a {seconds}-second timeout, no rate-limit retries, and "
@@ -837,9 +854,26 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "settings.requests_used": "الطلبات المستخدمة",
         "settings.tokens_used": "الرموز المستخدمة",
         "settings.requests_remaining": "الطلبات المتبقية",
+        "settings.tokens_remaining": "الرموز المتبقية",
         "settings.request_budget_used": "ميزانية الطلبات المستخدمة",
         "settings.token_budget_used": "ميزانية الرموز المستخدمة",
         "settings.budget_reset": "إعادة ضبط ميزانية الجلسة",
+        "settings.cache_title": "ذاكرة استجابات المساعد",
+        "settings.cache_caption": (
+            "ذاكرة محدودة في الجلسة مفتاحها الطراز وإصدار المخطط وإصدار التوجيه "
+            "وتجزئة الإدخال المضبوط. إصابة الذاكرة لا تستدعي المزود ولا تستهلك "
+            "ميزانية الجلسة."
+        ),
+        "settings.cache_hits": "إصابات الذاكرة",
+        "settings.cache_misses": "إخفاقات الذاكرة",
+        "settings.cache_entries": "المدخلات المخزنة",
+        "settings.cache_reset": "مسح ذاكرة الاستجابات",
+        "settings.trace_title": "سجل التوجيهات",
+        "settings.trace_caption": (
+            "معرفات التوجيهات وإصداراتها والمخططات والطرازات ونتيجة الذاكرة فقط. "
+            "لا يتم تسجيل مفتاح API أو جملة المستخدم أو الاستجابة الخام."
+        ),
+        "settings.trace_empty": "لم يتم تقديم أي طلب لغوي إلى المساعد بعد.",
         "settings.connection": "اختبار الاتصال",
         "settings.connection_caption": (
             "اختبار محدود: طلب واحد ومهلة {seconds} ثانية دون إعادة محاولة لتحديد "

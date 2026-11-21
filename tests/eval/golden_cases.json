@@ -1,0 +1,446 @@
+[
+  {
+    "id": "en-det-link-01",
+    "language": "en",
+    "kind": "deterministic link failure",
+    "sentence": "fail link ab",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "single_link_failure",
+      "affected_links": ["ab"],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-det-link-02",
+    "language": "en",
+    "kind": "deterministic link failure",
+    "sentence": "disable link cd",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "single_link_failure",
+      "affected_links": ["cd"],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-det-device-01",
+    "language": "en",
+    "kind": "deterministic device failure",
+    "sentence": "fail device b",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "node_failure",
+      "affected_links": [],
+      "affected_nodes": ["b"],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-det-device-02",
+    "language": "en",
+    "kind": "deterministic device failure",
+    "sentence": "fail the device c",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "node_failure",
+      "affected_links": [],
+      "affected_nodes": ["c"],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-det-traffic-01",
+    "language": "en",
+    "kind": "deterministic traffic scale",
+    "sentence": "scale traffic by 50%",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "increased_traffic_demand",
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": 0.5,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-det-traffic-02",
+    "language": "en",
+    "kind": "deterministic traffic scale",
+    "sentence": "increase traffic by 150%",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "increased_traffic_demand",
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": 1.5,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-det-link-01",
+    "language": "ar",
+    "kind": "deterministic link failure",
+    "sentence": "عطل الرابط ab",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "single_link_failure",
+      "affected_links": ["ab"],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-det-link-02",
+    "language": "ar",
+    "kind": "deterministic link failure",
+    "sentence": "افصل الرابط bd",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "single_link_failure",
+      "affected_links": ["bd"],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-det-device-01",
+    "language": "ar",
+    "kind": "deterministic device failure",
+    "sentence": "عطل الجهاز b",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "node_failure",
+      "affected_links": [],
+      "affected_nodes": ["b"],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-det-device-02",
+    "language": "ar",
+    "kind": "deterministic device failure",
+    "sentence": "فشل الجهاز c",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "node_failure",
+      "affected_links": [],
+      "affected_nodes": ["c"],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-det-traffic-01",
+    "language": "ar",
+    "kind": "deterministic traffic scale",
+    "sentence": "زود حركة المرور بنسبة 50%",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "increased_traffic_demand",
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": 0.5,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-det-traffic-02",
+    "language": "ar",
+    "kind": "deterministic traffic scale",
+    "sentence": "زيادة حركة المرور بنسبة 150%",
+    "draft": null,
+    "expect": {
+      "source": "deterministic",
+      "scenario_type": "increased_traffic_demand",
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": 1.5,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-ai-link-01",
+    "language": "en",
+    "kind": "AI link failure",
+    "sentence": "please take the ab link down",
+    "draft": {
+      "intent": "fail_link",
+      "entity_ids": ["ab"],
+      "numeric_literals": [],
+      "demand_names": [],
+      "question": "",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": "single_link_failure",
+      "affected_links": ["ab"],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-ai-device-01",
+    "language": "en",
+    "kind": "AI device failure",
+    "sentence": "kindly take node b offline",
+    "draft": {
+      "intent": "fail_device",
+      "entity_ids": ["b"],
+      "numeric_literals": [],
+      "demand_names": [],
+      "question": "",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": "node_failure",
+      "affected_links": [],
+      "affected_nodes": ["b"],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-ai-traffic-01",
+    "language": "en",
+    "kind": "AI traffic scale",
+    "sentence": "please raise the load to 40 percent",
+    "draft": {
+      "intent": "scale_traffic",
+      "entity_ids": [],
+      "numeric_literals": ["40"],
+      "demand_names": [],
+      "question": "",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": "increased_traffic_demand",
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": 0.4,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "en-ai-clarify-01",
+    "language": "en",
+    "kind": "AI clarification",
+    "sentence": "unrecognizable sentence",
+    "draft": {
+      "intent": "clarify",
+      "entity_ids": [],
+      "numeric_literals": [],
+      "demand_names": [],
+      "question": "Which link should fail?",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": null,
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": "unknown_reference"
+    }
+  },
+  {
+    "id": "en-ai-out-of-scope-01",
+    "language": "en",
+    "kind": "AI out of scope",
+    "sentence": "show me a design recommendation",
+    "draft": {
+      "intent": "out_of_scope",
+      "entity_ids": [],
+      "numeric_literals": [],
+      "demand_names": [],
+      "question": "",
+      "reason": "This is outside scenario interpretation."
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": null,
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": "out_of_scope"
+    }
+  },
+  {
+    "id": "en-ai-reject-01",
+    "language": "en",
+    "kind": "AI invented number rejected",
+    "sentence": "please scale the traffic up",
+    "draft": {
+      "intent": "scale_traffic",
+      "entity_ids": [],
+      "numeric_literals": ["999"],
+      "demand_names": [],
+      "question": "",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": null,
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": "invented_number"
+    }
+  },
+  {
+    "id": "ar-ai-link-01",
+    "language": "ar",
+    "kind": "AI link failure",
+    "sentence": "من فضلك اجعل الرابط ab خارج الخدمة",
+    "draft": {
+      "intent": "fail_link",
+      "entity_ids": ["ab"],
+      "numeric_literals": [],
+      "demand_names": [],
+      "question": "",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": "single_link_failure",
+      "affected_links": ["ab"],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-ai-device-01",
+    "language": "ar",
+    "kind": "AI device failure",
+    "sentence": "من فضلك اجعل الجهاز b خارج الخدمة",
+    "draft": {
+      "intent": "fail_device",
+      "entity_ids": ["b"],
+      "numeric_literals": [],
+      "demand_names": [],
+      "question": "",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": "node_failure",
+      "affected_links": [],
+      "affected_nodes": ["b"],
+      "factor": null,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-ai-traffic-01",
+    "language": "ar",
+    "kind": "AI traffic scale",
+    "sentence": "من فضلك ارفع الحمل إلى 40 في المئة",
+    "draft": {
+      "intent": "scale_traffic",
+      "entity_ids": [],
+      "numeric_literals": ["40"],
+      "demand_names": [],
+      "question": "",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": "increased_traffic_demand",
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": 0.4,
+      "clarification_code": null
+    }
+  },
+  {
+    "id": "ar-ai-clarify-01",
+    "language": "ar",
+    "kind": "AI clarification",
+    "sentence": "جملة غير مفهومة",
+    "draft": {
+      "intent": "clarify",
+      "entity_ids": [],
+      "numeric_literals": [],
+      "demand_names": [],
+      "question": "أي رابط تريد إفشاله؟",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": null,
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": "unknown_reference"
+    }
+  },
+  {
+    "id": "ar-ai-out-of-scope-01",
+    "language": "ar",
+    "kind": "AI out of scope",
+    "sentence": "هل يمكنك فحص الثغرات؟",
+    "draft": {
+      "intent": "out_of_scope",
+      "entity_ids": [],
+      "numeric_literals": [],
+      "demand_names": [],
+      "question": "",
+      "reason": "هذا خارج نطاق السيناريوهات."
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": null,
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": "out_of_scope"
+    }
+  },
+  {
+    "id": "ar-ai-reject-01",
+    "language": "ar",
+    "kind": "AI invented number rejected",
+    "sentence": "من فضلك زد الحمل",
+    "draft": {
+      "intent": "scale_traffic",
+      "entity_ids": [],
+      "numeric_literals": ["999"],
+      "demand_names": [],
+      "question": "",
+      "reason": ""
+    },
+    "expect": {
+      "source": "ai",
+      "scenario_type": null,
+      "affected_links": [],
+      "affected_nodes": [],
+      "factor": null,
+      "clarification_code": "invented_number"
+    }
+  }
+]

@@ -88,6 +88,7 @@ These checks were run locally on Windows. A real browser, a deployed Community C
 - [API contracts](docs/API_CONTRACTS.md) - Python-level engineering, agent, reporting, and LLM contracts.
 - [Agent specifications](docs/AGENT_SPECIFICATIONS.md) - allowlists, workflow, budgets, traces, and no-key behavior.
 - [Test strategy](docs/TEST_STRATEGY.md) - test layers, evidence, profile, scans, and unverified items.
+- [LLM evaluation](docs/LLM_EVALUATION.md) - offline golden set, cache checks, and local-only response recording.
 - [Deployment](docs/DEPLOYMENT.md) - exact manual Streamlit Community Cloud steps.
 - [Release audit](docs/RELEASE_AUDIT.md) - criterion-by-criterion Blueprint §11/§16 review.
 - [Runtime limits](docs/RUNTIME_LIMITS.md) - every compiled cap and input guard.

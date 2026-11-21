@@ -6,6 +6,7 @@ venv/
 env/
 .env
 .streamlit/secrets.toml
+tests/eval/recorded/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
