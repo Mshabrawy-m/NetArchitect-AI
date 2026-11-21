@@ -2,6 +2,37 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - C1-C5: deterministic copilot on feature/v2-copilot
+
+### Added
+- C1: optional EN/AR sentence interpretation in Simulation Lab with a
+  deterministic-first parser, typed audited drafts, editable preview, and no
+  execution before confirmation.
+- C2: deterministic improvement suggestions from SPOF, overloaded links,
+  security design issues, and failure sweeps; exact before/after metrics and
+  explicit apply-to-new-snapshot confirmation.
+- C3: auditable "why?" explanations for routes, findings, simulation results,
+  and optimization candidates; deterministic text always present, optional AI
+  prose labeled and audited.
+- C4: bounded typed decision log with injected timestamps, Digital Twin JSON
+  export, and a provenance-tagged `design_decisions` report section.
+- C5: Settings cache/budget/trace visibility, a 24-case EN/AR golden eval set
+  using `FakeProvider`, and a local-only redacting response recorder.
+
+### Changed
+- No persisted schema version bump: `TWIN_SCHEMA_VERSION` stays `2`; all copilot
+  additions are additive and key-free flows remain complete.
+- Report section order now includes `design_decisions` before `assumptions`.
+- No new runtime dependency, thread, worker, or app disk write; cache, trace,
+  decision, and golden-eval state stay bounded and secret-free.
+
+### Evidence
+- `pytest -q`: `1213 passed, 5 deselected in 43.92s`.
+- `ruff check .`: `All checks passed!`.
+- `pytest -q -m smoke`: `13 passed, 1205 deselected in 5.80s`.
+- `pytest -q tests/eval`: `25 passed in 0.87s` (24 golden cases + coverage check).
+- Not verified: live Groq responses, browser rendering, and Cloud deployment.
+
 ## 2026-11-21 - E1-E5: bounded engine power and UI/report wiring
 
 ### Added

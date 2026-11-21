@@ -175,6 +175,53 @@
   state 7 passed, reporting/cache 43 passed, UI pages 26 passed. Not verified in
   this package: real-browser rendering, Cloud timing/RSS, and Linux CI.
 
+## V2 copilot package (feature/v2-copilot)
+
+- Scope: C1-C5 add optional copilot interpretation, deterministic explanations,
+  a session decision log, and cache/budget visibility. No standalone chatbot,
+  no sparkle icons, no "Ask AI" on unrelated pages. Free-tier rules are intact:
+  stdlib HTTP only for optional provider calls, no new runtime dependency, no
+  threads, no app disk writes, flat `requirements.txt`, and bounded session,
+  cache, trace, and decision state. The LLM interprets or explains only; every
+  scenario, verdict, decision, execution, and mutation stays in deterministic
+  engines.
+- C1 (`39dae53`): deterministic-first EN/AR sentence parser, typed
+  `ScenarioInterpretation`, injected allowlist/number audits, editable preview,
+  and no scenario run before confirmation. LLM calls: 0 for supported phrases,
+  at most 1 audited draft (plus bounded repair retries) otherwise.
+- C2 (`b25eb6a`): deterministic `suggest` from SPOF, overloaded links, security
+  design issues, and worst failure-sweep cases; typed proposals; exact
+  before/after metrics; engine re-evaluation; apply to a NEW snapshot only after
+  confirmation. No-key path works fully. LLM calls: 0.
+- C3 (`efa86f8`): "why?" buttons for routes, findings, simulation results, and
+  optimization picks. Deterministic text is always shown; optional AI prose is
+  labeled, audited for invented numbers/out-of-scope content/verdict language,
+  and never sets a level or verdict. LLM calls: 0 without a key, at most 1 per
+  requested explanation.
+- C4 (`93a99bf`): frozen `DecisionRecord`/`DecisionLog` with injected UTC
+  timestamps and `MAX_COPILOT_DECISIONS=40` bound. Explicitly recorded after
+  accepted suggestions, applied samples/snapshots, accepted security proposals,
+  and selected optimization candidates. Viewed/exported in Digital Twin and
+  rendered as a provenance-tagged `design_decisions` report section. LLM calls: 0.
+- C5 (`da5d192`): Settings shows remaining requests/tokens, cache hits/misses/
+  entries, prompt trace rows, and a cache reset. Cache keys hash model, prompt
+  id/version, schema name, and typed input; hits skip provider and budget.
+  Prompts remain in `services/llm/prompts.py`; native JSON with extract-and-
+  repair fallback and Pydantic validation is used both ways. `tests/eval` holds
+  24 EN/AR golden cases with `FakeProvider`; `scripts/record_llm_responses.py`
+  is a manual local-only, CI-refusing, key-redacting recorder writing to an
+  ignored directory. LLM calls in tests: 0 real calls.
+- Schema additions are additive only: `DecisionKind`, `DecisionRecord`,
+  `DecisionLog`, `design_decisions` report section, and optional copilot result
+  metadata already introduced in C1/C3. No persisted twin field changed;
+  `TWIN_SCHEMA_VERSION` remains `2` and legacy JSON/fingerprints are unchanged.
+- Final evidence: `pytest -q` -> `1213 passed, 5 deselected in 43.92s`;
+  `ruff check .` -> `All checks passed!`; `pytest -q -m smoke` ->
+  `13 passed, 1205 deselected in 5.80s`. Focused C3 `46 passed in 10.00s`,
+  C4 `84 passed in 13.32s`, C5 golden `25 passed in 0.87s`.
+  Not verified: live Groq responses, real-browser rendering, and deployed
+  Community Cloud.
+
 ## Completed
 - [x] Phase 1: Project Foundation and Environment
 - [x] Phase 2: Requirements and Domain Modeling
