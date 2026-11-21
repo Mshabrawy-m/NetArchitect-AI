@@ -65,7 +65,13 @@ from security import FlowRequest
 from services.llm import RequestBudget
 
 if TYPE_CHECKING:  # pragma: no cover - typing only; copilot import stays lazy
-    from services.copilot import CopilotCache, PromptTrace
+    from services.copilot import (
+        CopilotCache,
+        DecisionKind,
+        DecisionLog,
+        DecisionRecord,
+        PromptTrace,
+    )
 from simulation import (
     FailureSweepResult,
     RoutingModeComparison,
@@ -104,6 +110,7 @@ LLM_SESSION_KEY = "llm_session_api_key"
 LLM_BUDGET_KEY = "llm_request_budget"
 COPILOT_CACHE_KEY = "copilot_response_cache"
 COPILOT_TRACE_KEY = "copilot_prompt_trace"
+COPILOT_DECISIONS_KEY = "copilot_decisions"
 
 CIDR_KEY = "ip_cidr_result"
 VLSM_KEY = "addressing_result"
@@ -1010,3 +1017,51 @@ def peek_copilot_trace() -> PromptTrace:
 
     trace = st.session_state.get(COPILOT_TRACE_KEY)
     return trace if isinstance(trace, PromptTrace) else PromptTrace()
+
+
+def get_copilot_decisions() -> DecisionLog:
+    """Return the session decision log, creating it when needed."""
+    from services.copilot import DecisionLog
+
+    log = st.session_state.get(COPILOT_DECISIONS_KEY)
+    if not isinstance(log, DecisionLog):
+        log = DecisionLog()
+        st.session_state[COPILOT_DECISIONS_KEY] = log
+    return log
+
+
+def peek_copilot_decisions() -> DecisionLog:
+    """Return a decision-log view without creating a session key."""
+    from services.copilot import DecisionLog
+
+    log = st.session_state.get(COPILOT_DECISIONS_KEY)
+    return log if isinstance(log, DecisionLog) else DecisionLog()
+
+
+def record_decision(
+    *,
+    kind: DecisionKind | str,
+    subject_id: str,
+    title: str,
+    page: str,
+    source_fingerprint: str = "",
+    result_fingerprint: str = "",
+    details: tuple[tuple[str, str], ...] = (),
+) -> DecisionRecord:
+    """Append one explicitly confirmed decision with an injected timestamp."""
+    from services.copilot import DecisionKind
+
+    return get_copilot_decisions().add(
+        kind=DecisionKind(kind),
+        subject_id=subject_id,
+        title=title,
+        page=page,
+        source_fingerprint=source_fingerprint,
+        result_fingerprint=result_fingerprint,
+        details=details,
+    )
+
+
+def clear_copilot_decisions() -> None:
+    """Remove the session decision log."""
+    session_delete(COPILOT_DECISIONS_KEY)

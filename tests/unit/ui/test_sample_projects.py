@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from services.copilot import DecisionKind
 from services.validation import build_design_health
 from simulation import twin_fingerprint
 from tests.unit.ui.nav_helpers import open_page
@@ -101,6 +102,11 @@ def test_confirming_a_sample_replaces_the_twin_with_a_new_one() -> None:
     assert loaded is not existing
     assert loaded.metadata.name == sample_by_key("small-office").name
     assert PENDING_KEY not in at.session_state
+
+    records = at.session_state[state.COPILOT_DECISIONS_KEY].records
+    assert [record.kind for record in records] == [DecisionKind.sample_applied]
+    assert records[0].subject_id == "small-office"
+    assert records[0].result_fingerprint == twin_fingerprint(loaded)
 
 
 def test_unknown_sample_key_is_rejected() -> None:

@@ -9,6 +9,7 @@ from streamlit.testing.v1 import AppTest
 from agents import run_structured_design
 from capacity import CapacityHistory, DemandMapping, evaluate_capacity
 from core.schemas.scenario import ScenarioType
+from services.copilot import DecisionKind, DecisionLog
 from simulation import ScenarioHistory, run_failure_sweep, run_scenario
 from tests.unit.agents.helpers import sample_requirements
 from tests.unit.capacity.helpers import constant_run, line_capacity_twin
@@ -228,6 +229,60 @@ def test_e5_source_selectors_are_available() -> None:
         selectbox = at.selectbox(key=key)
         assert selectbox
         assert "None" in selectbox.options
+
+
+def test_design_decisions_section_follows_the_session_log() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120)
+    at.session_state[state.TWIN_KEY] = make_twin()
+    at.run()
+    open_page(at, "Reports & Documentation")
+
+    assert not at.exception
+    selector = at.multiselect(key="reports_sections")
+    assert "Design decisions (not run)" in selector.options
+    assert not any("Design decisions" in item.value for item in at.markdown)
+
+    prepared = next(
+        caption.value for caption in at.caption if "Prepared at" in caption.value
+    )
+
+    log = DecisionLog()
+    log.add(
+        kind=DecisionKind.suggestion_accepted,
+        subject_id="overload:ab",
+        title="Applied suggestion overload:ab",
+        page="Optimization Center",
+        source_fingerprint="a" * 64,
+        result_fingerprint="b" * 64,
+    )
+    at.session_state[state.COPILOT_DECISIONS_KEY] = log
+    at.run()
+
+    assert not at.exception
+    assert (
+        "Design decisions (available)"
+        in at.multiselect(key="reports_sections").options
+    )
+    # The selection was defaulted before the decision existed, so select the
+    # newly available section explicitly before checking the rendered preview.
+    at.multiselect(key="reports_sections").set_value(["design_decisions"]).run()
+
+    assert not at.exception
+    assert any("Design decisions" in item.value for item in at.markdown)
+    assert any(
+        "Applied suggestion overload:ab" in frame.value.to_string()
+        for frame in at.get("dataframe")
+    )
+    # The timestamp is stable for one twin; the decision payload is what
+    # invalidates the cached document.
+    assert (
+        next(
+            caption.value
+            for caption in at.caption
+            if "Prepared at" in caption.value
+        )
+        == prepared
+    )
 
 
 def test_a_retained_failure_sweep_fills_the_failure_sweep_section() -> None:

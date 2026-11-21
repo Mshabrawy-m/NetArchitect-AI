@@ -15,6 +15,7 @@ from digital_twin import (
     apply_failure,
 )
 from network.topology import generate_ring
+from services.copilot import DecisionKind, DecisionLog
 from tests.unit.digital_twin.helpers import make_twin
 from tests.unit.ui.nav_helpers import open_page
 from ui import state
@@ -70,6 +71,51 @@ def test_digital_twin_page_summarizes_state_and_creates_snapshot() -> None:
 
     # With one snapshot, the comparison defaults to snapshot vs current twin.
     assert any("identical" in success.value for success in at.success)
+
+    decisions = at.session_state[state.COPILOT_DECISIONS_KEY]
+    assert [record.kind for record in decisions.records] == [
+        DecisionKind.snapshot_saved
+    ]
+    assert decisions.records[0].title == "Saved snapshot: baseline"
+
+
+def test_design_decisions_viewer_offers_json_export_and_clear() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    open_page(at, "Topology Editor")
+    at.button(key="generate_topology").click().run()
+    open_page(at, "Digital Twin")
+
+    assert not at.exception
+    assert any(
+        "No design decisions" in info.value for info in at.info
+    )
+    assert "twin_design_decisions_download" not in [
+        button.key for button in at.download_button
+    ]
+
+    log = DecisionLog()
+    log.add(
+        kind=DecisionKind.sample_applied,
+        subject_id="small-office",
+        title="Loaded sample project: SAMPLE - Small office",
+        page="Dashboard",
+        source_fingerprint="a" * 64,
+        result_fingerprint="b" * 64,
+    )
+    at.session_state[state.COPILOT_DECISIONS_KEY] = log
+    at.run()
+
+    assert not at.exception
+    download = at.download_button(key="twin_design_decisions_download")
+    assert download.label == "Download design decisions as JSON"
+    assert "small-office" in log.to_json()
+    assert at.button(key="twin_design_decisions_clear")
+
+    at.button(key="twin_design_decisions_clear").click().run()
+
+    assert not at.exception
+    assert state.COPILOT_DECISIONS_KEY not in at.session_state
+    assert any("No design decisions" in info.value for info in at.info)
 
 
 def test_routing_page_applies_twin_operational_failures() -> None:

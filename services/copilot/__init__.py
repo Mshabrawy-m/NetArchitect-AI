@@ -9,6 +9,7 @@ any application code.
 from __future__ import annotations
 
 from .cache import CacheKey, CopilotCache, build_key, input_hash
+from .decisions import DecisionKind, DecisionLog, DecisionRecord
 from .explain import (
     ExplanationRequest,
     audit_ai_explanation,
@@ -51,6 +52,9 @@ __all__ = [
     "Clarification",
     "ClarificationCode",
     "CopilotCache",
+    "DecisionKind",
+    "DecisionLog",
+    "DecisionRecord",
     "ExplanationRequest",
     "ExplanationResult",
     "ExplanationTarget",

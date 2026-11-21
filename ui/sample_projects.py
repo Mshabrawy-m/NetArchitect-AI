@@ -24,6 +24,7 @@ from network.topology import (
 )
 from network.vlan import VlanPlanResult, VlanRequest, plan_vlans
 from network.vlan.dhcp import plan_dhcp_scopes
+from simulation import twin_fingerprint
 from ui import state
 
 PENDING_KEY = "sample_project_pending"
@@ -242,7 +243,17 @@ def load_sample(key: str, *, confirmed: bool) -> DigitalTwin:
     if not confirmed:
         raise ValueError("A sample project requires explicit confirmation before loading.")
     twin = build_sample(key)
+    before = state.peek_twin()
+    source_fingerprint = twin_fingerprint(before) if before is not None else ""
     state.replace_twin(twin)
+    state.record_decision(
+        kind="sample_applied",
+        subject_id=key,
+        title=f"Loaded sample project: {sample_by_key(key).name}",
+        page="Dashboard",
+        source_fingerprint=source_fingerprint,
+        result_fingerprint=twin_fingerprint(twin),
+    )
     state.session_delete(PENDING_KEY)
     return twin
 

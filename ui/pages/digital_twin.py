@@ -24,6 +24,7 @@ from digital_twin import (
     effective_link_state,
     to_json,
 )
+from simulation import twin_fingerprint
 from ui import formatting, state
 from ui.components import (
     csv_bytes,
@@ -308,6 +309,39 @@ def _diff_rows(diff) -> pd.DataFrame:
     )
 
 
+DESIGN_DECISIONS_DOWNLOAD_KEY = "twin_design_decisions_download"
+DESIGN_DECISIONS_CLEAR_KEY = "twin_design_decisions_clear"
+
+
+def _render_design_decisions() -> None:
+    """Read-only view and in-memory JSON export of the session decision log."""
+    st.subheader("Design decisions")
+    st.caption(
+        "Explicitly confirmed design decisions from this browser session. "
+        "The log is bounded, carries injected timestamps, and is produced only "
+        "by deterministic application code."
+    )
+    decisions = state.peek_copilot_decisions()
+    rows = decisions.rows()
+    if not rows:
+        st.info("No design decisions have been recorded in this session.")
+        return
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    columns = st.columns(2)
+    with columns[0]:
+        st.download_button(
+            "Download design decisions as JSON",
+            data=decisions.to_json().encode("utf-8"),
+            file_name="design-decisions.json",
+            mime="application/json",
+            key=DESIGN_DECISIONS_DOWNLOAD_KEY,
+        )
+    with columns[1]:
+        if st.button("Clear decision log", key=DESIGN_DECISIONS_CLEAR_KEY):
+            state.clear_copilot_decisions()
+            st.rerun()
+
+
 def _render_snapshot_actions(twin, snapshots: tuple[Snapshot, ...]) -> None:
     st.subheader("Snapshots")
     st.caption(
@@ -330,7 +364,17 @@ def _render_snapshot_actions(twin, snapshots: tuple[Snapshot, ...]) -> None:
         except (NetArchitectError, ValidationError, ValueError) as error:
             st.error(format_error(error), title="Snapshot not created")
         else:
-            st.success(f"Created snapshot {label.strip()!r}.")
+            snapshot_label = label.strip() or "Untitled snapshot"
+            fingerprint = twin_fingerprint(twin)
+            state.record_decision(
+                kind="snapshot_saved",
+                subject_id=snapshot_label,
+                title=f"Saved snapshot: {snapshot_label}",
+                page="Digital Twin",
+                source_fingerprint=fingerprint,
+                result_fingerprint=fingerprint,
+            )
+            st.success(f"Created snapshot {snapshot_label!r}.")
             st.rerun()
 
     if not snapshots:
@@ -479,3 +523,5 @@ def render() -> None:
     _render_snapshot_actions(twin, state.get_snapshots())
     st.divider()
     _render_comparison(twin, state.get_snapshots())
+    st.divider()
+    _render_design_decisions()

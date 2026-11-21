@@ -31,6 +31,7 @@ from security import (
     set_security_model,
 )
 from services.copilot import finding_request
+from simulation import twin_fingerprint
 from ui import state
 from ui.cache import cached_security_analysis, security_flows_payload, twin_payload
 from ui.components import (
@@ -771,7 +772,16 @@ def _render_findings_tab(twin, analysis) -> None:
     except (NetArchitectError, ValidationError, ValueError) as error:
         st.error(f"Proposals not applied: {format_error(error)}")
         return
+    source_fingerprint = twin_fingerprint(twin)
     state.replace_twin(updated)
+    state.record_decision(
+        kind="security_proposal_accepted",
+        subject_id=", ".join(applied)[:200],
+        title=f"Accepted {len(applied)} modeled security proposal(s)",
+        page="Security Analysis",
+        source_fingerprint=source_fingerprint,
+        result_fingerprint=twin_fingerprint(updated),
+    )
     st.success(f"Applied {len(applied)} proposed rule(s) to a new twin.")
     st.rerun()
 

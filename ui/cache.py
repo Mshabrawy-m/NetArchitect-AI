@@ -44,6 +44,7 @@ from simulation import (
 )
 
 if TYPE_CHECKING:
+    from services.copilot import DecisionLog
     from services.reporting import ReportDocument
 
 CACHE_ENTRIES = 8
@@ -79,6 +80,11 @@ def source_payload(
     if source is None:
         return ""
     return source.model_dump_json()
+
+
+def decisions_payload(decisions: DecisionLog | None) -> str:
+    """Return canonical JSON for the bounded session decision log."""
+    return decisions.to_json() if decisions is not None else ""
 
 
 def capacity_series_payload(series: tuple[TimeSeries, ...]) -> str:
@@ -201,8 +207,10 @@ def cached_report(
     reranking_payload: str = "",
     sensitivity_source_fingerprint: str = "",
     rerank_source_fingerprint: str = "",
+    decisions_json: str = "",
 ) -> ReportDocument:
     """Build one report document once per twin revision and source selection."""
+    from services.copilot import DecisionLog
     from services.reporting import ReportSources, build_report
 
     return build_report(
@@ -242,6 +250,9 @@ def cached_report(
                 ParetoReranking.model_validate_json(reranking_payload)
                 if reranking_payload
                 else None
+            ),
+            decisions=(
+                DecisionLog.from_json(decisions_json) if decisions_json else None
             ),
             optimization_source_fingerprint=optimization_source_fingerprint,
             sensitivity_source_fingerprint=sensitivity_source_fingerprint,

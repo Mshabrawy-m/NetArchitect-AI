@@ -47,6 +47,7 @@ from ui.cache import (
     cached_exports,
     cached_report,
     capacity_source_payload,
+    decisions_payload,
     source_payload,
     twin_payload,
 )
@@ -627,6 +628,7 @@ def render() -> None:
                 reranking_payload=source_payload(reranking),
                 sensitivity_source_fingerprint=sensitivity_source_fingerprint,
                 rerank_source_fingerprint=rerank_source_fingerprint,
+                decisions_json=decisions_payload(state.peek_copilot_decisions()),
             )
         else:
             # WorkflowState holds a live accessor and is not serializable, so it
@@ -645,6 +647,7 @@ def render() -> None:
                     optimization_source_fingerprint=optimization_source_fingerprint,
                     sensitivity_source_fingerprint=sensitivity_source_fingerprint,
                     rerank_source_fingerprint=rerank_source_fingerprint,
+                    decisions=state.peek_copilot_decisions(),
                     generated_at=generated_at,
                 )
             )

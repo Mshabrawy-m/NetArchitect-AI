@@ -47,6 +47,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from agents.models import WorkflowState
     from capacity.models import CapacityRun
     from optimization.models import OptimizationRun, ParetoReranking, SensitivityReport
+    from services.copilot import DecisionLog
     from simulation.comparison import RoutingModeComparison
     from simulation.failure_sweep import FailureSweepResult
     from simulation.scenarios import ScenarioRun
@@ -71,6 +72,7 @@ class ReportSources:
     mode_comparison: RoutingModeComparison | None = None
     sensitivity_report: SensitivityReport | None = None
     reranking: ParetoReranking | None = None
+    decisions: DecisionLog | None = None
     # OptimizationRun has no persisted twin fingerprint. The UI records the
     # fingerprint of its source twin when the run is created and passes it here.
     optimization_source_fingerprint: str | None = None
@@ -188,6 +190,7 @@ class _Builder:
         self._mode_comparison = sources.mode_comparison
         self._sensitivity_report = sources.sensitivity_report
         self._reranking = sources.reranking
+        self.decisions = sources.decisions
         self.sensitivity_source_fingerprint = sources.sensitivity_source_fingerprint
         self.rerank_source_fingerprint = sources.rerank_source_fingerprint
         self.fingerprint = fingerprint
@@ -3936,6 +3939,108 @@ class _Builder:
             )
         return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
 
+    def design_decisions(self) -> ReportSection:
+        """Report explicitly recorded, deterministic design decisions."""
+        section_id = "design_decisions"
+        title = "Design decisions"
+        decisions = self.decisions
+        if decisions is None or not decisions.records:
+            return self.not_run(
+                section_id,
+                title,
+                "No design decisions were recorded in this browser session.",
+                "Digital Twin",
+            )
+
+        values = self.numbers
+        note = NoteBlock(
+            text=values.text(
+                "design_decisions.scope",
+                "Design decision scope",
+                (
+                    "Decisions are recorded only after explicit user actions. "
+                    "Timestamps are injected by application code and no language "
+                    "model contributes to this section."
+                ),
+                step="decision",
+                tool="services.copilot.decisions",
+            ),
+            severity="info",
+            provenance=self.prov("decision", "services.copilot.decisions"),
+        )
+        rows: list[tuple[str, ...]] = []
+        for index, record in enumerate(decisions.records, start=1):
+            version = record.source_fingerprint or self.fingerprint
+            rows.append(
+                (
+                    values.scan(
+                        f"design_decisions.{index}.time",
+                        "Decision time",
+                        record.created_at.isoformat(),
+                        step="decision",
+                        tool="services.copilot.decisions",
+                        twin_version=version,
+                    ),
+                    values.scan(
+                        f"design_decisions.{index}.title",
+                        "Decision title",
+                        record.title,
+                        step="decision",
+                        tool="services.copilot.decisions",
+                        twin_version=version,
+                    ),
+                    values.text(
+                        f"design_decisions.{index}.kind",
+                        "Decision kind",
+                        record.kind.value.replace("_", " "),
+                        step="decision",
+                        tool="services.copilot.decisions",
+                        twin_version=version,
+                    ),
+                    values.scan(
+                        f"design_decisions.{index}.subject",
+                        "Decision subject",
+                        record.subject_id,
+                        step="decision",
+                        tool="services.copilot.decisions",
+                        twin_version=version,
+                    ),
+                    values.text(
+                        f"design_decisions.{index}.page",
+                        "Decision page",
+                        record.page,
+                        step="decision",
+                        tool="services.copilot.decisions",
+                        twin_version=version,
+                    ),
+                    values.scan(
+                        f"design_decisions.{index}.source",
+                        "Decision source fingerprint",
+                        record.source_fingerprint or "not recorded",
+                        step="decision",
+                        tool="services.copilot.decisions",
+                        twin_version=version,
+                    ),
+                    values.scan(
+                        f"design_decisions.{index}.result",
+                        "Decision result fingerprint",
+                        record.result_fingerprint or "not recorded",
+                        step="decision",
+                        tool="services.copilot.decisions",
+                        twin_version=version,
+                    ),
+                )
+            )
+        table = self.table(
+            "design_decision_log",
+            "Recorded decisions",
+            ("Time", "Decision", "Kind", "Subject", "Page", "Source", "Result"),
+            rows,
+            step="decision",
+            tool="services.copilot.decisions",
+        )
+        return ReportSection(id=section_id, title=title, blocks=(note, table))
+
     # ------------------------------------------------------------------
     # Assembly
     # ------------------------------------------------------------------
@@ -3955,6 +4060,7 @@ class _Builder:
             self.sensitivity(),
             self.reranking(),
             self.security(),
+            self.design_decisions(),
             self.assumptions(),
             self.limitations(),
             self.agent_trace(),

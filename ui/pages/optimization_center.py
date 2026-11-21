@@ -1276,6 +1276,23 @@ def _render_candidates(run: OptimizationRun, twin: DigitalTwin) -> None:
             baseline=run.baseline,
         ),
     )
+    if st.button(
+        "Record this candidate as a design decision",
+        key="copilot_record_candidate",
+    ):
+        state.record_decision(
+            kind="optimization_candidate_selected",
+            subject_id=evaluation.candidate_hash[:16],
+            title=f"Selected candidate {evaluation.candidate_hash[:12]}",
+            page="Optimization Center",
+            source_fingerprint=twin_fingerprint(twin),
+            result_fingerprint=evaluation.candidate_hash,
+            details=(
+                ("weighted score", f"{evaluation.weighted_score:.4f}"),
+                ("feasible", "yes" if evaluation.feasible else "no"),
+            ),
+        )
+        st.caption("Recorded in the session decision log.")
     _render_apply(run, twin, evaluation)
 
 
@@ -1308,6 +1325,17 @@ def _render_apply(run: OptimizationRun, twin: DigitalTwin, evaluation) -> None:
             except NetArchitectError as error:
                 st.error(format_error(error), title="Snapshot rejected")
             else:
+                state.record_decision(
+                    kind="optimization_candidate_selected",
+                    subject_id=evaluation.candidate_hash[:16],
+                    title=(
+                        "Applied candidate "
+                        f"{evaluation.candidate_hash[:12]} as snapshot"
+                    ),
+                    page="Optimization Center",
+                    source_fingerprint=twin_fingerprint(twin),
+                    result_fingerprint=twin_fingerprint(built),
+                )
                 _flash("success", f"Saved snapshot {label!r}.")
                 st.rerun()
     with columns[1], st.expander("Replace baseline twin"):
@@ -1320,7 +1348,19 @@ def _render_apply(run: OptimizationRun, twin: DigitalTwin, evaluation) -> None:
             "Replace baseline now",
             key="optimization_replace_baseline",
         ):
+            source_fingerprint = twin_fingerprint(twin)
             state.replace_twin(built)
+            state.record_decision(
+                kind="optimization_candidate_selected",
+                subject_id=evaluation.candidate_hash[:16],
+                title=(
+                    "Applied candidate "
+                    f"{evaluation.candidate_hash[:12]} as baseline"
+                ),
+                page="Optimization Center",
+                source_fingerprint=source_fingerprint,
+                result_fingerprint=twin_fingerprint(built),
+            )
             _flash("success", "Replaced the baseline twin with the optimized design.")
             st.rerun()
 
@@ -1831,6 +1871,20 @@ def _render_suggestions(twin: DigitalTwin) -> None:
             st.error(format_error(error), title="Suggestion was not applied")
             return
         state.session_set(SUGGESTION_APPLIED_KEY, fingerprint)
+        state.record_decision(
+            kind="suggestion_accepted",
+            subject_id=suggestion.id,
+            title=f"Applied suggestion: {suggestion.id}",
+            page="Optimization Center",
+            source_fingerprint=report.baseline_fingerprint,
+            result_fingerprint=fingerprint,
+            details=(
+                ("kind", suggestion.kind.value),
+                ("metric", suggestion.primary_metric),
+                ("before", f"{suggestion.primary_before:g}"),
+                ("after", f"{suggestion.primary_after:g}"),
+            ),
+        )
         _flash("success", f"Saved suggested twin {fingerprint[:12]} as a snapshot.")
         st.rerun()
 

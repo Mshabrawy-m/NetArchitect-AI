@@ -13,6 +13,7 @@ from optimization import (
     OptimizationHistory,
     run_optimization,
 )
+from services.copilot import DecisionKind
 from services.llm.testing import FakeProvider
 from simulation import twin_fingerprint
 from tests.unit.optimization.helpers import settings, tiny_twin
@@ -235,6 +236,14 @@ def test_copilot_suggestions_work_without_key_and_require_confirmation() -> None
         snapshots[0].twin
     )
 
+    records = at.session_state[state.COPILOT_DECISIONS_KEY].records
+    assert [record.kind for record in records] == [
+        DecisionKind.suggestion_accepted
+    ]
+    assert records[0].result_fingerprint == at.session_state[
+        SUGGESTION_APPLIED_KEY
+    ]
+
 
 def _app_with_run():
     twin, run = _retained_nsga2_run()
@@ -245,6 +254,22 @@ def _app_with_run():
     at.session_state[state.OPTIMIZATION_HISTORY_KEY] = history
     open_page(at, "Optimization Center")
     return at
+
+
+def test_candidate_selection_records_a_design_decision() -> None:
+    at = _app_with_run()
+
+    assert not at.exception
+    assert at.button(key="copilot_record_candidate")
+    at.button(key="copilot_record_candidate").click().run()
+
+    assert not at.exception
+    records = at.session_state[state.COPILOT_DECISIONS_KEY].records
+    assert [record.kind for record in records] == [
+        DecisionKind.optimization_candidate_selected
+    ]
+    assert records[0].page == "Optimization Center"
+    assert records[0].subject_id
 
 
 def test_c3_candidate_explanation_without_key() -> None:

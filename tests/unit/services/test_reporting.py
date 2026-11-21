@@ -31,6 +31,7 @@ from optimization import (
     rerank_pareto_front,
     run_optimization,
 )
+from services.copilot import DecisionKind, DecisionLog
 from services.llm.testing import FakeProvider
 from services.reporting import (
     DISCLOSURE_TEXT,
@@ -84,6 +85,7 @@ SECTION_IDS = (
     "sensitivity",
     "reranking",
     "security",
+    "design_decisions",
     "assumptions",
     "limitations",
     "agent_trace",
@@ -468,6 +470,46 @@ def test_capacity_values_equal_the_run(
     assert record.provenance.tool == "capacity.engine.evaluate_capacity"
     assert record.provenance.twin_version == capacity_run.twin_fingerprint
     assert check_consistency(document).ok
+
+
+def test_design_decisions_section_has_provenance_and_is_consistent(
+    twin: DigitalTwin,
+) -> None:
+    decisions = DecisionLog(max_entries=2)
+    decisions.add(
+        kind=DecisionKind.suggestion_accepted,
+        subject_id="overload:ab",
+        title="Applied suggestion overload:ab",
+        page="Optimization Center",
+        source_fingerprint=twin_fingerprint(twin),
+        result_fingerprint="c" * 64,
+        details=(("metric", "served_demand_ratio"),),
+    )
+    document = build_report(
+        ReportSources(
+            twin=twin,
+            decisions=decisions,
+            generated_at=GENERATED_AT,
+        )
+    )
+    section = document.section("design_decisions")
+    assert section.status.value == "available"
+    assert section.blocks[0].provenance.step == "decision"
+    assert section.blocks[0].provenance.tool == "services.copilot.decisions"
+    table = section.blocks[1]
+    assert table.rows[0][2] == "suggestion accepted"
+    assert value(document, "design_decisions.1.time.token.1") is not None
+    assert check_consistency(document).ok
+
+    empty = build_report(
+        ReportSources(
+            twin=twin,
+            generated_at=GENERATED_AT,
+        )
+    )
+    missing = empty.section("design_decisions")
+    assert missing.status.value == "not_run"
+    assert missing.producer_page == "Digital Twin"
 
 
 def test_tampered_capacity_number_is_detected(

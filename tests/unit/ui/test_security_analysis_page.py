@@ -10,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 
 from config.limits import MAX_SECURITY_FLOW_CHECKS
 from security import SECURITY_DISCLAIMER, FlowRequest, Protocol, get_security_model
+from services.copilot import DecisionKind
 from services.llm.testing import FakeProvider
 from tests.unit.security.design_helpers import case_design, hardened_design
 from tests.unit.ui.nav_helpers import open_page
@@ -235,6 +236,13 @@ def test_security_proposals_are_applied_only_on_explicit_acceptance() -> None:
     assert updated is not twin
     rule_ids = {rule.id for rule in get_security_model(updated).rules}
     assert set(options) <= rule_ids
+
+    records = at.session_state[state.COPILOT_DECISIONS_KEY].records
+    assert len(records) == 1
+    assert records[0].kind is DecisionKind.security_proposal_accepted
+    assert records[0].page == "Security Analysis"
+    assert records[0].source_fingerprint
+    assert records[0].result_fingerprint != records[0].source_fingerprint
 
 
 def test_security_flow_accessors_are_typed_and_bounded() -> None:
