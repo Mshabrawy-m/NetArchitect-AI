@@ -2,6 +2,39 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - S6: integrated design-time security workflow on feature/v2-security
+
+### Added
+- S6: ten-tab Security Analysis page (Zones, Policy, Flow check, Reachability,
+  Segmentation, Optimizer, Zero-trust, Findings, Checklist, Templates) using new
+  EN/AR catalog keys, theme-backed status chips, versioned editor keys, and a
+  fingerprint-keyed bounded analysis cache.
+- Deterministic C3 "why?" requests for blast radius and segmentation score;
+  explicit Optimizer and Zero-trust apply actions that create a NEW twin and one
+  C4 decision each (`optimization_candidate_selected` or
+  `security_proposal_accepted`).
+- Critic handling for `REACH-` codes and S1 exposure findings in the existing
+  deterministic gate, with selective re-plan to the security step. Report
+  Security additions now carry step/tool provenance and pass numeric consistency
+  checks.
+- Focused coverage for page tabs/apply flows, reachability/score explanations,
+  Critic exposure, report provenance/consistency, i18n parity, fingerprint cache,
+  and forbidden network/process imports and tokens.
+
+### Changed
+- No schema version bump (`TWIN_SCHEMA_VERSION` stays `2`); S6 is UI and wiring
+  only. The cache's optional fingerprint argument preserves existing callers.
+  No new runtime dependency, thread, worker, or app disk write.
+
+### Evidence
+- Focused S6 tests: `60 passed in 6.81s`.
+- `pytest -q`: `1270 passed, 6 deselected in 47.72s`.
+- `ruff check .`: `All checks passed!`.
+- `pytest -q -m smoke`: `13 passed, 1263 deselected in 6.44s`.
+- Live Streamlit agent API: health `ok`; all 10 tabs rendered with no exceptions
+  and no server warnings; server stopped afterward.
+- Not verified: real-browser rendering, Cloud deployment, Linux CI.
+
 ## 2026-11-21 - S5: fixed design checklist on feature/v2-security
 
 ### Added

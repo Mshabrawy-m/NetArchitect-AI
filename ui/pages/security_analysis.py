@@ -1,4 +1,4 @@
-"""Security Analysis page with Zones, Policy, Flow check, Findings, and Templates.
+"""Security Analysis page for bounded, deterministic design-time modeling.
 
 The page is a presentation layer over the deterministic, offline security
 engine. It reads the current digital twin, lets the user edit a bounded modeled
@@ -8,6 +8,7 @@ probes, contacts a device, looks up a vulnerability, or changes live equipment.
 
 from __future__ import annotations
 
+import html
 from collections.abc import Mapping
 
 import pandas as pd
@@ -26,14 +27,25 @@ from security import (
     Service,
     Zone,
     ZoneType,
+    accept_microsegmentation_proposals,
+    accept_optimization_proposals,
     accept_proposed_rules,
     get_security_model,
     set_security_model,
 )
-from services.copilot import finding_request
+from services.copilot import (
+    blast_radius_request,
+    finding_request,
+    segmentation_score_request,
+)
 from simulation import twin_fingerprint
-from ui import state
-from ui.cache import cached_security_analysis, security_flows_payload, twin_payload
+from ui import i18n, state, theme
+from ui.cache import (
+    cached_security_analysis,
+    security_flows_payload,
+    twin_cache_key,
+    twin_payload,
+)
 from ui.components import (
     empty_state,
     format_error,
@@ -43,6 +55,7 @@ from ui.components import (
 )
 from ui.components.copilot import why_button
 from ui.components.editors import bump_editor_key, editor_key
+from ui.components.health import render_design_health
 from ui.components.notices import queue_notice, render_notices
 
 MODEL_NOTE = SECURITY_DISCLAIMER
@@ -66,8 +79,15 @@ FLOW_REMOVE_BUTTON_KEY = "security_remove_flow"
 FLOW_CLEAR_BUTTON_KEY = "security_clear_flows"
 
 COPILOT_WHY_FINDING_KEY = "copilot_why_finding_select"
+COPILOT_WHY_BLAST_KEY = "copilot_why_blast_radius"
+COPILOT_WHY_SEGMENTATION_KEY = "copilot_why_segmentation_score"
 PROPOSAL_SELECT_KEY = "security_selected_proposals"
 APPLY_PROPOSALS_KEY = "security_apply_proposals"
+BLAST_RADIUS_SELECT_KEY = "security_blast_radius_select"
+OPTIMIZER_SELECT_KEY = "security_optimizer_selected"
+OPTIMIZER_APPLY_KEY = "security_optimizer_apply"
+ZERO_TRUST_SELECT_KEY = "security_zero_trust_selected"
+ZERO_TRUST_APPLY_KEY = "security_zero_trust_apply"
 TEMPLATE_DOWNLOAD_KEY = "security_template_download"
 ANALYSIS_DOWNLOAD_KEY = "security_analysis_download"
 
@@ -102,6 +122,17 @@ FLOW_COLUMNS = (
 ANY_TOKENS = frozenset({"any", "*"})
 TRUE_TOKENS = frozenset({"true", "1", "yes"})
 FALSE_TOKENS = frozenset({"false", "0", "no", ""})
+
+
+def _status_chip(text: str, status: str) -> str:
+    """Return one theme-token-backed status chip for inline rendering."""
+    token = theme.STATUS_TOKEN_NAMES.get(status.lower(), "info")
+    foreground = theme.color(token)
+    background = theme.color(f"{token}_surface")
+    return (
+        "<span style='padding:2px 8px;border-radius:12px;"
+        f"color:{foreground};background:{background};'>{html.escape(text)}</span>"
+    )
 
 
 def _blank(value: object) -> bool:
@@ -363,6 +394,7 @@ def _analysis(twin, model: SecurityModel):
         twin_payload(twin),
         model.model_dump_json(),
         security_flows_payload(state.peek_security_flows()),
+        twin_cache_key(twin),
     )
 
 
@@ -786,6 +818,323 @@ def _render_findings_tab(twin, analysis) -> None:
     st.rerun()
 
 
+def _render_reachability_tab(analysis) -> None:
+    st.subheader(i18n.t("security.reachability.title"))
+    st.caption(i18n.t("security.reachability.caption"))
+    st.caption(SECURITY_DISCLAIMER)
+    reachability = analysis.reachability
+    if reachability is None:
+        empty_state("No reachability model is present in this analysis result.")
+        return
+
+    matrix = reachability.matrix
+    metrics = st.columns(4)
+    metrics[0].metric("Zones", str(len(matrix.zones)))
+    metrics[1].metric("Services", str(len(matrix.services)))
+    metrics[2].metric("Cells", str(len(matrix.cells)))
+    metrics[3].metric("Exposure findings", str(len(reachability.exposure_findings)))
+
+    st.subheader(i18n.t("security.reachability.blast_radius"))
+    radii = reachability.blast_radii
+    if not radii:
+        empty_state("No modeled zone was available for a blast-radius result.")
+        return
+    labels = [
+        f"{item.origin_zone} ({item.origin_zone_type.value})" for item in radii
+    ]
+    selected_label = st.selectbox(
+        "Origin zone", labels, key=BLAST_RADIUS_SELECT_KEY
+    )
+    radius = next(
+        item
+        for item, label in zip(radii, labels)
+        if label == selected_label
+    )
+    st.markdown(
+        _status_chip(
+            i18n.status_label("exposed" if radius.exposure else "ok"),
+            "critical" if radius.exposure else "pass",
+        ),
+        unsafe_allow_html=True,
+    )
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "directly_reachable": ", ".join(radius.directly_reachable)
+                    or "none",
+                    "closure_zones": ", ".join(radius.closure_zones) or "none",
+                    "max_criticality_reached": radius.max_criticality_reached,
+                    "hop_count": radius.hop_count,
+                }
+            ],
+            columns=[
+                "directly_reachable",
+                "closure_zones",
+                "max_criticality_reached",
+                "hop_count",
+            ],
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    why_button(
+        "copilot_why_blast_radius",
+        lambda: blast_radius_request(radius),
+        label=i18n.t("security.reachability.why"),
+    )
+
+    st.subheader("Reachability exposure findings")
+    render_findings(
+        tuple(
+            item.to_validation_finding()
+            for item in reachability.exposure_findings
+        ),
+        "No lower-trust zone reaches a high-criticality zone in this model.",
+    )
+
+
+def _render_segmentation_tab(analysis) -> None:
+    st.subheader(i18n.t("security.segmentation.title"))
+    st.caption(i18n.t("security.segmentation.caption"))
+    st.caption(SECURITY_DISCLAIMER)
+    segmentation = analysis.segmentation
+    if segmentation is None:
+        empty_state("No segmentation score is present in this analysis result.")
+        return
+    metrics = st.columns(4)
+    metrics[0].metric("Score", f"{segmentation.score}/100")
+    metrics[1].metric("Allowed", str(segmentation.allowed_count))
+    metrics[2].metric("Needed", str(segmentation.needed_count))
+    metrics[3].metric("Excess", str(segmentation.excess_count))
+    st.caption(segmentation.formula)
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "input": item.name,
+                    "subscore": item.subscore,
+                    "weight": item.weight,
+                    "contribution": item.contribution,
+                    "derivation": item.detail,
+                }
+                for item in segmentation.inputs
+            ],
+            columns=[
+                "input",
+                "subscore",
+                "weight",
+                "contribution",
+                "derivation",
+            ],
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    why_button(
+        "copilot_why_segmentation_score",
+        lambda: segmentation_score_request(segmentation),
+        label=i18n.t("security.segmentation.why"),
+    )
+
+
+def _apply_optimizer_selection(twin, plan) -> None:
+    selected = st.multiselect(
+        i18n.t("security.optimizer.select"),
+        [proposal.id for proposal in plan.proposals],
+        key=OPTIMIZER_SELECT_KEY,
+    )
+    if not st.button(
+        i18n.t("security.optimizer.apply"),
+        key=OPTIMIZER_APPLY_KEY,
+        type="primary",
+    ):
+        return
+    if not selected:
+        st.warning("Select at least one optimization before applying changes.")
+        return
+
+    def record(decision) -> None:
+        state.record_decision(
+            kind=decision.kind,
+            subject_id=decision.subject_id,
+            title=decision.title,
+            page=decision.page,
+            source_fingerprint=decision.source_fingerprint,
+            result_fingerprint=decision.result_fingerprint,
+            details=decision.details,
+        )
+
+    try:
+        updated, applied = accept_optimization_proposals(
+            twin,
+            plan,
+            tuple(selected),
+            fingerprint=twin_fingerprint,
+            on_decision=record,
+        )
+    except (NetArchitectError, ValidationError, ValueError) as error:
+        st.error(f"Optimization not applied: {format_error(error)}")
+        return
+    state.replace_twin(updated)
+    st.success(i18n.t("security.optimizer.applied", count=len(applied)))
+    st.rerun()
+
+
+def _render_optimizer_tab(twin, analysis) -> None:
+    st.subheader(i18n.t("security.optimizer.title"))
+    st.caption(i18n.t("security.optimizer.caption"))
+    st.caption(SECURITY_DISCLAIMER)
+    plan = analysis.optimizer
+    if plan is None or not plan.proposals:
+        empty_state(i18n.t("security.optimizer.empty"))
+        return
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "id": proposal.id,
+                    "kind": proposal.kind.value,
+                    "behavior_preserving": str(proposal.behavior_preserving).lower(),
+                    "cases_checked": proposal.proof.cases_checked,
+                    "explanation": proposal.explanation,
+                }
+                for proposal in plan.proposals
+            ],
+            columns=[
+                "id",
+                "kind",
+                "behavior_preserving",
+                "cases_checked",
+                "explanation",
+            ],
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    st.markdown(
+        _status_chip(
+            f"{len(plan.proposals)} modeled proposal(s)",
+            "pass" if all(item.behavior_preserving for item in plan.proposals) else "warn",
+        ),
+        unsafe_allow_html=True,
+    )
+    _apply_optimizer_selection(twin, plan)
+
+
+def _apply_zero_trust_selection(twin, plan) -> None:
+    selected = st.multiselect(
+        i18n.t("security.zero_trust.select"),
+        [proposal.id for proposal in plan.proposals],
+        key=ZERO_TRUST_SELECT_KEY,
+    )
+    if not st.button(
+        i18n.t("security.zero_trust.apply"),
+        key=ZERO_TRUST_APPLY_KEY,
+        type="primary",
+    ):
+        return
+    if not selected:
+        st.warning("Select at least one suggestion before applying changes.")
+        return
+
+    def record(decision) -> None:
+        state.record_decision(
+            kind=decision.kind,
+            subject_id=decision.subject_id,
+            title=decision.title,
+            page=decision.page,
+            source_fingerprint=decision.source_fingerprint,
+            result_fingerprint=decision.result_fingerprint,
+            details=decision.details,
+        )
+
+    try:
+        updated, applied = accept_microsegmentation_proposals(
+            twin,
+            plan,
+            tuple(selected),
+            fingerprint=twin_fingerprint,
+            on_decision=record,
+        )
+    except (NetArchitectError, ValidationError, ValueError) as error:
+        st.error(f"Suggestion not applied: {format_error(error)}")
+        return
+    state.replace_twin(updated)
+    st.success(i18n.t("security.zero_trust.applied", count=len(applied)))
+    st.rerun()
+
+
+def _render_zero_trust_tab(twin, analysis) -> None:
+    st.subheader(i18n.t("security.zero_trust.title"))
+    st.caption(i18n.t("security.zero_trust.caption"))
+    st.caption(SECURITY_DISCLAIMER)
+    plan = analysis.microsegmentation
+    if plan is None or not plan.proposals:
+        empty_state(i18n.t("security.zero_trust.empty"))
+        return
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "id": proposal.id,
+                    "zone": proposal.zone_id,
+                    "score_before": proposal.before_score,
+                    "score_after": proposal.after_score,
+                    "pairs_before": proposal.before_reachable_count,
+                    "pairs_after": proposal.after_reachable_count,
+                    "new_rules": len(proposal.new_rules),
+                    "explanation": proposal.explanation,
+                }
+                for proposal in plan.proposals
+            ],
+            columns=[
+                "id",
+                "zone",
+                "score_before",
+                "score_after",
+                "pairs_before",
+                "pairs_after",
+                "new_rules",
+                "explanation",
+            ],
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    st.markdown(
+        _status_chip(
+            f"{len(plan.proposals)} inert suggestion(s)",
+            "info",
+        ),
+        unsafe_allow_html=True,
+    )
+    _apply_zero_trust_selection(twin, plan)
+
+
+def _render_checklist_tab(twin, analysis) -> None:
+    st.subheader(i18n.t("security.checklist.title"))
+    st.caption(i18n.t("security.checklist.caption"))
+    checklist = analysis.checklist
+    if checklist is None:
+        empty_state("No design checklist is present in this analysis result.")
+        return
+    st.caption(f"{i18n.t('security.checklist.version')}: {checklist.version}")
+    for item in checklist.items:
+        label = i18n.status_label(item.status.value)
+        st.markdown(
+            f"**{html.escape(item.id)}** "
+            f"{_status_chip(label, item.status.value)}",
+            unsafe_allow_html=True,
+        )
+        st.caption(item.text)
+        st.caption("Evidence: " + "; ".join(item.evidence))
+    st.caption(checklist.note)
+    st.caption(SECURITY_DISCLAIMER)
+    st.subheader(i18n.t("security.checklist.health"))
+    render_design_health(twin, include_expensive=False)
+
+
 def _render_templates_tab(analysis) -> None:
     st.subheader("Vendor-neutral templates")
     st.caption(
@@ -811,30 +1160,49 @@ def _render_templates_tab(analysis) -> None:
 
 
 def render() -> None:
-    """Render the five-tab design-time Security Analysis workflow."""
+    """Render the ten-tab design-time Security Analysis workflow."""
     page_header(
-        "Security Analysis",
-        "Model trust zones, policy, and flow checks against the current digital "
-        "twin. This page does not scan, probe, contact a device, or look up a "
-        "vulnerability.",
+        i18n.t("security.page.title"),
+        i18n.t("security.page.intro"),
     )
     render_notices()
-    model_estimate_note(MODEL_NOTE, title="Model scope")
+    model_estimate_note(MODEL_NOTE, title=i18n.t("security.scope"))
 
     twin = state.get_twin()
     if twin is None or not twin.topology.devices:
         empty_state(
-            "No digital twin with a topology is loaded. Open the Topology "
-            "Editor to create, generate, or import one, then return here.",
-            title="Digital twin required",
-            hint="Security results are modeled only from a stored twin revision.",
+            i18n.t("security.empty.message"),
+            title=i18n.t("security.empty.title"),
+            hint=i18n.t("security.empty.hint"),
         )
         return
 
     model = get_security_model(twin)
     analysis = _analysis(twin, model)
-    zones_tab, policy_tab, flow_tab, findings_tab, templates_tab = st.tabs(
-        ["Zones", "Policy", "Flow check", "Findings", "Templates"]
+    (
+        zones_tab,
+        policy_tab,
+        flow_tab,
+        reachability_tab,
+        segmentation_tab,
+        optimizer_tab,
+        zero_trust_tab,
+        findings_tab,
+        checklist_tab,
+        templates_tab,
+    ) = st.tabs(
+        [
+            i18n.t("security.tab.zones"),
+            i18n.t("security.tab.policy"),
+            i18n.t("security.tab.flow"),
+            i18n.t("security.tab.reachability"),
+            i18n.t("security.tab.segmentation"),
+            i18n.t("security.tab.optimizer"),
+            i18n.t("security.tab.zero_trust"),
+            i18n.t("security.tab.findings"),
+            i18n.t("security.tab.checklist"),
+            i18n.t("security.tab.templates"),
+        ]
     )
     with zones_tab:
         _render_zones_tab(twin, model)
@@ -842,7 +1210,17 @@ def render() -> None:
         _render_policy_tab(twin, model)
     with flow_tab:
         _render_flow_tab(twin, analysis)
+    with reachability_tab:
+        _render_reachability_tab(analysis)
+    with segmentation_tab:
+        _render_segmentation_tab(analysis)
+    with optimizer_tab:
+        _render_optimizer_tab(twin, analysis)
+    with zero_trust_tab:
+        _render_zero_trust_tab(twin, analysis)
     with findings_tab:
         _render_findings_tab(twin, analysis)
+    with checklist_tab:
+        _render_checklist_tab(twin, analysis)
     with templates_tab:
         _render_templates_tab(analysis)

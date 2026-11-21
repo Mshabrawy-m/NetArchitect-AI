@@ -117,8 +117,14 @@ def cached_security_analysis(
     twin_payload: str,
     model_payload: str,
     flows_payload: str,
+    fingerprint: str = "",
 ) -> SecurityAnalysis:
-    """Build one deterministic security assessment per content-keyed input set."""
+    """Build one assessment per bounded, fingerprint-keyed content set.
+
+    The canonical payloads rebuild the model without touching session state.
+    The fingerprint is part of the cache key so a twin revision cannot reuse a
+    result from a different session revision even if its JSON ever differs.
+    """
     return analyze_design(
         DigitalTwin.model_validate_json(twin_payload),
         model=SecurityModel.model_validate_json(model_payload),

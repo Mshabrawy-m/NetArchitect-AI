@@ -183,6 +183,8 @@ class ExplanationTarget(str, Enum):
     finding = "finding"
     simulation = "simulation"
     optimization = "optimization"
+    blast_radius = "blast_radius"
+    segmentation_score = "segmentation_score"
 
 
 class ExplanationResult(BaseModel):

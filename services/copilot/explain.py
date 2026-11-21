@@ -24,7 +24,7 @@ from optimization import (
     OptimizationSettings,
     candidate_changes,
 )
-from security import SecurityFinding
+from security import BlastRadius, SecurityFinding, SegmentationScore
 from services.llm import EXPLAIN_RESULT, LLMProvider, PromptSpec
 from simulation import DemandEvaluation, ScenarioRun, SimulationAssumptions
 
@@ -170,6 +170,57 @@ def finding_request(finding: SecurityFinding) -> ExplanationRequest:
     return ExplanationRequest(
         target=ExplanationTarget.finding,
         target_id=finding.code,
+        deterministic_text=deterministic,
+        facts=facts,
+    )
+
+
+def blast_radius_request(radius: BlastRadius) -> ExplanationRequest:
+    """Build a bounded blast-radius explanation from one S1 result."""
+    direct = ", ".join(radius.directly_reachable) or "none"
+    closure = ", ".join(radius.closure_zones) or "none"
+    deterministic = (
+        f"Modeled policy reachability from {radius.origin_zone} "
+        f"({radius.origin_zone_type.value}) directly includes {direct}. Within "
+        f"the bounded {radius.hop_count}-hop closure, reachable zones are "
+        f"{closure}. Highest designer-set criticality reached is "
+        f"{radius.max_criticality_reached}; exposure flag is "
+        f"{str(radius.exposure).lower()}. This is a policy-reachability model, "
+        "not an attack path or exploit chain."
+    )
+    facts = (
+        f"Origin {radius.origin_zone}, direct zones {direct}, closure zones "
+        f"{closure}, hops {radius.hop_count}, highest criticality "
+        f"{radius.max_criticality_reached}, exposure "
+        f"{str(radius.exposure).lower()}"
+    )
+    return ExplanationRequest(
+        target=ExplanationTarget.blast_radius,
+        target_id=radius.origin_zone,
+        deterministic_text=deterministic,
+        facts=facts,
+    )
+
+
+def segmentation_score_request(score: SegmentationScore) -> ExplanationRequest:
+    """Build a hand-checkable segmentation-score explanation from one S2 result."""
+    inputs = "; ".join(
+        f"{item.name} subscore {_number(item.subscore)} x weight "
+        f"{_number(item.weight)} = {_number(item.contribution)}"
+        for item in score.inputs
+    )
+    deterministic = (
+        f"Modeled segmentation score is {score.score}/100. Weighted inputs: "
+        f"{inputs}. {score.formula}"
+    )
+    facts = (
+        f"Score {score.score}, weighted inputs {inputs}, formula {score.formula}, "
+        f"allowed {score.allowed_count}, needed {score.needed_count}, excess "
+        f"{score.excess_count}"
+    )
+    return ExplanationRequest(
+        target=ExplanationTarget.segmentation_score,
+        target_id="segmentation",
         deterministic_text=deterministic,
         facts=facts,
     )
@@ -397,9 +448,11 @@ def explain(
 __all__ = [
     "ExplanationRequest",
     "audit_ai_explanation",
+    "blast_radius_request",
     "explain",
     "finding_request",
     "optimization_request",
     "route_request",
+    "segmentation_score_request",
     "simulation_request",
 ]

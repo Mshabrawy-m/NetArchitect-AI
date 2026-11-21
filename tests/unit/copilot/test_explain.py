@@ -17,10 +17,12 @@ from services.copilot import (
     ExplanationTarget,
     PromptTrace,
     audit_ai_explanation,
+    blast_radius_request,
     explain,
     finding_request,
     optimization_request,
     route_request,
+    segmentation_score_request,
     simulation_request,
 )
 from services.llm import EXPLAIN_RESULT, LLMProvider, PromptSpec
@@ -29,6 +31,7 @@ from services.llm.testing import FakeProvider
 from simulation import run_scenario
 from tests.unit.optimization.helpers import settings, tiny_twin
 from tests.unit.security.design_helpers import case_design
+from tests.unit.security.test_reachability import _chain_twin, _four_zone_model
 from tests.unit.simulation.helpers import line_twin, make_demand
 
 _FACTS = (
@@ -216,3 +219,24 @@ def test_builders_use_only_computed_values() -> None:
     assert record.evaluation.candidate_hash[:16] == candidate.target_id
     assert "Modeled served ratio" in candidate.deterministic_text
     assert "Baseline served ratio" in candidate.deterministic_text
+
+
+def test_security_builders_are_deterministic_first_and_bounded() -> None:
+    analysis = analyze_design(_chain_twin(), model=_four_zone_model())
+    radius = analysis.reachability.blast_radii[0]
+    score = analysis.segmentation
+
+    blast = blast_radius_request(radius)
+    assert blast.target is ExplanationTarget.blast_radius
+    assert blast.target_id == radius.origin_zone
+    assert radius.origin_zone in blast.deterministic_text
+    assert "not an attack path or exploit chain" in blast.deterministic_text
+    assert f"hops {radius.hop_count}" in blast.facts
+
+    segmentation = segmentation_score_request(score)
+    assert segmentation.target is ExplanationTarget.segmentation_score
+    assert f"Modeled segmentation score is {score.score}/100" in (
+        segmentation.deterministic_text
+    )
+    assert score.formula in segmentation.deterministic_text
+    assert f"Score {score.score}" in segmentation.facts

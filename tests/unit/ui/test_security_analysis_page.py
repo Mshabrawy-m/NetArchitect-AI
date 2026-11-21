@@ -42,7 +42,7 @@ def test_security_analysis_requires_a_twin() -> None:
     assert not at.download_button
 
 
-def test_security_analysis_shows_five_tabs_and_exact_disclaimer() -> None:
+def test_security_analysis_shows_ten_tabs_and_exact_disclaimer() -> None:
     twin, _ = hardened_design()
     at = _page(twin)
 
@@ -51,7 +51,12 @@ def test_security_analysis_shows_five_tabs_and_exact_disclaimer() -> None:
         "Zones",
         "Policy",
         "Flow check",
+        "Reachability",
+        "Segmentation",
+        "Optimizer",
+        "Zero-trust",
         "Findings",
+        "Checklist",
         "Templates",
     ]
     assert any(info.value == SECURITY_DISCLAIMER for info in at.info)
@@ -60,6 +65,79 @@ def test_security_analysis_shows_five_tabs_and_exact_disclaimer() -> None:
     assert at.button(key=page.FLOW_ADD_KEY)
     assert at.download_button(key=page.TEMPLATE_DOWNLOAD_KEY)
     assert at.download_button(key=page.ANALYSIS_DOWNLOAD_KEY)
+    assert at.button(key=page.ZERO_TRUST_APPLY_KEY)
+
+
+def test_s6_reachability_and_segmentation_why_buttons() -> None:
+    twin, _ = hardened_design()
+    at = _page(twin)
+
+    assert at.selectbox(key=page.BLAST_RADIUS_SELECT_KEY)
+    at.button(key="copilot_why_blast_radius").click().run()
+
+    assert not at.exception
+    stored = at.session_state[copilot_component.EXPLANATION_STATE_KEY]
+    assert stored["copilot_why_blast_radius"].target.value == "blast_radius"
+    assert "policy-reachability model" in stored[
+        "copilot_why_blast_radius"
+    ].deterministic_text
+
+    at.button(key="copilot_why_segmentation_score").click().run()
+
+    assert not at.exception
+    stored = at.session_state[copilot_component.EXPLANATION_STATE_KEY]
+    assert stored["copilot_why_segmentation_score"].target.value == "segmentation_score"
+    assert "/100" in stored["copilot_why_segmentation_score"].deterministic_text
+
+
+def test_s6_optimizer_apply_creates_new_twin_and_one_decision() -> None:
+    twin, _ = case_design("SEC-DW-005")
+    at = _page(twin)
+
+    options = list(at.multiselect(key=page.OPTIMIZER_SELECT_KEY).options)
+    assert options == ["tighten-allow-guest-srv"]
+    at.multiselect(key=page.OPTIMIZER_SELECT_KEY).set_value(options).run()
+    at.button(key=page.OPTIMIZER_APPLY_KEY).click().run()
+
+    assert not at.exception
+    updated = at.session_state[state.TWIN_KEY]
+    assert updated is not twin
+    records = at.session_state[state.COPILOT_DECISIONS_KEY].records
+    assert len(records) == 1
+    assert records[0].kind is DecisionKind.optimization_candidate_selected
+    assert records[0].page == "Security Analysis"
+    assert records[0].source_fingerprint
+    assert records[0].result_fingerprint != records[0].source_fingerprint
+
+
+def test_s6_zero_trust_apply_creates_new_twin_and_one_decision() -> None:
+    twin, _ = hardened_design()
+    at = _page(twin)
+
+    options = list(at.multiselect(key=page.ZERO_TRUST_SELECT_KEY).options)
+    assert options == ["micro-z-mgmt", "micro-z-srv"]
+    at.multiselect(key=page.ZERO_TRUST_SELECT_KEY).set_value([options[0]]).run()
+    at.button(key=page.ZERO_TRUST_APPLY_KEY).click().run()
+
+    assert not at.exception
+    updated = at.session_state[state.TWIN_KEY]
+    assert updated is not twin
+    records = at.session_state[state.COPILOT_DECISIONS_KEY].records
+    assert len(records) == 1
+    assert records[0].kind is DecisionKind.security_proposal_accepted
+    assert records[0].page == "Security Analysis"
+    assert records[0].source_fingerprint
+    assert records[0].result_fingerprint != records[0].source_fingerprint
+
+
+def test_s6_checklist_tab_shows_version_and_basic_health() -> None:
+    twin, _ = hardened_design()
+    at = _page(twin)
+
+    assert not at.exception
+    assert any("Checklist version: 1.0" in item.value for item in at.caption)
+    assert any("Not modeled" in item.value for item in at.markdown)
+    assert any("Basic design health" in item.value for item in at.subheader)
 
 
 def test_c3_finding_explanation_without_key() -> None:

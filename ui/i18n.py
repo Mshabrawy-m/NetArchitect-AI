@@ -540,6 +540,75 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "topology.alt": (
             "Layered topology diagram with {devices} devices and {links} links"
         ),
+        # S6 design-time security tabs
+        "security.page.title": "Security Analysis",
+        "security.page.intro": (
+            "Model trust zones, policy, and flow checks against the current "
+            "digital twin. This page does not scan, probe, contact a device, or "
+            "look up a vulnerability."
+        ),
+        "security.scope": "Model scope",
+        "security.empty.message": (
+            "No digital twin with a topology is loaded. Open the Topology "
+            "Editor to create, generate, or import one, then return here."
+        ),
+        "security.empty.title": "Digital twin required",
+        "security.empty.hint": (
+            "Security results are modeled only from a stored twin revision."
+        ),
+        "security.tab.zones": "Zones",
+        "security.tab.policy": "Policy",
+        "security.tab.flow": "Flow check",
+        "security.tab.reachability": "Reachability",
+        "security.tab.segmentation": "Segmentation",
+        "security.tab.optimizer": "Optimizer",
+        "security.tab.zero_trust": "Zero-trust",
+        "security.tab.findings": "Findings",
+        "security.tab.checklist": "Checklist",
+        "security.tab.templates": "Templates",
+        "security.reachability.title": "Modeled policy reachability",
+        "security.reachability.caption": (
+            "The full zone x service grid is a design-time policy model. It is "
+            "not an attack path, exploit chain, or a scan of a live network."
+        ),
+        "security.reachability.blast_radius": "Bounded blast radius",
+        "security.reachability.why": "Why this reachability?",
+        "security.segmentation.title": "Modeled segmentation score",
+        "security.segmentation.caption": (
+            "Every weighted input is shown so the integer score can be checked "
+            "by hand. Criticality is a designer-set assumption, not a CVSS value."
+        ),
+        "security.segmentation.why": "Why this score?",
+        "security.optimizer.title": "Inert policy optimizations",
+        "security.optimizer.caption": (
+            "Each proposal carries a finite decision-table proof. Selection "
+            "creates a new twin; no device configuration is generated."
+        ),
+        "security.optimizer.select": "Optimizations to apply",
+        "security.optimizer.apply": "Apply selected optimizations",
+        "security.optimizer.empty": "No optimization proposals were produced.",
+        "security.optimizer.applied": "Applied {count} optimization(s) to a new twin.",
+        "security.zero_trust.title": "Zero-trust microsegmentation",
+        "security.zero_trust.caption": (
+            "Suggestions align with common practice at design level only. Allow "
+            "rules come from modeled needs; denies cover lower-trust pairs with "
+            "no modeled need."
+        ),
+        "security.zero_trust.select": "Suggestions to apply",
+        "security.zero_trust.apply": "Apply selected suggestions",
+        "security.zero_trust.empty": "No microsegmentation suggestions were produced.",
+        "security.zero_trust.applied": "Applied {count} suggestion(s) to a new twin.",
+        "security.checklist.title": "Design checklist",
+        "security.checklist.caption": (
+            "Design checklist aligned with common practice (design-level). No "
+            "compliance or certification is claimed."
+        ),
+        "security.checklist.version": "Checklist version",
+        "security.checklist.health": "Basic design health",
+        "status.pass": "Pass",
+        "status.fail": "Fail",
+        "status.not-modeled": "Not modeled",
+        "status.exposed": "Exposed",
     }
 )
 
@@ -994,6 +1063,75 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "topology.utilization.high": "مرتفع (90-100%)",
         "topology.utilization.overload": "تحميل زائد (>100%)",
         "topology.alt": "مخطط طوبولوجيا بـ {devices} جهازاً و {links} رابطاً",
+        # S6 design-time security tabs
+        "security.page.title": "تحليل الأمان",
+        "security.page.intro": (
+            "نمذجة مناطق الثقة والسياسات وفحوص التدفق مقابل التوأم الرقمي "
+            "الحالي. لا تقوم هذه الصفحة بفحص أو استقصاء أو الاتصال بأي جهاز "
+            "أو البحث عن ثغرات."
+        ),
+        "security.scope": "نطاق النموذج",
+        "security.empty.message": (
+            "لا يوجد توأم رقمي مع طوبولوجيا محمّل. افتح محرر الطوبولوجيا "
+            "لإنشاء تصميم أو توليده أو استيراده، ثم عد إلى هنا."
+        ),
+        "security.empty.title": "التوأم الرقمي مطلوب",
+        "security.empty.hint": (
+            "نتائج الأمان تُنمذج من مراجعة توأم رقمي مخزّنة فقط."
+        ),
+        "security.tab.zones": "المناطق",
+        "security.tab.policy": "السياسة",
+        "security.tab.flow": "فحص التدفق",
+        "security.tab.reachability": "قابلية الوصول",
+        "security.tab.segmentation": "التجزئة",
+        "security.tab.optimizer": "المحسِّن",
+        "security.tab.zero_trust": "الثقة المعدومة",
+        "security.tab.findings": "النتائج",
+        "security.tab.checklist": "قائمة التحقق",
+        "security.tab.templates": "القوالب",
+        "security.reachability.title": "قابلية الوصول للسياسة المُنمذجة",
+        "security.reachability.caption": (
+            "شبكة المناطق × الخدمات الكاملة هي نموذج سياسة وقت التصميم. "
+            "ليست مسار هجوم أو سلسلة استغلال أو فحصاً لشبكة مباشرة."
+        ),
+        "security.reachability.blast_radius": "نطاق التأثير المحدود",
+        "security.reachability.why": "لماذا قابلية الوصول هذه؟",
+        "security.segmentation.title": "درجة التجزئة المُنمذجة",
+        "security.segmentation.caption": (
+            "كل مُدخل مرجّح ظاهر حتى يمكن التحقق من الدرجة الصحيحة يدوياً. "
+            "الأهمية قراءة تصميمية وليست قيمة CVSS."
+        ),
+        "security.segmentation.why": "لماذا هذه الدرجة؟",
+        "security.optimizer.title": "تحسينات سياسة غير مُطبَّقة",
+        "security.optimizer.caption": (
+            "كل اقتراح مصحوب بإثبات جدول قرارات محدود. الاختيار ينشئ توأماً "
+            "جديداً؛ لا يتم توليد أي إعداد جهاز."
+        ),
+        "security.optimizer.select": "التحسينات المطلوب تطبيقها",
+        "security.optimizer.apply": "تطبيق التحسينات المحددة",
+        "security.optimizer.empty": "لم يتم إنتاج اقتراحات تحسين.",
+        "security.optimizer.applied": "تم تطبيق {count} تحسين على توأم جديد.",
+        "security.zero_trust.title": "التجزئة الدقيقة للثقة المعدومة",
+        "security.zero_trust.caption": (
+            "الاقتراحات متوافقة مع الممارسة الشائعة على مستوى التصميم فقط. "
+            "قواعد السماح مستمدة من احتياجات مُنمذجة، وقواعد المنع تغطي "
+            "الأزواج الأقل ثقة دون حاجة مُنمذجة."
+        ),
+        "security.zero_trust.select": "الاقتراحات المطلوب تطبيقها",
+        "security.zero_trust.apply": "تطبيق الاقتراحات المحددة",
+        "security.zero_trust.empty": "لم يتم إنتاج اقتراحات تجزئة دقيقة.",
+        "security.zero_trust.applied": "تم تطبيق {count} اقتراح على توأم جديد.",
+        "security.checklist.title": "قائمة تحقق التصميم",
+        "security.checklist.caption": (
+            "قائمة تحقق تصميم متوافقة مع الممارسة الشائعة (على مستوى "
+            "التصميم). لا يُدّعى أي امتثال أو شهادة."
+        ),
+        "security.checklist.version": "إصدار قائمة التحقق",
+        "security.checklist.health": "صحة التصميم الأساسية",
+        "status.pass": "ناجح",
+        "status.fail": "فاشل",
+        "status.not-modeled": "غير مُنمذج",
+        "status.exposed": "مُعرّض",
     }
 )
 

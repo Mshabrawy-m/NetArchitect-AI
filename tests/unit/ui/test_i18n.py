@@ -98,6 +98,62 @@ def test_e5_catalog_keys_are_present_and_parity_is_preserved() -> None:
     assert set(i18n.EN) == set(i18n.AR)
 
 
+S6_KEYS = (
+    "security.page.title",
+    "security.page.intro",
+    "security.scope",
+    "security.empty.message",
+    "security.empty.title",
+    "security.empty.hint",
+    "security.tab.zones",
+    "security.tab.policy",
+    "security.tab.flow",
+    "security.tab.reachability",
+    "security.tab.segmentation",
+    "security.tab.optimizer",
+    "security.tab.zero_trust",
+    "security.tab.findings",
+    "security.tab.checklist",
+    "security.tab.templates",
+    "security.reachability.title",
+    "security.reachability.caption",
+    "security.reachability.blast_radius",
+    "security.reachability.why",
+    "security.segmentation.title",
+    "security.segmentation.caption",
+    "security.segmentation.why",
+    "security.optimizer.title",
+    "security.optimizer.caption",
+    "security.optimizer.select",
+    "security.optimizer.apply",
+    "security.optimizer.empty",
+    "security.optimizer.applied",
+    "security.zero_trust.title",
+    "security.zero_trust.caption",
+    "security.zero_trust.select",
+    "security.zero_trust.apply",
+    "security.zero_trust.empty",
+    "security.zero_trust.applied",
+    "security.checklist.title",
+    "security.checklist.caption",
+    "security.checklist.version",
+    "security.checklist.health",
+    "status.pass",
+    "status.fail",
+    "status.not-modeled",
+    "status.exposed",
+)
+
+
+def test_s6_catalog_keys_are_present_and_parity_is_preserved() -> None:
+    for key in S6_KEYS:
+        assert key in i18n.EN
+        assert key in i18n.AR
+    assert i18n.catalog_parity()
+    assert i18n.missing_translation_keys() == ()
+    assert set(i18n.EN) == set(i18n.AR)
+
+
 def test_translate_falls_back_to_english_for_a_missing_arabic_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

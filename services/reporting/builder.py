@@ -2658,6 +2658,521 @@ class _Builder:
             blocks.append(findings_table)
         if flow_rows:
             blocks.append(flow_table)
+
+        def design_note(
+            key: str,
+            label: str,
+            text: str,
+            tool: str,
+            *,
+            severity: str = "info",
+        ) -> NoteBlock:
+            """Record every copied numeric token and tag the note with provenance."""
+            return NoteBlock(
+                text=values.scan(
+                    key,
+                    label,
+                    text,
+                    step="security",
+                    tool=tool,
+                ),
+                severity=severity,  # type: ignore[arg-type]
+                provenance=self.prov("security", tool),
+            )
+
+        reachability = analysis.reachability
+        if reachability is not None:
+            tool = "security.reachability.build_reachability_report"
+            matrix = reachability.matrix
+            zone_count = values.number(
+                "security.reachability.zones",
+                "Modeled reachability zone count",
+                len(matrix.zones),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            service_count = values.number(
+                "security.reachability.services",
+                "Modeled reachability service count",
+                len(matrix.services),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            cell_count = values.number(
+                "security.reachability.cells",
+                "Modeled reachability matrix cell count",
+                len(matrix.cells),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            reachable_count = values.number(
+                "security.reachability.reachable_cells",
+                "Reachable modeled inter-zone cell count",
+                sum(
+                    cell.reachable
+                    and cell.source_zone != cell.destination_zone
+                    for cell in matrix.cells
+                ),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            exposure_count = values.number(
+                "security.reachability.exposure_findings",
+                "Reachability exposure finding count",
+                len(reachability.exposure_findings),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            hop_limit = values.number(
+                "security.reachability.hop_limit",
+                "Blast-radius hop bound",
+                reachability.hop_limit,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            blocks.append(
+                design_note(
+                    "security.reachability.summary",
+                    "Modeled reachability summary",
+                    (
+                        f"The modeled matrix covers {zone_count} zone(s), "
+                        f"{service_count} service(s), and {cell_count} cell(s). "
+                        f"{reachable_count} inter-zone cell(s) are reachable under "
+                        f"the modeled policy and route; {exposure_count} exposure "
+                        f"finding(s) use a {hop_limit}-hop closure bound. "
+                        f"{reachability.note}"
+                    ),
+                    tool,
+                )
+            )
+            radius_rows: list[tuple[str, ...]] = []
+            for index, radius in enumerate(reachability.blast_radii):
+                direct = values.number(
+                    f"security.blast.{index}.direct",
+                    f"Directly reachable zones from {radius.origin_zone}",
+                    len(radius.directly_reachable),
+                    step="security",
+                    tool=tool,
+                    digits=0,
+                )
+                closure = values.number(
+                    f"security.blast.{index}.closure",
+                    f"Bounded closure zones from {radius.origin_zone}",
+                    len(radius.closure_zones),
+                    step="security",
+                    tool=tool,
+                    digits=0,
+                )
+                criticality = values.number(
+                    f"security.blast.{index}.criticality",
+                    f"Highest criticality reached from {radius.origin_zone}",
+                    radius.max_criticality_reached,
+                    step="security",
+                    tool=tool,
+                    digits=0,
+                )
+                radius_rows.append(
+                    (
+                        radius.origin_zone,
+                        radius.origin_zone_type.value,
+                        direct,
+                        closure,
+                        criticality,
+                        str(radius.exposure).lower(),
+                    )
+                )
+            if radius_rows:
+                blocks.append(
+                    self.table(
+                        "security_blast_radius",
+                        "Bounded modeled blast radius",
+                        ("Origin", "Type", "Direct", "Closure", "Max criticality", "Exposure"),
+                        radius_rows,
+                        step="security",
+                        tool=tool,
+                    )
+                )
+
+        segmentation = analysis.segmentation
+        if segmentation is not None:
+            tool = "security.segmentation.score_segmentation"
+            score = values.number(
+                "security.segmentation.score",
+                "Modeled segmentation score",
+                segmentation.score,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            allowed = values.number(
+                "security.segmentation.allowed",
+                "Allowed service triples",
+                segmentation.allowed_count,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            needed = values.number(
+                "security.segmentation.needed",
+                "Needed service triples",
+                segmentation.needed_count,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            excess = values.number(
+                "security.segmentation.excess",
+                "Excess service triples",
+                segmentation.excess_count,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            blocks.append(
+                design_note(
+                    "security.segmentation.summary",
+                    "Modeled segmentation summary",
+                    (
+                        f"Modeled segmentation score is {score}/100 with {allowed} "
+                        f"allowed, {needed} needed, and {excess} excess service "
+                        f"triple(s). {segmentation.formula}"
+                    ),
+                    tool,
+                )
+            )
+            input_rows: list[tuple[str, ...]] = []
+            for index, item in enumerate(segmentation.inputs):
+                subscore = values.number(
+                    f"security.segmentation.input.{index}.subscore",
+                    f"{item.name} subscore",
+                    item.subscore,
+                    step="security",
+                    tool=tool,
+                    digits=4,
+                )
+                weight = values.number(
+                    f"security.segmentation.input.{index}.weight",
+                    f"{item.name} weight",
+                    item.weight,
+                    step="security",
+                    tool=tool,
+                    digits=2,
+                )
+                contribution = values.number(
+                    f"security.segmentation.input.{index}.contribution",
+                    f"{item.name} contribution",
+                    item.contribution,
+                    step="security",
+                    tool=tool,
+                    digits=4,
+                )
+                input_rows.append(
+                    (
+                        item.name,
+                        subscore,
+                        weight,
+                        contribution,
+                        values.scan(
+                            f"security.segmentation.input.{index}.detail",
+                            f"{item.name} derivation",
+                            item.detail,
+                            step="security",
+                            tool=tool,
+                        ),
+                    )
+                )
+            if input_rows:
+                blocks.append(
+                    self.table(
+                        "security_segmentation_inputs",
+                        "Visible segmentation score inputs",
+                        ("Input", "Subscore", "Weight", "Contribution", "Derivation"),
+                        input_rows,
+                        step="security",
+                        tool=tool,
+                    )
+                )
+
+        optimizer = analysis.optimizer
+        if optimizer is not None:
+            tool = "security.optimizer.build_optimization_plan"
+            proposal_count = values.number(
+                "security.optimizer.proposals",
+                "Policy optimization proposal count",
+                len(optimizer.proposals),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            preserving_count = values.number(
+                "security.optimizer.behavior_preserving",
+                "Behavior-preserving optimization count",
+                sum(item.behavior_preserving for item in optimizer.proposals),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            cases = values.number(
+                "security.optimizer.cases_checked",
+                "Optimizer decision-table case count",
+                optimizer.cases_checked,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            default_action = values.text(
+                "security.optimizer.baseline_default",
+                "Baseline policy default action",
+                optimizer.baseline_default_action.value,
+                step="security",
+                tool=tool,
+            )
+            blocks.append(
+                design_note(
+                    "security.optimizer.summary",
+                    "Modeled policy optimization summary",
+                    (
+                        f"The baseline default action is {default_action}. "
+                        f"{proposal_count} inert proposal(s) were produced, "
+                        f"{preserving_count} with a behavior-preserving proof, "
+                        f"over {cases} decision-table case(s). {optimizer.note}"
+                    ),
+                    tool,
+                )
+            )
+            optimizer_rows: list[tuple[str, ...]] = []
+            for index, proposal in enumerate(optimizer.proposals):
+                proof_cases = values.number(
+                    f"security.optimizer.proof.{index}.cases",
+                    f"Proof cases for {proposal.id}",
+                    proposal.proof.cases_checked,
+                    step="security",
+                    tool=tool,
+                    digits=0,
+                )
+                optimizer_rows.append(
+                    (
+                        proposal.id,
+                        proposal.kind.value,
+                        str(proposal.behavior_preserving).lower(),
+                        proof_cases,
+                        values.scan(
+                            f"security.optimizer.proof.{index}.method",
+                            f"Proof method for {proposal.id}",
+                            proposal.proof.method,
+                            step="security",
+                            tool=tool,
+                        ),
+                        values.scan(
+                            f"security.optimizer.explanation.{index}",
+                            f"Optimization explanation for {proposal.id}",
+                            proposal.explanation,
+                            step="security",
+                            tool=tool,
+                        ),
+                    )
+                )
+            if optimizer_rows:
+                blocks.append(
+                    self.table(
+                        "security_optimizer_proposals",
+                        "Inert modeled policy optimizations",
+                        ("Id", "Kind", "Equivalent", "Cases", "Proof", "Explanation"),
+                        optimizer_rows,
+                        step="security",
+                        tool=tool,
+                    )
+                )
+
+        microsegmentation = analysis.microsegmentation
+        if microsegmentation is not None:
+            tool = "security.microsegmentation.build_microsegmentation_plan"
+            micro_proposals = values.number(
+                "security.microsegmentation.proposals",
+                "Microsegmentation proposal count",
+                len(microsegmentation.proposals),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            flows_modeled = values.number(
+                "security.microsegmentation.flows",
+                "Modeled microsegmentation flow count",
+                microsegmentation.flows_modeled,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            additions = values.number(
+                "security.microsegmentation.rules",
+                "Inert microsegmentation rule count",
+                sum(len(item.new_rules) for item in microsegmentation.proposals),
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            blocks.append(
+                design_note(
+                    "security.microsegmentation.summary",
+                    "Modeled zero-trust summary",
+                    (
+                        f"{micro_proposals} inert suggestion(s) were derived from "
+                        f"{flows_modeled} modeled flow(s), adding {additions} "
+                        f"design-time rule record(s). {microsegmentation.note}"
+                    ),
+                    tool,
+                )
+            )
+            micro_rows: list[tuple[str, ...]] = []
+            for index, proposal in enumerate(microsegmentation.proposals):
+                before_score = values.number(
+                    f"security.microsegmentation.{index}.before_score",
+                    f"Segmentation score before {proposal.id}",
+                    proposal.before_score,
+                    step="security",
+                    tool=tool,
+                    digits=0,
+                )
+                after_score = values.number(
+                    f"security.microsegmentation.{index}.after_score",
+                    f"Segmentation score after {proposal.id}",
+                    proposal.after_score,
+                    step="security",
+                    tool=tool,
+                    digits=0,
+                )
+                before_reachable = values.number(
+                    f"security.microsegmentation.{index}.before_reachable",
+                    f"Reachable pairs before {proposal.id}",
+                    proposal.before_reachable_count,
+                    step="security",
+                    tool=tool,
+                    digits=0,
+                )
+                after_reachable = values.number(
+                    f"security.microsegmentation.{index}.after_reachable",
+                    f"Reachable pairs after {proposal.id}",
+                    proposal.after_reachable_count,
+                    step="security",
+                    tool=tool,
+                    digits=0,
+                )
+                micro_rows.append(
+                    (
+                        proposal.id,
+                        proposal.zone_id,
+                        before_score,
+                        after_score,
+                        before_reachable,
+                        after_reachable,
+                        values.scan(
+                            f"security.microsegmentation.{index}.explanation",
+                            f"Microsegmentation explanation for {proposal.id}",
+                            proposal.explanation,
+                            step="security",
+                            tool=tool,
+                        ),
+                    )
+                )
+            if micro_rows:
+                blocks.append(
+                    self.table(
+                        "security_microsegmentation",
+                        "Inert modeled zero-trust suggestions",
+                        (
+                            "Id",
+                            "Zone",
+                            "Score before",
+                            "Score after",
+                            "Pairs before",
+                            "Pairs after",
+                            "Explanation",
+                        ),
+                        micro_rows,
+                        step="security",
+                        tool=tool,
+                    )
+                )
+
+        checklist = analysis.checklist
+        if checklist is not None:
+            tool = "security.checklist.build_design_checklist"
+            version = values.text(
+                "security.checklist.version",
+                "Design checklist version",
+                checklist.version,
+                step="security",
+                tool=tool,
+            )
+            pass_count = values.number(
+                "security.checklist.pass",
+                "Design checklist pass count",
+                checklist.pass_count,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            fail_count = values.number(
+                "security.checklist.fail",
+                "Design checklist fail count",
+                checklist.fail_count,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            not_modeled_count = values.number(
+                "security.checklist.not_modeled",
+                "Design checklist not-modeled count",
+                checklist.not_modeled_count,
+                step="security",
+                tool=tool,
+                digits=0,
+            )
+            blocks.append(
+                design_note(
+                    "security.checklist.summary",
+                    "Design checklist summary",
+                    (
+                        f"Design checklist version {version} records {pass_count} "
+                        f"pass, {fail_count} fail, and {not_modeled_count} "
+                        f"not-modeled item(s). {checklist.note}"
+                    ),
+                    tool,
+                )
+            )
+            checklist_rows: list[tuple[str, ...]] = []
+            for index, item in enumerate(checklist.items):
+                checklist_rows.append(
+                    (
+                        item.id,
+                        item.status.value,
+                        ", ".join(item.rule_linkage) or "-",
+                        values.scan(
+                            f"security.checklist.{index}.evidence",
+                            f"Evidence for {item.id}",
+                            "; ".join(item.evidence) or "-",
+                            step="security",
+                            tool=tool,
+                        ),
+                    )
+                )
+            blocks.append(
+                self.table(
+                    "security_checklist",
+                    "Versioned design checklist",
+                    ("Id", "Status", "Linked rules", "Evidence"),
+                    checklist_rows,
+                    step="security",
+                    tool=tool,
+                )
+            )
+
         if analysis.proposals.rules:
             blocks.append(
                 NoteBlock(

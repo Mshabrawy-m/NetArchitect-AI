@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from security import SECURITY_DISCLAIMER, PolicyAction, analyze_design
-from services.reporting import ReportSources, build_report
+from services.reporting import ReportSources, build_report, check_consistency
 from tests.unit.security.design_helpers import hardened_design
 
 GENERATED_AT = datetime(2026, 11, 18, 12, 0, tzinfo=UTC)
@@ -43,6 +43,44 @@ def test_security_section_uses_exact_disclaimer_and_provenance() -> None:
         table for table in section.blocks if getattr(table, "id", "") == "security_findings"
     )
     assert any("POLICY-DEFAULT-ALLOW" in row for row in findings_table.rows)
+
+
+def test_security_design_additions_have_provenance_and_consistent_numbers() -> None:
+    twin, analysis = _security_case()
+
+    document = build_report(
+        ReportSources(
+            twin=twin,
+            security_analysis=analysis,
+            generated_at=GENERATED_AT,
+        )
+    )
+    section = document.section("security")
+    assert section is not None
+    tool_by_key = {
+        "security.reachability.zones": "security.reachability.build_reachability_report",
+        "security.segmentation.score": "security.segmentation.score_segmentation",
+        "security.optimizer.proposals": "security.optimizer.build_optimization_plan",
+        "security.microsegmentation.proposals": (
+            "security.microsegmentation.build_microsegmentation_plan"
+        ),
+        "security.checklist.pass": "security.checklist.build_design_checklist",
+    }
+    for key, tool in tool_by_key.items():
+        record = next(record for record in document.values if record.key == key)
+        assert record.provenance.step == "security"
+        assert record.provenance.tool == tool
+
+    table_ids = {
+        getattr(block, "id", "") for block in section.blocks
+    }
+    assert "security_blast_radius" in table_ids
+    assert "security_segmentation_inputs" in table_ids
+    assert "security_checklist" in table_ids
+
+    consistency = check_consistency(document)
+    assert consistency.ok
+    assert consistency.errors == ()
 
 
 def test_security_section_is_deterministic() -> None:

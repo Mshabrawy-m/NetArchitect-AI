@@ -385,3 +385,29 @@ def test_security_analysis_cache_is_keyed_by_twin_model_and_flows(
     assert changed.flow_checks[0].request.id == "other"
     assert len(calls) == 2
     assert all(call.endswith(":1") for call in calls)
+
+
+def test_security_analysis_cache_uses_fingerprint_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    original = cache.analyze_design
+    twin, model = hardened_design()
+
+    def spy(twin_arg, *, model=None, flows=()):
+        calls.append(twin_arg.metadata.name)
+        return original(twin_arg, model=model, flows=flows)
+
+    monkeypatch.setattr(cache, "analyze_design", spy)
+    cached_security_analysis.clear()
+
+    args = (
+        twin_payload(twin),
+        model.model_dump_json(),
+        security_flows_payload(()),
+    )
+    first = cached_security_analysis(*args, twin_cache_key(twin))
+    second = cached_security_analysis(*args, twin_cache_key(twin))
+    changed = cached_security_analysis(*args, f"revision-{twin_cache_key(twin)}")
+
+    assert first == second
+    assert first == changed
+    assert len(calls) == 2

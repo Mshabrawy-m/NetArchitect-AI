@@ -157,6 +157,9 @@ STATUS_TOKEN_NAMES = MappingProxyType(
         "critical": "critical",
         "error": "critical",
         "info": "info",
+        "pass": "ok",
+        "fail": "critical",
+        "not-modeled": "info",
     }
 )
 

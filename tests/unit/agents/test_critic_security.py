@@ -25,10 +25,11 @@ from core.schemas.validation import Severity
 from security import PolicyAction, RiskLevel
 from tests.unit.security.design_helpers import hardened_design
 from tests.unit.security.helpers import make_rule
+from tests.unit.security.test_reachability import _chain_twin, _four_zone_model
 
 
-def _security_output(model):
-    twin, _ = hardened_design()
+def _security_output(model, twin=None):
+    twin = twin if twin is not None else hardened_design()[0]
     agent = SecurityAgent()
     plan = WorkflowPlan(
         name="Security setup", tasks=(WorkflowTask(id="security", agent="security"),)
@@ -50,8 +51,8 @@ def _security_output(model):
     )
 
 
-def _run_critic(security_output):
-    twin, _ = hardened_design()
+def _run_critic(security_output, twin=None):
+    twin = twin if twin is not None else hardened_design()[0]
     agent = CriticAgent()
     plan = WorkflowPlan(
         name="Critic security test",
@@ -79,6 +80,7 @@ def test_security_finding_codes_are_mapped_to_the_security_step() -> None:
     assert responsible_step_for("SEC-DW-009") == "security"
     assert responsible_step_for("POLICY-DEFAULT-ALLOW") == "security"
     assert responsible_step_for("POLICY-SHADOWED") == "security"
+    assert responsible_step_for("REACH-EXPOSURE-HIGH-CRITICALITY") == "security"
     assert responsible_step_for("security_high_risk") == "security"
 
 
@@ -103,6 +105,29 @@ def test_security_error_rejects_the_critic_and_maps_to_security() -> None:
     security_calls = [entry for entry in trace.entries if entry.tool == "security_analysis"]
     assert len(security_calls) == 1
     assert security_calls[0].status == "ok"
+
+
+def test_reachability_exposure_rejects_and_routes_to_security() -> None:
+    twin, model = _chain_twin(), _four_zone_model()
+    twin = twin.model_copy(update={"addressing": None})
+    security_output = _security_output(model, twin=twin)
+
+    output, trace = _run_critic(security_output, twin=twin)
+
+    assert output.verdict is CriticVerdict.rejected
+    assert "REACH-EXPOSURE-HIGH-CRITICALITY" in output.issue_codes
+    assert output.replan_target == "security"
+    finding = next(
+        item
+        for item in output.findings
+        if item.code == "REACH-EXPOSURE-HIGH-CRITICALITY"
+    )
+    assert finding.severity is Severity.error
+    assert finding.blocking is True
+    assert finding.responsible_step == "security"
+    assert "not an attack path" in finding.explanation
+    security_calls = [entry for entry in trace.entries if entry.tool == "security_analysis"]
+    assert len(security_calls) == 1
 
 
 def test_high_band_risk_adds_a_nonblocking_warning() -> None:

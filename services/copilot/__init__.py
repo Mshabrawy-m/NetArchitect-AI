@@ -13,10 +13,12 @@ from .decisions import DecisionKind, DecisionLog, DecisionRecord
 from .explain import (
     ExplanationRequest,
     audit_ai_explanation,
+    blast_radius_request,
     explain,
     finding_request,
     optimization_request,
     route_request,
+    segmentation_score_request,
     simulation_request,
 )
 from .interpret import interpret_scenario
@@ -72,6 +74,7 @@ __all__ = [
     "apply_suggestion",
     "audit_ai_explanation",
     "audit_prose",
+    "blast_radius_request",
     "build_key",
     "explain",
     "finding_request",
@@ -80,6 +83,7 @@ __all__ = [
     "optimization_request",
     "request_structured",
     "route_request",
+    "segmentation_score_request",
     "simulation_request",
     "suggest",
 ]

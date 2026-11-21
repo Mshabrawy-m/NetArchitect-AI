@@ -64,7 +64,7 @@ def responsible_step_for(code: str) -> str:
     known = RESPONSIBLE_STEPS.get(code)
     if known is not None:
         return known
-    if code.startswith(("SEC-", "POLICY-")):
+    if code.startswith(("SEC-", "POLICY-", "REACH-")):
         return "security"
     if code == "security_high_risk":
         return "security"
@@ -422,6 +422,10 @@ class CriticAgent(BaseAgent):
             return
         for finding in report.findings:
             add_engine_finding(finding)
+        reachability = report.reachability
+        if reachability is not None:
+            for finding in reachability.exposure_findings:
+                add_engine_finding(finding)
         if report.risk.level is RiskLevel.high:
             add_finding(
                 code="security_high_risk",
