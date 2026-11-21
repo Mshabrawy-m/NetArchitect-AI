@@ -12,6 +12,7 @@ measured property and is not a CVSS score.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -485,6 +486,80 @@ class ReachabilityReport(DisclosedModel):
     hop_limit: int = Field(ge=0)
 
 
+POLICY_OPTIMIZER_NOTE = (
+    "Modeled policy optimization. Proposals are inert until explicitly applied "
+    "to a new twin; no device configuration or command is generated."
+)
+
+
+class RuleChange(DisclosedModel):
+    """One inert rule-level edit used to realize an optimizer proposal."""
+
+    op: Literal["remove", "replace", "set_default"]
+    target_rule_id: str = ""
+    new_rule: FirewallRule | None = None
+    new_default_action: PolicyAction | None = None
+
+    @model_validator(mode="after")
+    def _validate_change(self) -> RuleChange:
+        if self.op == "remove" and not self.target_rule_id:
+            raise ValueError("A remove change must name a rule")
+        if self.op == "replace" and (not self.target_rule_id or self.new_rule is None):
+            raise ValueError("A replace change must name a rule and supply its replacement")
+        if (
+            self.op == "replace"
+            and self.new_rule is not None
+            and self.new_rule.id != self.target_rule_id
+        ):
+            raise ValueError("A replacement rule must keep the target rule id")
+        if self.op == "set_default" and self.new_default_action is None:
+            raise ValueError("A set_default change must supply the new default action")
+        return self
+
+
+class OptimizationKind(str, Enum):
+    """Stable categories of deterministic policy optimization."""
+
+    merge_duplicates = "merge_duplicates"
+    remove_shadowed = "remove_shadowed"
+    remove_redundant = "remove_redundant"
+    reorder_specifics = "reorder_specifics"
+    tighten_any = "tighten_any"
+    explicit_default_deny = "explicit_default_deny"
+
+
+class DecisionProof(DisclosedModel):
+    """Full finite decision-table comparison between two modeled policies."""
+
+    cases_checked: int = Field(ge=0)
+    differing_cases: tuple[str, ...] = Field(default_factory=tuple, max_length=8)
+    equivalent: bool
+    method: str
+
+
+class OptimizationProposal(DisclosedModel):
+    """One inert, selectable policy optimization with its equivalence proof."""
+
+    id: str
+    kind: OptimizationKind
+    title: str
+    explanation: str
+    affected_rule_ids: tuple[str, ...] = Field(default_factory=tuple)
+    behavior_preserving: bool
+    proof: DecisionProof
+    changes: tuple[RuleChange, ...] = Field(min_length=1)
+
+
+class OptimizationPlan(DisclosedModel):
+    """Bounded set of deterministic proposals for one modeled policy."""
+
+    note: str = POLICY_OPTIMIZER_NOTE
+    model: SecurityModel
+    baseline_default_action: PolicyAction
+    cases_checked: int = Field(ge=0)
+    proposals: tuple[OptimizationProposal, ...] = Field(default_factory=tuple)
+
+
 class SegmentationInput(DisclosedModel):
     """One visible weighted contribution to the segmentation score."""
 
@@ -527,19 +602,25 @@ class SecurityAnalysis(DisclosedModel):
     # parses, and twin JSON/fingerprints are unaffected.
     reachability: ReachabilityReport | None = None
     segmentation: SegmentationScore | None = None
+    optimizer: OptimizationPlan | None = None
 
 
 __all__ = [
+    "POLICY_OPTIMIZER_NOTE",
     "POLICY_REACHABILITY_NOTE",
     "SECURITY_DISCLAIMER",
     "BlastRadius",
     "CatalogRule",
+    "DecisionProof",
     "DisclosedModel",
     "FindingCategory",
     "FirewallRule",
     "FlowCheckResult",
     "FlowRequest",
     "FlowVerdict",
+    "OptimizationKind",
+    "OptimizationPlan",
+    "OptimizationProposal",
     "PolicyAction",
     "PolicyDecision",
     "ProposalSet",
@@ -551,6 +632,7 @@ __all__ = [
     "RiskAssessment",
     "RiskLevel",
     "RiskTerm",
+    "RuleChange",
     "SecurityAnalysis",
     "SecurityFinding",
     "SecurityModel",

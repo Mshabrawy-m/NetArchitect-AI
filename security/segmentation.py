@@ -158,6 +158,23 @@ def _is_needed(
     return (source, destination, service) in exact or (source, destination, "*") in wildcard
 
 
+def needed_pairs(
+    twin: DigitalTwin,
+    model: SecurityModel,
+    flows: tuple[FlowRequest, ...] | list[FlowRequest] = (),
+) -> dict[tuple[str, str], set[str]]:
+    """Return the modeled named-service need for each zone pair."""
+    exact, wildcard = _needed_sets(twin, model, tuple(flows))
+    result: dict[tuple[str, str], set[str]] = {}
+    for source, destination, service in exact:
+        result.setdefault((source, destination), set()).add(service)
+    for source, destination, _ in wildcard:
+        result.setdefault((source, destination), set()).update(
+            service.name for service in model.services
+        )
+    return result
+
+
 def _shared_vlan_fraction(model: SecurityModel) -> float:
     """Return the largest fraction of zones sharing one modeled VLAN id."""
     zone_count = len(model.zones)
@@ -277,5 +294,6 @@ __all__ = [
     "TRUST_WEIGHT",
     "SegmentationInput",
     "SegmentationScore",
+    "needed_pairs",
     "score_segmentation",
 ]

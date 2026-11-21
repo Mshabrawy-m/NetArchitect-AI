@@ -2,8 +2,8 @@
 
 ## Overall
 - Current phase: v1.0.0 released; V2 security package on `feature/v2-security`
-- Current task: S1-S2 complete; S3-S6 in progress
-- Overall status: `feature/v2-tech` (`ed3312f`), `feature/v2-design` (`52ef456`), `feature/v2-engine`, and `feature/v2-copilot` were merged and pushed to `main` (latest `54ba6a2`). `feature/v2-security` adds deterministic, offline design-time security modeling: S1 zone policy reachability/bounded blast radius and S2 segmentation scoring are complete. All additions are additive optional fields: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
+- Current task: S1-S3 complete; S4-S6 in progress
+- Overall status: `feature/v2-tech` (`ed3312f`), `feature/v2-design` (`52ef456`), `feature/v2-engine`, and `feature/v2-copilot` were merged and pushed to `main` (latest `54ba6a2`). `feature/v2-security` adds deterministic, offline design-time security modeling: S1 zone policy reachability/bounded blast radius, S2 segmentation scoring, and S3 policy optimization are complete. All additions are additive optional fields: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
 - Last updated: 2026-11-21
 - Branch: `feature/v2-security` (created from updated `main`)
 
@@ -36,6 +36,19 @@
   additive optional field. Tests cover the documented formula, a hand-computed
   score, monotone deny behavior, criticality, modeled needs, shared VLANs, and
   legacy JSON. `pytest -q` 1228 passed, 6 deselected; `ruff check .` clean.
+- S3: `security/optimizer.py` builds bounded, inert deterministic policy
+  proposals: adjacent-duplicate merge, shadowed/redundant removal, specific-first
+  reordering, any-service tightening, and explicit default deny. Every proposal
+  carries a full finite decision-table equivalence proof (zone pairs x
+  `{tcp,udp,icmp,any}` x port breakpoints plus default). Behavior-changing
+  proposals are flagged and remain selectable. Applying selected proposals
+  creates a NEW twin through `set_security_model` and emits one optional C4
+  `optimization_candidate_selected` decision through an injected callback (no
+  `ui`/`services` import inside `security/`). `SecurityAnalysis.optimizer` is
+  additive and optional; `MAX_OPTIMIZATION_PROPOSALS=12`. Tests cover every
+  proposal kind, proof correctness, NEW-twin/C4 behavior, legacy JSON, bounds,
+  and a bounded Hypothesis cross-check against `evaluate_policy`. `pytest -q`
+  1241 passed, 6 deselected; `ruff check .` clean.
 
 ## V2 package (feature/v2-tech)
 

@@ -16,6 +16,7 @@ from .models import (
     SecurityModel,
 )
 from .operations import get_security_model
+from .optimizer import build_optimization_plan
 from .policy import check_flow
 from .reachability import build_reachability_report
 from .remediation import build_proposals
@@ -138,6 +139,7 @@ def analyze_design(
         matrix=reachability.matrix,
         blast_radii=reachability.blast_radii,
     )
+    optimizer = build_optimization_plan(twin, security_model, flows=flows)
     return SecurityAnalysis(
         model=security_model,
         findings=findings,
@@ -148,6 +150,7 @@ def analyze_design(
         template=template,
         reachability=reachability,
         segmentation=segmentation,
+        optimizer=optimizer,
     )
 
 

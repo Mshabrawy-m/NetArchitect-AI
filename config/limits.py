@@ -76,6 +76,11 @@ MAX_BLAST_RADIUS_HOPS: int = 8
 # the free tier even if a zone names many devices.
 MAX_ROUTE_PROBE_DEVICES: int = 8
 
+# Maximum deterministic policy-optimization proposals shown for one design.
+# Proposals are inert; the cap keeps the decision table and proposal list small
+# enough for an interactive free-tier session.
+MAX_OPTIMIZATION_PROPOSALS: int = 12
+
 # Maximum number of snapshots retained for one digital twin.
 MAX_SNAPSHOTS: int = 20
 

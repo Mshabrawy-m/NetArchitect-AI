@@ -2,6 +2,29 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-21 - S3: deterministic policy optimizer on feature/v2-security
+
+### Added
+- S3: inert, deterministic policy proposals (merge duplicates, remove
+  shadowed/redundant, reorder specific-before-any, tighten any-service, explicit
+  default deny) with a full finite decision-table equivalence proof and explicit
+  behavior-changing flags.
+- Additive optional `SecurityAnalysis.optimizer` field and bounded
+  `MAX_OPTIMIZATION_PROPOSALS=12`.
+- Explicit selection applies proposals to a NEW twin and emits one optional C4
+  `optimization_candidate_selected` decision via an injected callback.
+
+### Changed
+- No schema version bump (`TWIN_SCHEMA_VERSION` stays `2`); no new runtime
+  dependency, thread, worker, or app disk write. Proposals are inert until
+  explicitly applied and never generate device configuration or commands.
+
+### Evidence
+- `pytest -q`: `1241 passed, 6 deselected in 48.94s`.
+- `ruff check .`: `All checks passed!`.
+- Bounded Hypothesis cross-check against `evaluate_policy` in
+  `tests/property/test_security_optimizer.py` passed.
+
 ## 2026-11-21 - S2: visible segmentation score on feature/v2-security
 
 ### Added
