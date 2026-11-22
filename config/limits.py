@@ -291,6 +291,17 @@ MAX_V6_PREFIXES: int = 256
 # checks are linear in rule count, so this keeps interactive review bounded.
 MAX_NAT_RULES: int = 64
 
+# Maximum number of OSPF areas in one modeled design. Area ids and membership
+# are design annotations; this bound keeps the derivation checks interactive.
+MAX_OSPF_AREAS: int = 32
+
+# Configurable *heuristic* device count per OSPF area. Exceeding it produces a
+# warning only: this is a planning guideline, NOT an OSPF protocol limit.
+DEFAULT_OSPF_AREA_DEVICE_THRESHOLD: int = 50
+
+# Maximum number of inert summarization suggestions emitted by one OSPF review.
+MAX_OSPF_SUMMARY_SUGGESTIONS: int = 16
+
 # Maximum characters accepted in one copilot scenario sentence. This is a UI
 # input bound, not a token budget; deterministic parsing always runs first.
 MAX_COPILOT_TEXT_CHARS: int = 1_000
