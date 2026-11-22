@@ -66,6 +66,10 @@ def _module_names() -> list[str]:
             parts = list(path.relative_to(ROOT).with_suffix("").parts)
             if parts[-1] == "__init__":
                 parts.pop()
+            # __main__ modules intentionally execute their CLI on import. They
+            # are covered by their own subprocess tests instead.
+            if parts[-1] == "__main__":
+                continue
             names.add(".".join(parts))
     names.update(_page_targets())
     names.add("app")
