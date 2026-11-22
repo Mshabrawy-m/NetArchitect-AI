@@ -8,6 +8,10 @@ are used as field types by routing and other modules. The requirements models
 re-exported as well.
 """
 
+from network.l2.models import LinkL2Mode
+from network.qos.models import TrafficClass
+from network.wan.models import SiteType, WanLinkType
+
 from .addressing import (
     AddressingPlan,
     AddressType,
@@ -16,10 +20,6 @@ from .addressing import (
     Subnet,
     VlanPlan,
 )
-from network.l2.models import LinkL2Mode
-from network.qos.models import TrafficClass
-from network.wan.models import SiteType, WanLinkType
-
 from .network import (
     Device,
     DeviceRole,
@@ -53,6 +53,7 @@ __all__ = [
     "DhcpScope",
     "Finding",
     "Link",
+    "LinkL2Mode",
     "NetworkRequirements",
     "NetworkType",
     "Objective",
@@ -69,10 +70,9 @@ __all__ = [
     "Subnet",
     "Topology",
     "TrafficClass",
-    "LinkL2Mode",
-    "WanLinkType",
     "TrafficDemand",
     "UserFacts",
     "ValidationReport",
     "VlanPlan",
+    "WanLinkType",
 ]
