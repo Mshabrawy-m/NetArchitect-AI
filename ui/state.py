@@ -1065,3 +1065,286 @@ def record_decision(
 def clear_copilot_decisions() -> None:
     """Remove the session decision log."""
     session_delete(COPILOT_DECISIONS_KEY)
+
+
+# ---------------------------------------------------------------------------
+# B2: in-memory project bundles
+# ---------------------------------------------------------------------------
+# Bundle state lives under versioned keys. At most one prepared download, one
+# staged upload, and one typed preview are retained at a time, so a long
+# session cannot accumulate payloads. Digests prevent re-reading the same
+# upload on every Streamlit rerun and suppress re-staging after Cancel/import.
+BUNDLE_STATE_VERSION: int = 2
+BUNDLE_PREPARED_KEY: str = f"bundle_v{BUNDLE_STATE_VERSION}_prepared"
+BUNDLE_STAGED_KEY: str = f"bundle_v{BUNDLE_STATE_VERSION}_staged"
+BUNDLE_PREVIEW_KEY: str = f"bundle_v{BUNDLE_STATE_VERSION}_preview"
+BUNDLE_INSPECTED_KEY: str = f"bundle_v{BUNDLE_STATE_VERSION}_inspected"
+BUNDLE_PROCESSED_KEY: str = f"bundle_v{BUNDLE_STATE_VERSION}_processed"
+BUNDLE_SAVED_FINGERPRINT_KEY: str = f"bundle_v{BUNDLE_STATE_VERSION}_saved_fingerprint"
+
+if TYPE_CHECKING:  # pragma: no cover - typing only; services.bundle stays lazy
+    from services.bundle import BundleData
+
+
+def _bundle_digest(payload: bytes) -> str:
+    """Return the stable digest used to identify one staged upload."""
+    return hashlib.sha256(payload).hexdigest()
+
+
+def create_bundle_bytes() -> bytes:
+    """Gather the current session into a deterministic in-memory bundle."""
+    from datetime import UTC, datetime
+
+    from config.settings import Settings
+    from services.bundle import (
+        CURRENT_BUNDLE_VERSION,
+        BundleData,
+        BundleSourceFingerprints,
+        build_bundle,
+        limits_snapshot,
+        settings_snapshot,
+    )
+
+    twin = get_twin()
+    if twin is None:
+        raise ValueError("No digital twin is loaded.")
+    fingerprints = BundleSourceFingerprints(
+        optimization_runs=_string_map(OPTIMIZATION_SOURCE_FINGERPRINTS_KEY),
+        rerankings=_string_map(OPTIMIZATION_RERANK_SOURCE_FINGERPRINTS_KEY),
+        addressing_check=_string_map(CHECK_FINGERPRINT_KEY),
+        report_times={
+            key: value.isoformat() for key, value in peek_report_times().items()
+        },
+    )
+    data = BundleData(
+        twin=twin,
+        created_at=datetime.now(UTC),
+        source_app_version=Settings().APP_VERSION,
+        bundle_version=CURRENT_BUNDLE_VERSION,
+        snapshots=peek_snapshots(),
+        simulation_runs=peek_simulation_runs(),
+        failure_sweeps=peek_simulation_sweeps(),
+        mode_comparisons=peek_mode_comparisons(),
+        optimization_runs=peek_optimization_runs(),
+        capacity_runs=peek_capacity_runs(),
+        forecast_series=get_capacity_series(),
+        decision_records=peek_copilot_decisions().records,
+        security_flows=peek_security_flows(),
+        settings=settings_snapshot(Settings()),
+        limits=limits_snapshot(),
+        source_fingerprints=fingerprints,
+    )
+    return build_bundle(data)
+
+
+def _string_map(key: str) -> dict[str, str]:
+    """Copy one bounded string fingerprint map without trusting stored types."""
+    value = session_get(key)
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(name): str(fingerprint)
+        for name, fingerprint in value.items()
+        if isinstance(name, str) and isinstance(fingerprint, str)
+    }
+
+
+def prepare_project_bundle() -> bytes:
+    """Build, retain, and mark as saved one project bundle archive."""
+    from simulation.evaluator import twin_fingerprint
+
+    payload = create_bundle_bytes()
+    session_set(BUNDLE_PREPARED_KEY, payload)
+    twin = get_twin()
+    if twin is not None:
+        session_set(BUNDLE_SAVED_FINGERPRINT_KEY, twin_fingerprint(twin))
+    return payload
+
+
+def peek_project_bundle() -> bytes | None:
+    """Return the last prepared archive without rebuilding it."""
+    value = session_get(BUNDLE_PREPARED_KEY)
+    return value if isinstance(value, bytes) else None
+
+
+def clear_prepared_bundle() -> None:
+    """Discard the prepared download without touching the twin."""
+    session_delete(BUNDLE_PREPARED_KEY)
+
+
+def inspect_bundle(payload: bytes) -> BundleData | None:
+    """Validate a hostile upload and retain its typed preview + payload.
+
+    Re-reading the same bytes on every rerun is avoided by the inspected-key
+    digest. A cancel or a completed import records the digest as processed so
+    the still-selected uploader value cannot silently re-stage the preview.
+    """
+    from services.bundle import read_bundle
+
+    digest = _bundle_digest(payload)
+    if session_get(BUNDLE_INSPECTED_KEY) == digest:
+        preview = peek_bundle_preview()
+        if preview is not None:
+            return preview
+    if session_get(BUNDLE_PROCESSED_KEY) == digest:
+        return None
+
+    session_delete(BUNDLE_PREVIEW_KEY)
+    session_delete(BUNDLE_STAGED_KEY)
+    session_delete(BUNDLE_INSPECTED_KEY)
+    data = read_bundle(payload)
+    session_set(BUNDLE_PREVIEW_KEY, data)
+    session_set(BUNDLE_STAGED_KEY, payload)
+    session_set(BUNDLE_INSPECTED_KEY, digest)
+    return data
+
+
+def peek_bundle_preview() -> BundleData | None:
+    """Return the retained typed bundle preview, if any."""
+    from services.bundle import BundleData
+
+    value = session_get(BUNDLE_PREVIEW_KEY)
+    return value if isinstance(value, BundleData) else None
+
+
+def peek_staged_bundle() -> bytes | None:
+    """Return the staged upload bytes used for one confirmed import."""
+    value = session_get(BUNDLE_STAGED_KEY)
+    return value if isinstance(value, bytes) else None
+
+
+def clear_bundle_import() -> None:
+    """Cancel a staged import, reset inspected state, and suppress re-staging."""
+    staged = peek_staged_bundle()
+    if staged is not None:
+        session_set(BUNDLE_PROCESSED_KEY, _bundle_digest(staged))
+    session_delete(BUNDLE_PREVIEW_KEY)
+    session_delete(BUNDLE_STAGED_KEY)
+    session_delete(BUNDLE_INSPECTED_KEY)
+
+
+def reset_bundle_upload() -> None:
+    """Forget the last processed upload after the uploader is cleared."""
+    session_delete(BUNDLE_PROCESSED_KEY)
+
+
+def has_unsaved_bundle_changes() -> bool:
+    """Return whether the twin changed since the last prepared bundle."""
+    from simulation.evaluator import twin_fingerprint
+
+    twin = peek_twin()
+    if twin is None:
+        return False
+    saved = session_get(BUNDLE_SAVED_FINGERPRINT_KEY, "")
+    return saved != twin_fingerprint(twin)
+
+
+def _restore_fingerprint_map(key: str, incoming: object, cap: int) -> None:
+    """Merge one bounded string fingerprint map into session state."""
+    current = _string_map(key)
+    if isinstance(incoming, dict):
+        for name, fingerprint in incoming.items():
+            if isinstance(name, str) and isinstance(fingerprint, str):
+                current[name] = fingerprint
+    ordered = sorted(current.items())[-cap:]
+    if ordered:
+        session_set(key, dict(ordered))
+    else:
+        session_delete(key)
+
+
+def restore_bundle(data: BundleData, *, mode: str = "replace") -> None:
+    """Restore a validated bundle into bounded session stores.
+
+    ``mode='replace'`` swaps the baseline twin; ``mode='snapshot'`` keeps the
+    current twin and captures the imported twin as a new bounded snapshot. All
+    other imported collections are appended through the existing capped
+    accessors so free-tier memory stays bounded. The imported upload is marked
+    processed so reruns cannot re-stage it after confirmation.
+    """
+    from config.limits import (
+        MAX_CAPACITY_RUNS,
+        MAX_COPILOT_DECISIONS,
+        MAX_FORECAST_SERIES,
+        MAX_OPTIMIZATION_RUNS,
+        MAX_SCENARIOS,
+        MAX_SNAPSHOTS,
+    )
+    from services.copilot import DecisionLog
+
+    if mode not in {"replace", "snapshot"}:
+        raise ValueError("Bundle import mode must be 'replace' or 'snapshot'.")
+
+    if mode == "replace":
+        replace_twin(data.twin)
+    else:
+        save_twin_snapshot(data.twin, f"Imported: {data.twin.metadata.name}")
+
+    store = get_snapshot_store()
+    for snapshot in data.snapshots[:MAX_SNAPSHOTS]:
+        try:
+            store.add(snapshot)
+        except (ValueError, TypeError):
+            continue
+
+    for run in data.simulation_runs[:MAX_SCENARIOS]:
+        if len(peek_simulation_runs()) >= MAX_SCENARIOS:
+            break
+        add_simulation_run(run)
+    for result in data.failure_sweeps[:SIMULATION_SWEEP_ENTRIES]:
+        if len(peek_simulation_sweeps()) >= SIMULATION_SWEEP_ENTRIES:
+            break
+        add_simulation_sweep(result)
+    for result in data.mode_comparisons[:SIMULATION_MODE_COMPARISON_ENTRIES]:
+        if len(peek_mode_comparisons()) >= SIMULATION_MODE_COMPARISON_ENTRIES:
+            break
+        add_mode_comparison(result)
+    for run in data.optimization_runs[:MAX_OPTIMIZATION_RUNS]:
+        if len(peek_optimization_runs()) >= MAX_OPTIMIZATION_RUNS:
+            break
+        key = _optimization_run_key(run)
+        fingerprint = data.source_fingerprints.optimization_runs.get(key, "")
+        add_optimization_run(run, fingerprint)
+    for run in data.capacity_runs[:MAX_CAPACITY_RUNS]:
+        if len(peek_capacity_runs()) >= MAX_CAPACITY_RUNS:
+            break
+        add_capacity_run(run)
+
+    if data.forecast_series:
+        existing = get_capacity_series()
+        set_capacity_series((*existing, *data.forecast_series)[-MAX_FORECAST_SERIES:])
+    if data.security_flows:
+        set_security_flows(data.security_flows)
+
+    if data.decision_records:
+        log = DecisionLog(max_entries=MAX_COPILOT_DECISIONS)
+        log.records = tuple(data.decision_records)[-MAX_COPILOT_DECISIONS:]
+        session_set(COPILOT_DECISIONS_KEY, log)
+
+    fingerprints = data.source_fingerprints
+    _restore_fingerprint_map(
+        OPTIMIZATION_RERANK_SOURCE_FINGERPRINTS_KEY,
+        fingerprints.rerankings,
+        OPTIMIZATION_RERANKING_ENTRIES,
+    )
+    _restore_fingerprint_map(
+        CHECK_FINGERPRINT_KEY,
+        fingerprints.addressing_check,
+        CHECK_FINGERPRINT_ENTRIES,
+    )
+    if fingerprints.report_times:
+        restored: dict[str, datetime] = {}
+        for key, value in sorted(fingerprints.report_times.items())[
+            -REPORT_TIME_ENTRIES:
+        ]:
+            try:
+                restored[key] = datetime.fromisoformat(value)
+            except (TypeError, ValueError):
+                continue
+        if restored:
+            current = peek_report_times()
+            current.update(restored)
+            session_set(REPORT_TIME_KEY, current)
+
+    session_delete(BUNDLE_SAVED_FINGERPRINT_KEY)
+    clear_bundle_import()

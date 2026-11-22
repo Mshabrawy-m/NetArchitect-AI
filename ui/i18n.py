@@ -518,6 +518,53 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "reports.mode_compare_source": "Mode comparison result",
         "reports.sensitivity_source": "Sensitivity result",
         "reports.rerank_source": "Re-ranked Pareto front",
+        # B2 project bundles (Save / Open)
+        "bundle.title": "Project bundle",
+        "bundle.save.title": "Save project bundle",
+        "bundle.save.caption": (
+            "Build one deterministic archive in memory from this session: the "
+            "twin, snapshots, retained runs with their fingerprints, decisions, "
+            "modeled flows, and non-secret settings. Nothing is written to disk."
+        ),
+        "bundle.save.prepare": "Prepare bundle",
+        "bundle.save.ready": "Bundle ready: {bytes} bytes.",
+        "bundle.save.download": "Download project bundle",
+        "bundle.save.requires_twin": "Load a digital twin before preparing a bundle.",
+        "bundle.open.title": "Open project bundle",
+        "bundle.open.caption": (
+            "Import a previously saved bundle. The archive is checked for path "
+            "traversal, size, checksums, and schema before anything is shown."
+        ),
+        "bundle.open.upload": "Bundle file (.zip)",
+        "bundle.open.preview_title": "Bundle preview",
+        "bundle.open.preview": (
+            "Twin: {name} | Schema: {schema} | Devices: {devices} | Links: "
+            "{links} | Fingerprint: {fingerprint} | Format: v{version}"
+        ),
+        "bundle.open.counts": (
+            "Snapshots: {snapshots} | Simulations: {simulations} | "
+            "Optimizations: {optimizations} | Decisions: {decisions} | "
+            "Flows: {flows}"
+        ),
+        "bundle.open.mode": "Import mode",
+        "bundle.open.mode.replace": "Replace current twin",
+        "bundle.open.mode.snapshot": "Import as new snapshot",
+        "bundle.open.mode.help": (
+            "Import as new snapshot keeps the current twin untouched and stores "
+            "the imported twin as one additional bounded snapshot."
+        ),
+        "bundle.open.confirm": "Confirm import",
+        "bundle.open.cancel": "Cancel import",
+        "bundle.open.imported": "Bundle imported: {name}.",
+        "bundle.open.invalid": "The bundle could not be imported.",
+        "bundle.open.processed": (
+            "This upload has already been imported or cancelled. Choose another "
+            "file to stage a new import."
+        ),
+        "bundle.unsaved": (
+            "The current design has unsaved changes. Prepare a project bundle "
+            "on the Digital Twin page before replacing it."
+        ),
         # Settings
         "settings.language.label": "Language",
         "settings.language.help": (
@@ -1207,6 +1254,52 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "reports.mode_compare_source": "نتيجة مقارنة الأوضاع",
         "reports.sensitivity_source": "نتيجة تحليل الحساسية",
         "reports.rerank_source": "جبهة Pareto المُعاد ترتيبها",
+        # B2 project bundles (Save / Open)
+        "bundle.title": "حزمة المشروع",
+        "bundle.save.title": "حفظ حزمة المشروع",
+        "bundle.save.caption": (
+            "أنشئ أرشيفاً حتمياً واحداً في الذاكرة من هذه الجلسة: التوأم "
+            "واللقطة والتشغيلات المحفوظة بصماتها والقرارات والتدفقات المُنمذجة "
+            "والإعدادات غير السرية. لا يُكتب أي شيء إلى القرص."
+        ),
+        "bundle.save.prepare": "تجهيز الحزمة",
+        "bundle.save.ready": "الحزمة جاهزة: {bytes} بايت.",
+        "bundle.save.download": "تنزيل حزمة المشروع",
+        "bundle.save.requires_twin": "حمّل توأماً رقمياً قبل تجهيز حزمة.",
+        "bundle.open.title": "فتح حزمة مشروع",
+        "bundle.open.caption": (
+            "استورد حزمة محفوظة سابقاً. يُفحص الأرشيف من حيث مسارات الملفات "
+            "والحجم والمجموع الاختباري والمخطط قبل عرض أي شيء."
+        ),
+        "bundle.open.upload": "ملف الحزمة (.zip)",
+        "bundle.open.preview_title": "معاينة الحزمة",
+        "bundle.open.preview": (
+            "التوأم: {name} | المخطط: {schema} | الأجهزة: {devices} | "
+            "الروابط: {links} | البصمة: {fingerprint} | الصيغة: v{version}"
+        ),
+        "bundle.open.counts": (
+            "اللقطات: {snapshots} | المحاكاة: {simulations} | "
+            "التحسين: {optimizations} | القرارات: {decisions} | "
+            "التدفقات: {flows}"
+        ),
+        "bundle.open.mode": "وضع الاستيراد",
+        "bundle.open.mode.replace": "استبدال التوأم الحالي",
+        "bundle.open.mode.snapshot": "الاستيراد كلقطة جديدة",
+        "bundle.open.mode.help": (
+            "الاستيراد كلقطة جديدة يُبقي التوأم الحالي دون تغيير ويخزّن "
+            "التوأم المستورد كلقطة إضافية محدودة."
+        ),
+        "bundle.open.confirm": "تأكيد الاستيراد",
+        "bundle.open.cancel": "إلغاء الاستيراد",
+        "bundle.open.imported": "تم استيراد الحزمة: {name}.",
+        "bundle.open.invalid": "تعذّر استيراد الحزمة.",
+        "bundle.open.processed": (
+            "تم استيراد هذا الملف أو إلغاؤه سابقاً. اختر ملفاً آخر لتجهيز استيراد جديد."
+        ),
+        "bundle.unsaved": (
+            "التصميم الحالي يحتوي على تغييرات غير محفوظة. جهّز حزمة مشروع "
+            "من صفحة التوأم الرقمي قبل استبداله."
+        ),
         # Settings
         "settings.language.label": "اللغة",
         "settings.language.help": (

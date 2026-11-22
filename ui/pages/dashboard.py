@@ -110,6 +110,9 @@ def render_dashboard() -> None:
         )
         return
 
+    if state.has_unsaved_bundle_changes():
+        callout(i18n.t("bundle.unsaved"), kind="warn")
+
     topology = twin.topology
     snapshots = state.peek_snapshots()
     scenarios = state.peek_simulation_runs()

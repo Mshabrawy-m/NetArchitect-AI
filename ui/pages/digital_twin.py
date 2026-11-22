@@ -11,6 +11,8 @@ This page is presentation only. State edits and snapshots are delegated to
 
 from __future__ import annotations
 
+import html
+
 import pandas as pd
 import streamlit as st
 from pydantic import ValidationError
@@ -24,8 +26,9 @@ from digital_twin import (
     effective_link_state,
     to_json,
 )
+from services.bundle import BundleError
 from simulation import twin_fingerprint
-from ui import formatting, state
+from ui import formatting, i18n, state, theme
 from ui.components import (
     csv_bytes,
     format_error,
@@ -42,6 +45,134 @@ COMPARE_BEFORE_KEY = "twin_compare_before"
 COMPARE_AFTER_KEY = "twin_compare_after"
 DOWNLOAD_SNAPSHOT_KEY = "twin_download_snapshot"
 DELETE_SNAPSHOT_KEY = "twin_delete_snapshot"
+
+BUNDLE_PREPARE_KEY = "bundle_prepare"
+BUNDLE_DOWNLOAD_KEY = "bundle_download"
+BUNDLE_UPLOAD_KEY = "bundle_upload"
+BUNDLE_MODE_KEY = "bundle_import_mode"
+BUNDLE_CONFIRM_KEY = "bundle_confirm"
+BUNDLE_CANCEL_KEY = "bundle_cancel"
+
+
+def _bundle_preview_html(data) -> str:
+    """Render a bounded, escaped bundle preview using theme tokens."""
+    details = i18n.t(
+        "bundle.open.preview",
+        name=data.twin.metadata.name,
+        schema=data.twin.metadata.schema_version,
+        devices=len(data.twin.topology.devices),
+        links=len(data.twin.topology.links),
+        fingerprint=twin_fingerprint(data.twin),
+        version=data.bundle_version,
+    )
+    counts = i18n.t(
+        "bundle.open.counts",
+        snapshots=len(data.snapshots),
+        simulations=len(data.simulation_runs),
+        optimizations=len(data.optimization_runs),
+        decisions=len(data.decision_records),
+        flows=len(data.security_flows),
+    )
+    border = theme.color("bundle_border")
+    surface = theme.color("bundle_surface")
+    accent = theme.color("bundle_accent")
+    text = theme.color("text")
+    padding = theme.SPACING["md"]
+    return (
+        f'<div style="border:1px solid {border}; background:{surface}; '
+        f'border-radius:8px; padding:{padding}px; color:{text};">'
+        f'<div style="color:{accent}; font-weight:600;">'
+        f'{html.escape(i18n.t("bundle.open.preview_title"))}</div>'
+        f'<div style="margin-top:{theme.SPACING["xs"]}px;">'
+        f'{html.escape(details)}</div>'
+        f'<div style="margin-top:{theme.SPACING["xs"]}px;">'
+        f'{html.escape(counts)}</div>'
+        '</div>'
+    )
+
+
+def _render_bundle(twin) -> None:
+    """Save the session as one in-memory bundle or open one after confirmation."""
+    st.subheader(i18n.t("bundle.title"))
+    save_column, open_column = st.columns(2)
+
+    with save_column:
+        st.markdown(f"**{i18n.t('bundle.save.title')}**")
+        st.caption(i18n.t("bundle.save.caption"))
+        if twin is None:
+            st.info(i18n.t("bundle.save.requires_twin"))
+        else:
+            if st.button(i18n.t("bundle.save.prepare"), key=BUNDLE_PREPARE_KEY):
+                try:
+                    payload = state.prepare_project_bundle()
+                except (NetArchitectError, ValidationError, ValueError) as error:
+                    st.error(format_error(error), title=i18n.t("bundle.open.invalid"))
+                else:
+                    st.success(i18n.t("bundle.save.ready", bytes=len(payload)))
+            payload = state.peek_project_bundle()
+            if payload is not None:
+                st.caption(i18n.t("bundle.save.ready", bytes=len(payload)))
+                st.download_button(
+                    i18n.t("bundle.save.download"),
+                    data=payload,
+                    file_name="netarchitect-project-bundle.zip",
+                    mime="application/zip",
+                    key=BUNDLE_DOWNLOAD_KEY,
+                )
+
+    with open_column:
+        st.markdown(f"**{i18n.t('bundle.open.title')}**")
+        st.caption(i18n.t("bundle.open.caption"))
+        uploaded = st.file_uploader(
+            i18n.t("bundle.open.upload"),
+            type=["zip"],
+            key=BUNDLE_UPLOAD_KEY,
+        )
+        if uploaded is None:
+            state.reset_bundle_upload()
+            return
+        try:
+            data = state.inspect_bundle(uploaded.getvalue())
+        except (BundleError, ValueError, UnicodeError) as error:
+            state.clear_bundle_import()
+            st.error(f"{i18n.t('bundle.open.invalid')} {format_error(error)}")
+            return
+        if data is None:
+            st.caption(i18n.t("bundle.open.processed"))
+            return
+
+        st.markdown(_bundle_preview_html(data), unsafe_allow_html=True)
+        mode = st.radio(
+            i18n.t("bundle.open.mode"),
+            options=("replace", "snapshot"),
+            format_func=lambda value: i18n.t(f"bundle.open.mode.{value}"),
+            help=i18n.t("bundle.open.mode.help"),
+            key=BUNDLE_MODE_KEY,
+        )
+        confirm_column, cancel_column = st.columns(2)
+        if confirm_column.button(
+            i18n.t("bundle.open.confirm"),
+            key=BUNDLE_CONFIRM_KEY,
+            type="primary",
+        ):
+            try:
+                state.restore_bundle(data, mode=mode)
+            except (NetArchitectError, ValidationError, ValueError) as error:
+                st.error(format_error(error), title=i18n.t("bundle.open.invalid"))
+                return
+            state.record_decision(
+                kind="snapshot_saved",
+                subject_id=data.twin.metadata.name,
+                title=f"Imported bundle: {data.twin.metadata.name}",
+                page="Digital Twin",
+                source_fingerprint=twin_fingerprint(data.twin),
+                result_fingerprint=twin_fingerprint(data.twin),
+            )
+            st.success(i18n.t("bundle.open.imported", name=data.twin.metadata.name))
+            st.rerun()
+        if cancel_column.button(i18n.t("bundle.open.cancel"), key=BUNDLE_CANCEL_KEY):
+            state.clear_bundle_import()
+            st.rerun()
 
 
 def _state_value(value: object) -> OperationalState:
@@ -494,6 +625,11 @@ def render() -> None:
         "and modeled operational state. It is not a live copy of real equipment.",
     )
     render_notices()
+
+    # Save/Open must work from an empty session too, so render before the twin
+    # guard. ``peek_twin`` avoids creating or migrating a twin on that path.
+    _render_bundle(state.peek_twin())
+    st.divider()
 
     twin = state.get_twin()
     if twin is None:

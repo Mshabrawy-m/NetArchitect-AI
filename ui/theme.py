@@ -79,6 +79,9 @@ LIGHT = MappingProxyType(
         "state_critical": "#402528",
         "state_overloaded": "#fae7e7",
         "state_absent": "#e9edf2",
+        "bundle_surface": "#e8f0f6",
+        "bundle_border": "#b8c9d8",
+        "bundle_accent": "#1f5f8b",
     }
 )
 
@@ -137,6 +140,9 @@ DARK = MappingProxyType(
         "state_critical": "#3b3020",
         "state_overloaded": "#402528",
         "state_absent": "#253444",
+        "bundle_surface": "#1b3346",
+        "bundle_border": "#456783",
+        "bundle_accent": "#8cc8f0",
     }
 )
 
@@ -233,6 +239,8 @@ TEXT_CONTRAST_PAIRS = (
     ("warn", "warn_surface"),
     ("critical", "critical_surface"),
     ("info", "info_surface"),
+    ("bundle_accent", "bundle_surface"),
+    ("text", "bundle_surface"),
     ("l2_accent", "surface"),
     ("wan_accent", "surface"),
     ("wireless_accent", "surface"),
