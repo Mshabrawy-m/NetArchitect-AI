@@ -8,7 +8,7 @@ Lowest to highest::
 
 A module may import only its own layer or a lower one. ``config`` is a
 foundation layer beside ``core``, ``app_pages`` and ``app`` belong to ``ui``,
-and ``scripts`` is a top-level tool layer. Imports deferred to function bodies
+``scripts`` and ``netarchitect`` are top-level tool layers. Imports deferred to function bodies
 or ``if TYPE_CHECKING:`` blocks are not evaluated at module import time, so
 they cannot create an import-time cycle and are outside this guard.
 """
@@ -38,6 +38,7 @@ LAYERS: dict[str, int] = {
     "app_pages": 6,
     "app": 6,
     "scripts": 7,
+    "netarchitect": 7,
 }
 
 

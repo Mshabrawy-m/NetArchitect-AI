@@ -33,6 +33,7 @@ PACKAGES = (
     "core",
     "digital_twin",
     "forecasting",
+    "netarchitect",
     "network",
     "optimization",
     "scripts",

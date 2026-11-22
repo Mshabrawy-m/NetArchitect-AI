@@ -53,6 +53,20 @@ Open the URL printed by Streamlit. The **Dashboard** is the root page and the si
 14. Reports & Documentation
 15. Settings
 
+## Command-line interface
+
+The deterministic engines are also available without Streamlit through the standard-library CLI. It never imports the web UI, never reads a clock, and writes to disk only when you pass an explicit `--out` path.
+
+```powershell
+python -m netarchitect info
+python -m netarchitect validate path\to\twin.json
+python -m netarchitect simulate path\to\twin.json [--scenario path\to\scenario.json]
+python -m netarchitect report path\to\twin.json [--format markdown|json] [--out PATH]
+python -m netarchitect export path\to\twin.json --format graphml|mermaid|inventory|drawio [--out PATH]
+```
+
+All commands emit deterministic UTF-8 output. Exit codes are `0` for success, `1` for a domain/validation error (with a typed JSON error on stderr), and `2` for argparse usage errors. The `export` formats are the same pure interchange exporters used by the app and describe modeled design intent, not device-applied configuration. See [API contracts](docs/API_CONTRACTS.md) for the Python-level equivalents.
+
 ## No API key required
 
 Every deterministic engineering page works without external AI access. With no key configured, Settings shows `API key configured No`, the AI Designer uses the structured requirements form, and agent workflows run through real deterministic tools.
