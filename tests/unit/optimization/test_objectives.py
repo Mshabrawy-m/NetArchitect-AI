@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from network.wan.models import WanLinkType
 from optimization import (
     Candidate,
     ObjectiveKind,
@@ -16,6 +17,7 @@ from optimization import (
 from tests.unit.optimization.helpers import (
     TIER_LARGE,
     TIER_SMALL,
+    pool_links,
     settings,
     tiny_twin,
 )
@@ -36,6 +38,47 @@ def test_infrastructure_cost_proxy_arithmetic() -> None:
         settings(cost_model=_with_device_cost(5.0)),
     )
     assert cost == pytest.approx(220.0)
+
+
+def test_infrastructure_cost_proxy_adds_modeled_wan_cost_proxies() -> None:
+    # Hand: the legacy arithmetic above is 220. Baseline inter-site links ab and
+    # bc add 12.5 + 7.5 = 20 modeled monthly proxy units. The selected pool link
+    # cd adds another explicit 5.0, so the additive proxy total is 245.
+    base = tiny_twin()
+    sites = {"a": "hq", "b": "branch", "c": "dc", "d": "branch"}
+    devices = tuple(
+        device.model_copy(update={"site": sites[device.id]})
+        for device in base.topology.devices
+    )
+    proxies = {"ab": 12.5, "bc": 7.5}
+    links = tuple(
+        link.model_copy(
+            update={
+                "wan_type": WanLinkType.mpls,
+                "wan_monthly_cost_proxy": proxies[link.id],
+            }
+        )
+        for link in base.topology.links
+    )
+    wan_twin = base.model_copy(
+        update={"topology": base.topology.model_copy(update={"devices": devices, "links": links})}
+    )
+    pool = tuple(
+        link.model_copy(update={"wan_monthly_cost_proxy": 5.0})
+        if link.id == "cd"
+        else link
+        for link in pool_links()
+    )
+    candidate = Candidate(
+        selected_link_ids=("cd", "ad"),
+        tier_assignments=(("cd", "large"), ("ad", "small"), ("ab", "large")),
+    )
+    cost = infrastructure_cost_proxy(
+        wan_twin,
+        candidate,
+        settings(cost_model=_with_device_cost(5.0), pool=pool),
+    )
+    assert cost == pytest.approx(245.0)
 
 
 def _with_device_cost(device_cost: float):

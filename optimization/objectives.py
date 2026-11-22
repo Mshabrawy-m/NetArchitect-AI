@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from core.schemas.network import Link
 from digital_twin import DigitalTwin
+from network.wan.planning import wan_cost_proxy_total
 
 from .models import (
     Candidate,
@@ -33,11 +34,15 @@ def infrastructure_cost_proxy(
     Arithmetic:
     ``device_cost * device_count
       + sum(tier_cost for selected links)
-      + sum(max(0, new_tier_cost - old_tier_cost) for baseline upgrades)``
+      + sum(max(0, new_tier_cost - old_tier_cost) for baseline upgrades)
+      + baseline modeled monthly WAN cost proxies
+      + explicit modeled monthly WAN cost proxies on selected links``
 
     A baseline link whose capacity exactly matches a configured tier has that
     tier's cost as its sunk value; an unmatched capacity has zero modeled sunk
     value. Routing-cost multipliers do not change the infrastructure cost proxy.
+    WAN terms are additive designer-supplied proxies, not vendor quotes; twins
+    without WAN attributes contribute zero and keep legacy arithmetic unchanged.
     """
     cost_model = settings.cost_model
     baseline_links = (
@@ -47,11 +52,13 @@ def infrastructure_cost_proxy(
     )
     pool = pool_index(settings) if pool is None else pool
     total = cost_model.device_cost_proxy * len(baseline_twin.topology.devices)
+    total += wan_cost_proxy_total(baseline_twin)
 
     for link_id in candidate.selected_link_ids:
         if link_id not in pool:
             raise ValueError(f"Selected link {link_id!r} is not in the pool")
         total += tier_for_link(link_id, candidate, cost_model).link_cost_proxy
+        total += float(pool[link_id].wan_monthly_cost_proxy or 0.0)
 
     for link_id, _ in candidate.tier_assignments:
         baseline = baseline_links.get(link_id)
