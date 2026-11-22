@@ -5,7 +5,9 @@ network: a single :class:`Organization` containing :class:`Site` instances,
 each of which contains :class:`Department` instances with a user count.
 """
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_serializer, model_validator
+
+from network.wan.models import SiteType
 
 
 class Department(BaseModel):
@@ -39,6 +41,21 @@ class Site(BaseModel):
         default_factory=list,
         description="Departments located at this site.",
     )
+    site_type: SiteType | None = Field(
+        default=None,
+        description=(
+            "Optional modeled site role. The default is omitted from JSON so "
+            "legacy requirements payloads stay byte-identical."
+        ),
+    )
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: object) -> dict[str, object]:
+        """Omit the default site type so legacy JSON stays byte-identical."""
+        payload = dict(handler(self))  # type: ignore[operator]
+        if self.site_type is None:
+            payload.pop("site_type", None)
+        return payload
 
     @model_validator(mode="after")
     def _reject_duplicate_department_ids(self) -> "Site":

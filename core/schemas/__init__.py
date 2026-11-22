@@ -16,6 +16,10 @@ from .addressing import (
     Subnet,
     VlanPlan,
 )
+from network.l2.models import LinkL2Mode
+from network.qos.models import TrafficClass
+from network.wan.models import SiteType, WanLinkType
+
 from .network import (
     Device,
     DeviceRole,
@@ -61,8 +65,12 @@ __all__ = [
     "ScenarioType",
     "Severity",
     "Site",
+    "SiteType",
     "Subnet",
     "Topology",
+    "TrafficClass",
+    "LinkL2Mode",
+    "WanLinkType",
     "TrafficDemand",
     "UserFacts",
     "ValidationReport",

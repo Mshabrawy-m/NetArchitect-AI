@@ -4,9 +4,10 @@ Route entries and traffic demands expressed against the IP types defined
 in :mod:`core.schemas.addressing`. All numeric fields are non-negative.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 from core.schemas.addressing import AddressType, NetworkType
+from network.qos.models import TrafficClass
 
 
 class RouteEntry(BaseModel):
@@ -52,3 +53,18 @@ class TrafficDemand(BaseModel):
         description="Relative priority of the demand (non-negative; higher is more important).",
         ge=0,
     )
+    traffic_class: TrafficClass | None = Field(
+        default=None,
+        description=(
+            "Optional modeled QoS class. The default is omitted from JSON so "
+            "legacy twin bytes and fingerprints stay identical."
+        ),
+    )
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: object) -> dict[str, object]:
+        """Omit the default traffic class so legacy twin bytes stay stable."""
+        payload = dict(handler(self))  # type: ignore[operator]
+        if self.traffic_class is None:
+            payload.pop("traffic_class", None)
+        return payload

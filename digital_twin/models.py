@@ -32,9 +32,13 @@ from core.schemas.requirements import Assumption
 from core.schemas.routing import TrafficDemand
 from network.addressing.dual_stack import DualStackPlan
 from network.addressing.nat import NatPlan
+from network.l2.models import L2Design
+from network.qos.models import QosDesign
 from network.routing.ha import HaGroup
 from network.routing.ospf import OspfDesign
 from network.vlan.plan import VlanPlanResult
+from network.wan.models import WanDesign
+from network.wireless.models import WirelessDesign
 from security.models import SecurityModel
 
 TWIN_SCHEMA_VERSION = 2
@@ -234,6 +238,35 @@ class DigitalTwin(BaseModel):
         description=(
             "Optional modeled OSPF area design. Absent designs are omitted from "
             "JSON and fingerprints so legacy twin bytes stay compatible."
+        ),
+    )
+    l2_design: L2Design | None = Field(
+        default=None,
+        description=(
+            "Optional modeled Layer-2 switching design. Absent designs are "
+            "omitted from JSON and fingerprints so legacy twin bytes stay "
+            "compatible."
+        ),
+    )
+    wan_design: WanDesign | None = Field(
+        default=None,
+        description=(
+            "Optional modeled WAN/site design. Absent designs are omitted from "
+            "JSON and fingerprints so legacy twin bytes stay compatible."
+        ),
+    )
+    wireless_design: WirelessDesign | None = Field(
+        default=None,
+        description=(
+            "Optional abstract wireless plan. Absent designs are omitted from "
+            "JSON and fingerprints so legacy twin bytes stay compatible."
+        ),
+    )
+    qos_design: QosDesign | None = Field(
+        default=None,
+        description=(
+            "Optional modeled QoS admission design. Absent designs are omitted "
+            "from JSON and fingerprints so legacy twin bytes stay compatible."
         ),
     )
 

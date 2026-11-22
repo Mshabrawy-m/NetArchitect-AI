@@ -166,6 +166,20 @@ class SimulationAssumptions(BaseModel):
             "default is omitted from JSON so legacy run bytes stay identical."
         ),
     )
+    use_effective_l2_topology: bool = Field(
+        default=False,
+        description=(
+            "Additive, default-off option to route over the modeled loop-free "
+            "Layer-2 spanning tree. This is a design rule, not STP simulation."
+        ),
+    )
+    enable_strict_priority_qos: bool = Field(
+        default=False,
+        description=(
+            "Additive, default-off strict-priority QoS admission model. This is "
+            "not a queueing simulator; defaults preserve legacy results."
+        ),
+    )
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: object) -> dict[str, object]:
@@ -175,6 +189,10 @@ class SimulationAssumptions(BaseModel):
             payload.pop("routing_mode", None)
         if not self.enable_first_hop_failover:
             payload.pop("enable_first_hop_failover", None)
+        if not self.use_effective_l2_topology:
+            payload.pop("use_effective_l2_topology", None)
+        if not self.enable_strict_priority_qos:
+            payload.pop("enable_strict_priority_qos", None)
         return payload
 
     @field_validator("link_delay_ms")

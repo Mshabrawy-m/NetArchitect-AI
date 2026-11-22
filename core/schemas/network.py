@@ -7,7 +7,17 @@ engineering logic can branch on stable categories.
 
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
+
+from network.l2.models import LinkL2Mode
+from network.vlan.plan import VLAN_ID_MAX, VLAN_ID_MIN
+from network.wan.models import WanLinkType
 
 
 class DeviceType(str, Enum):
@@ -76,6 +86,102 @@ class Link(BaseModel):
         default=False,
         description="Whether the link is directed (endpoints are ordered).",
     )
+    l2_mode: LinkL2Mode | None = Field(
+        default=None,
+        description=(
+            "Optional modeled Layer-2 port style. This is design intent only; "
+            "the default is omitted from JSON so legacy twin bytes stay stable."
+        ),
+    )
+    l2_access_vlan: int | None = Field(
+        default=None,
+        description="Optional modeled untagged/access VLAN for this link.",
+    )
+    l2_native_vlan: int | None = Field(
+        default=None,
+        description="Optional modeled native VLAN at the first endpoint.",
+    )
+    l2_peer_native_vlan: int | None = Field(
+        default=None,
+        description="Optional modeled native VLAN at the second endpoint.",
+    )
+    l2_allowed_vlans: tuple[int, ...] = Field(
+        default_factory=tuple,
+        description="Optional modeled trunk allowed-VLAN list, canonicalized.",
+    )
+    wan_type: WanLinkType | None = Field(
+        default=None,
+        description="Optional modeled WAN circuit type for an inter-site link.",
+    )
+    wan_capacity_mbps: float | None = Field(
+        default=None,
+        gt=0,
+        description="Optional modeled WAN capacity assumption in Mbps.",
+    )
+    wan_monthly_cost_proxy: float | None = Field(
+        default=None,
+        ge=0,
+        description="Optional modeled monthly cost proxy, not a vendor quote.",
+    )
+    wan_latency_ms: float | None = Field(
+        default=None,
+        ge=0,
+        description="Optional assumed one-way WAN latency in milliseconds.",
+    )
+    wan_srg_tag: str | None = Field(
+        default=None,
+        description="Optional shared-risk tag reused by WAN design findings.",
+    )
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: object) -> dict[str, object]:
+        """Omit default-only additive fields so legacy twin bytes stay stable."""
+        payload = dict(handler(self))  # type: ignore[operator]
+        if self.l2_mode is None:
+            payload.pop("l2_mode", None)
+        if self.l2_access_vlan is None:
+            payload.pop("l2_access_vlan", None)
+        if self.l2_native_vlan is None:
+            payload.pop("l2_native_vlan", None)
+        if self.l2_peer_native_vlan is None:
+            payload.pop("l2_peer_native_vlan", None)
+        if not self.l2_allowed_vlans:
+            payload.pop("l2_allowed_vlans", None)
+        if self.wan_type is None:
+            payload.pop("wan_type", None)
+        if self.wan_capacity_mbps is None:
+            payload.pop("wan_capacity_mbps", None)
+        if self.wan_monthly_cost_proxy is None:
+            payload.pop("wan_monthly_cost_proxy", None)
+        if self.wan_latency_ms is None:
+            payload.pop("wan_latency_ms", None)
+        if self.wan_srg_tag is None:
+            payload.pop("wan_srg_tag", None)
+        return payload
+
+    @field_validator("l2_access_vlan", "l2_native_vlan", "l2_peer_native_vlan")
+    @classmethod
+    def _validate_vlan_id(cls, value: int | None) -> int | None:
+        if value is not None and not VLAN_ID_MIN <= value <= VLAN_ID_MAX:
+            raise ValueError(f"VLAN id {value} is outside {VLAN_ID_MIN}..{VLAN_ID_MAX}")
+        return value
+
+    @field_validator("l2_allowed_vlans")
+    @classmethod
+    def _canonicalize_allowed_vlans(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        for vlan_id in value:
+            if not VLAN_ID_MIN <= vlan_id <= VLAN_ID_MAX:
+                raise ValueError(
+                    f"Allowed VLAN {vlan_id} is outside {VLAN_ID_MIN}..{VLAN_ID_MAX}"
+                )
+        return tuple(sorted(set(value)))
+
+    @field_validator("wan_srg_tag")
+    @classmethod
+    def _validate_srg_tag(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("WAN SRG tag must be non-empty when supplied.")
+        return value
 
     @field_validator("endpoints")
     @classmethod

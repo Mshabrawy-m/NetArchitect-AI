@@ -305,6 +305,30 @@ MAX_OSPF_SUMMARY_SUGGESTIONS: int = 16
 # Maximum number of modeled first-hop gateway redundancy groups on one twin.
 MAX_HA_GROUPS: int = 16
 
+# Maximum number of modeled Layer-2 EtherChannel bundles on one twin. Bundles are
+# design annotations over existing links, so this caps review/editor size.
+MAX_ETHERCHANNEL_BUNDLES: int = 32
+
+# Maximum member links in one modeled EtherChannel bundle. The analyzer is
+# linear in member count; this keeps bundle math and findings bounded.
+MAX_ETHERCHANNEL_MEMBERS: int = 8
+
+# Configurable *heuristic* switch count for VLAN sprawl. Exceeding it produces a
+# warning only: this is a planning guideline, NOT a protocol or device limit.
+DEFAULT_VLAN_SPREAD_SWITCHES: int = 6
+
+# Maximum number of sites described by one modeled WAN design.
+MAX_WAN_DESIGN_SITES: int = 64
+
+# Maximum number of inter-site WAN links reviewed by one WAN analysis.
+MAX_WAN_LINKS: int = 128
+
+# Maximum number of abstract wireless areas reviewed by one wireless analysis.
+MAX_WIRELESS_AREAS: int = 32
+
+# Maximum number of per-link QoS class-share caps stored on one twin.
+MAX_QOS_CLASS_CAPS: int = 128
+
 # Maximum member devices in one modeled HA group. Two is the common campus
 # case; the cap keeps priority/election and shared-fate checks bounded.
 MAX_HA_MEMBERS: int = 8

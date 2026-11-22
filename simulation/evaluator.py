@@ -757,16 +757,28 @@ def evaluate(
             f"Links: {', '.join(selection.stale_links) or 'none'}."
         )
 
+    effective_failed_links = selection.links
+    if resolved_assumptions.use_effective_l2_topology:
+        from network.l2.switching import effective_l2_blocked_links
+
+        blocked = effective_l2_blocked_links(twin, design=twin.l2_design)
+        effective_failed_links = tuple(sorted(set(selection.links) | set(blocked)))
+        warnings.append(
+            "Layer-2 modeled spanning-tree blocking removed "
+            f"{len(blocked)} link(s) from the effective topology. This is a "
+            "documented design rule, not a protocol simulation."
+        )
+
     router_cache = _router_cache if _router_cache is not None else {}
     routing_key = _routing_key(
-        twin.topology, selection.devices, selection.links
+        twin.topology, selection.devices, effective_failed_links
     )
     router = router_cache.get(routing_key)
     if router is None:
         router = SparseRouter.from_topology(
             twin.topology,
             failed_devices=selection.devices,
-            failed_links=selection.links,
+            failed_links=effective_failed_links,
         )
         router_cache[routing_key] = router
 
@@ -840,7 +852,7 @@ def evaluate(
         demand_tuple,
         resolved_assumptions,
         failed_devices=selection.devices,
-        failed_links=selection.links,
+        failed_links=effective_failed_links,
         deadline=deadline,
     )
 
@@ -867,7 +879,7 @@ def evaluate(
         links=links,
         unserved_demands=unserved,
         failed_devices=selection.devices,
-        failed_links=selection.links,
+        failed_links=effective_failed_links,
         weak_components=components,
         isolated_devices=isolated,
         disconnected_devices=disconnected,

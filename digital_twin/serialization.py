@@ -48,6 +48,14 @@ def _serialization_exclude(twin: DigitalTwin) -> set[str] | None:
         exclude.add("nat_plan")
     if twin.ospf_design is None:
         exclude.add("ospf_design")
+    if twin.l2_design is None:
+        exclude.add("l2_design")
+    if twin.wan_design is None:
+        exclude.add("wan_design")
+    if twin.wireless_design is None:
+        exclude.add("wireless_design")
+    if twin.qos_design is None:
+        exclude.add("qos_design")
     return exclude or None
 
 
@@ -55,9 +63,10 @@ def canonical_payload(twin: DigitalTwin) -> dict[str, object]:
     """Return the canonical mapping used for fingerprints.
 
     Default-only additive fields (``security``, ``shared_risk_groups``,
-    ``ha_groups``, ``ipv6_plan``, ``nat_plan``, and ``ospf_design``) are omitted
-    so twins created before those fields were added have exactly the same
-    fingerprint bytes as before.
+    ``ha_groups``, ``ipv6_plan``, ``nat_plan``, ``ospf_design``, ``l2_design``,
+    ``wan_design``, ``wireless_design``, and ``qos_design``) are omitted so twins
+    created before those fields were added have exactly the same fingerprint
+    bytes as before.
     """
     return twin.model_dump(mode="json", exclude=_serialization_exclude(twin))
 
