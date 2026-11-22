@@ -9,6 +9,7 @@ those checks.
 from .constraints import constraint_findings
 from .health import (
     build_design_health,
+    categorize_design_finding,
     categorize_security_finding,
     categorize_twin_finding,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "DesignHealth",
     "ValidationCategory",
     "build_design_health",
+    "categorize_design_finding",
     "categorize_security_finding",
     "categorize_twin_finding",
     "constraint_findings",

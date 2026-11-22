@@ -12,9 +12,10 @@ well lets the cached function rebuild the model without touching session state.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -31,8 +32,12 @@ from forecasting import (
 )
 from network.addressing.dual_stack import validate_dual_stack
 from network.addressing.nat import analyze_nat_plan
+from network.l2.switching import analyze_l2_design
+from network.qos.review import qos_findings
 from network.routing.ha import analyze_ha_groups
 from network.routing.ospf import analyze_ospf_design
+from network.wan.planning import analyze_wan_design
+from network.wireless.planning import analyze_wireless_design
 from optimization import (
     CostModel,
     OptimizationRun,
@@ -48,12 +53,63 @@ from simulation import (
     SimulationAssumptions,
     twin_fingerprint,
 )
+from simulation.evaluator import evaluate
+from simulation.models import RoutingMode
 
 if TYPE_CHECKING:
     from services.copilot import DecisionLog
     from services.reporting import ReportDocument
 
 CACHE_ENTRIES = 8
+
+# Fixed, bounded review sections. Each section is one cached slice, so a full
+# review uses exactly four entries regardless of topology size.
+L2_REVIEW_SECTIONS: tuple[str, ...] = ("l2", "wan", "wireless", "qos")
+L2_REVIEW_SECTION_FIELDS: dict[str, tuple[str, ...]] = {
+    "l2": ("l2_loops", "l2_blocked_links", "l2_bundles", "l2_findings"),
+    "wan": (
+        "wan_links",
+        "wan_site_ids",
+        "wan_total_monthly_cost_proxy",
+        "wan_findings",
+    ),
+    "wireless": (
+        "wireless_areas",
+        "wireless_total_aps",
+        "wireless_total_uplink_mbps",
+        "wireless_findings",
+    ),
+    "qos": ("qos_caps", "qos_default_class", "qos_findings"),
+}
+
+
+@dataclass(frozen=True)
+class L2DesignReview:
+    """Small, serializable summary of one bounded L2/WAN/wireless/QoS review.
+
+    A cached slice fills only its own section fields. The UI merges the four
+    slices into one ``sections=L2_REVIEW_SECTIONS`` result, so every summary is
+    built from immutable tuples and needs no live engine object.
+    """
+
+    twin_version: str
+    sections: tuple[str, ...] = ()
+    status: str = "complete"
+    l2_loops: tuple[tuple[int, str | None, int, tuple[str, ...]], ...] = ()
+    l2_blocked_links: tuple[str, ...] = ()
+    l2_bundles: tuple[tuple[str, float, bool, tuple[str, ...]], ...] = ()
+    l2_findings: tuple[tuple[str, str, str], ...] = ()
+    wan_links: tuple[tuple[str, str, str, str, float, float, float], ...] = ()
+    wan_site_ids: tuple[str, ...] = ()
+    wan_total_monthly_cost_proxy: float = 0.0
+    wan_findings: tuple[tuple[str, str, str], ...] = ()
+    wireless_areas: tuple[tuple[str, str, int, int, int, str, float], ...] = ()
+    wireless_total_aps: int = 0
+    wireless_total_uplink_mbps: float = 0.0
+    wireless_findings: tuple[tuple[str, str, str], ...] = ()
+    qos_caps: tuple[tuple[str, str, float], ...] = ()
+    qos_default_class: str = ""
+    qos_findings: tuple[tuple[str, str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -79,6 +135,18 @@ def twin_payload(twin: DigitalTwin) -> str:
 def twin_cache_key(twin: DigitalTwin) -> str:
     """Return the stable content key for one twin revision."""
     return twin_fingerprint(twin)
+
+
+def l2_review_key(twin: DigitalTwin) -> str:
+    """Return one session/cache identity for a twin revision.
+
+    The key combines the fingerprint with a digest of the canonical twin JSON,
+    so either a fingerprint revision or any additive design field invalidates a
+    stored review result.
+    """
+    payload = twin_payload(twin)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"{twin_cache_key(twin)}:{digest}"
 
 
 def source_payload(
@@ -213,6 +281,180 @@ def cached_l3_design_review(
         else (),
         ha_findings=findings(ha_analysis.findings if ha_analysis else ()),
     )
+
+
+@st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
+def _cached_l2_design_review_slice(
+    twin_payload: str,
+    fingerprint: str = "",
+    sections: tuple[str, ...] = L2_REVIEW_SECTIONS,
+) -> L2DesignReview:
+    """Review one bounded slice of the W1-W4 design models per twin revision.
+
+    The cache is bounded and keyed by canonical twin JSON, fingerprint, and
+    section selection. Each call rebuilds its slice from the payload without
+    touching session state, so a changed twin can never reuse a stale result.
+    """
+    requested = tuple(dict.fromkeys(sections)) if sections else L2_REVIEW_SECTIONS
+    unknown = set(requested).difference(L2_REVIEW_SECTIONS)
+    if unknown:
+        raise ValueError(f"Unknown L2 review sections: {sorted(unknown)}")
+    twin = DigitalTwin.model_validate_json(twin_payload)
+
+    def summary(items: Sequence[Finding]) -> tuple[tuple[str, str, str], ...]:
+        return tuple(
+            (item.severity.value, item.code, item.explanation) for item in items
+        )
+
+    l2_loops: tuple[tuple[int, str | None, int, tuple[str, ...]], ...] = ()
+    l2_blocked_links: tuple[str, ...] = ()
+    l2_bundles: tuple[tuple[str, float, bool, tuple[str, ...]], ...] = ()
+    l2_findings: tuple[tuple[str, str, str], ...] = ()
+    if "l2" in requested:
+        l2 = analyze_l2_design(twin)
+        l2_loops = tuple(
+            (
+                loop.vlan_id,
+                loop.root_bridge,
+                loop.cycle_count,
+                loop.blocked_link_ids,
+            )
+            for loop in l2.loops
+        )
+        l2_blocked_links = l2.blocked_link_ids
+        l2_bundles = tuple(
+            (
+                bundle.bundle_id,
+                bundle.capacity_mbps,
+                bundle.down,
+                bundle.member_link_ids,
+            )
+            for bundle in l2.bundles
+        )
+        l2_findings = summary(l2.findings)
+
+    wan_links: tuple[tuple[str, str, str, str, float, float, float], ...] = ()
+    wan_site_ids: tuple[str, ...] = ()
+    wan_total = 0.0
+    wan_findings: tuple[tuple[str, str, str], ...] = ()
+    if "wan" in requested:
+        wan = analyze_wan_design(twin, design=twin.wan_design, include_expensive=False)
+        wan_links = tuple(
+            (
+                link.link_id,
+                link.source_site,
+                link.target_site,
+                link.wan_type.value if link.wan_type is not None else "",
+                link.capacity_mbps,
+                link.monthly_cost_proxy,
+                link.latency_ms,
+            )
+            for link in wan.links
+        )
+        wan_site_ids = wan.site_ids
+        wan_total = wan.total_monthly_cost_proxy
+        wan_findings = summary(wan.findings)
+
+    wireless_areas: tuple[tuple[str, str, int, int, int, str, float], ...] = ()
+    wireless_total_aps = 0
+    wireless_total_uplink = 0.0
+    wireless_findings: tuple[tuple[str, str, str], ...] = ()
+    if "wireless" in requested:
+        wireless = analyze_wireless_design(twin.wireless_design)
+        wireless_areas = tuple(
+            (
+                plan.area_id,
+                plan.area_name,
+                plan.effective_clients,
+                plan.capacity_ap_count,
+                plan.recommended_ap_count,
+                plan.binding_constraint,
+                plan.uplink_required_mbps,
+            )
+            for plan in wireless.plans
+        )
+        wireless_total_aps = wireless.total_recommended_aps
+        wireless_total_uplink = wireless.total_uplink_required_mbps
+        wireless_findings = summary(wireless.findings)
+
+    qos_caps: tuple[tuple[str, str, float], ...] = ()
+    qos_default_class = ""
+    qos_findings_summary: tuple[tuple[str, str, str], ...] = ()
+    if "qos" in requested:
+        if twin.qos_design is not None:
+            qos_default_class = twin.qos_design.default_class.value
+            qos_caps = tuple(
+                (cap.link_id, cap.traffic_class.value, cap.share_cap)
+                for cap in twin.qos_design.class_share_caps
+            )
+        state = evaluate(
+            twin,
+            SimulationAssumptions(
+                routing_mode=RoutingMode.capacity_aware,
+                enable_strict_priority_qos=True,
+            ),
+        )
+        qos_findings_summary = summary(
+            qos_findings(twin, state, design=twin.qos_design)
+        )
+
+    return L2DesignReview(
+        twin_version=fingerprint,
+        sections=requested,
+        l2_loops=l2_loops,
+        l2_blocked_links=l2_blocked_links,
+        l2_bundles=l2_bundles,
+        l2_findings=l2_findings,
+        wan_links=wan_links,
+        wan_site_ids=wan_site_ids,
+        wan_total_monthly_cost_proxy=wan_total,
+        wan_findings=wan_findings,
+        wireless_areas=wireless_areas,
+        wireless_total_aps=wireless_total_aps,
+        wireless_total_uplink_mbps=wireless_total_uplink,
+        wireless_findings=wireless_findings,
+        qos_caps=qos_caps,
+        qos_default_class=qos_default_class,
+        qos_findings=qos_findings_summary,
+    )
+
+
+def cached_l2_design_review(
+    twin_payload: str,
+    fingerprint: str = "",
+    sections: tuple[str, ...] = L2_REVIEW_SECTIONS,
+) -> L2DesignReview:
+    """Merge independently cached W1-W4 slices for one twin revision.
+
+    Each section is cached separately, so a reordered or smaller subset reuses
+    the same bounded entries instead of creating a new whole-combination entry.
+    The returned review preserves the requested order while every field still
+    comes from a fingerprint-keyed slice.
+    """
+    requested = tuple(dict.fromkeys(sections)) if sections else L2_REVIEW_SECTIONS
+    unknown = set(requested).difference(L2_REVIEW_SECTIONS)
+    if unknown:
+        raise ValueError(f"Unknown L2 review sections: {sorted(unknown)}")
+
+    result = L2DesignReview(
+        twin_version=fingerprint,
+        sections=requested,
+        status="complete",
+    )
+    updates: dict[str, object] = {}
+    for section in requested:
+        piece = _cached_l2_design_review_slice(twin_payload, fingerprint, (section,))
+        for field in L2_REVIEW_SECTION_FIELDS.get(section, ()):
+            updates[field] = getattr(piece, field)
+    return replace(result, **updates)
+
+
+def _clear_cached_l2_design_review() -> None:
+    """Drop all bounded L2 review slices (test and cache-reset helper)."""
+    _cached_l2_design_review_slice.clear()
+
+
+cached_l2_design_review.clear = _clear_cached_l2_design_review  # type: ignore[attr-defined]
 
 
 @st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
@@ -411,17 +653,21 @@ def cached_exports(document_payload: str, twin_payload: str) -> ExportBundle:
 
 
 __all__ = [
+    "L2_REVIEW_SECTIONS",
     "ExportBundle",
+    "L2DesignReview",
     "L3DesignReview",
     "cached_capacity_run",
     "cached_design_health",
     "cached_exports",
     "cached_forecast_run",
+    "cached_l2_design_review",
     "cached_l3_design_review",
     "cached_report",
     "cached_security_analysis",
     "capacity_series_payload",
     "capacity_source_payload",
+    "l2_review_key",
     "security_flows_payload",
     "source_payload",
     "twin_cache_key",

@@ -105,7 +105,7 @@ def test_all_cache_data_decorators_are_bounded() -> None:
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "cache_data"
     ]
-    assert len(decorators) == 7
+    assert len(decorators) == 8
     for decorator in decorators:
         keywords = {
             keyword.arg: keyword.value

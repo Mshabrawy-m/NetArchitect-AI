@@ -2,6 +2,64 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-22 - W1-W5: modeled L2/WAN/wireless/QoS design package on feature/v2-l2
+
+### Added
+- W1 (`9c25860`, lint fix `312e049`): bounded Layer-2 switching model with
+  per-VLAN graph review, deterministic minimum-spanning-forest blocking, trunk
+  downstream-VLAN checks, native-VLAN mismatch, VLAN-spread heuristic, and
+  EtherChannel capacity grouping.
+- W2 (`bb9c1c5`): design-only WAN analysis with inter-site link discovery,
+  monthly cost proxies, assumed latency, site-type/SRG/SPOF findings, opt-in
+  capacity-aware check, and additive optimizer proxy terms that stay zero on
+  legacy inputs.
+- W3 (`b34f0ad`): abstract wireless AP planning from explicit area/client/capacity
+  assumptions, with capacity/coverage binding labels and uplink estimates. No RF
+  propagation, channel, signal, or site-survey behavior is modeled.
+- W4 (`465973d`): default-off strict-priority QoS admission model with class
+  order, per-link share caps, and modeled starvation labels. No queueing,
+  dropping, scheduler, or device hardware behavior is simulated.
+- W5: validation categories `l2`, `wan`, `wireless`, `qos`; independent Critic
+  re-derivation and step mapping; four provenance-tagged report sections; four
+  deterministic Copilot “why?” targets; a five-tab `L2 Design` page with
+  versioned editors, notices, theme tokens, EN/AR keys, and a bounded
+  Run/Cancel/Clear review loop; one bounded fingerprint-keyed cache; offline
+  import audit; and max-size timing checks.
+- Additive twin fields: `l2_design`, `wan_design`, `wireless_design`,
+  `qos_design`; additive link fields `l2_mode`, `l2_access_vlan`,
+  `l2_native_vlan`, `l2_peer_native_vlan`, `l2_allowed_vlans`, `wan_type`,
+  `wan_capacity_mbps`, `wan_monthly_cost_proxy`, `wan_latency_ms`, `wan_srg_tag`;
+  additive demand field `traffic_class`; additive assumption field
+  `SimulationAssumptions.enable_strict_priority_qos`.
+- Additive non-twin APIs: validation categories `l2`, `wan`, `wireless`, `qos`;
+  `ExplanationTarget.l2_design`, `wan_design`, `wireless_design`, `qos_design`;
+  builders with the same four names; report IDs `l2_switching_design`,
+  `wan_design`, `wireless_design`, `qos_design`; and `L2DesignReview`.
+
+### Changed
+- No schema version bump: `TWIN_SCHEMA_VERSION` stays `2`; defaults are omitted
+  from twin JSON and the schema-v1 fingerprint remains
+  `4212909d2624a026229027d4266267906ae6a040df00678bf200d0430c2d802c`. Legacy
+  twin JSON/fingerprints stay byte-identical and tested. Default models leave
+  simulation results unchanged.
+- Navigation grows from 16 to 17 pages. No new runtime dependency, worker,
+  thread, or app disk write was added. `network/qos/review.py` is imported
+  directly rather than exported from `network.qos` to avoid a
+  `core.schemas.routing` / `network.qos` circular import.
+
+### Evidence
+- Focused engine/validation/Critic/report/Copilot/UI tests: `92 passed in 1.44s`,
+  `41 passed in 1.47s`, `98 passed in 13.27s`, `82 passed in 10.04s`, and
+  `31 passed in 9.26s`.
+- Max-size W-check timing (`pytest -q -m perf -o addopts= tests/unit/test_w5_design_perf.py -s`):
+  W1 32 x 8 bundles `0.0022s`, W2 64 sites / 128 links `0.0022s`, W3 32 areas
+  `0.0002s`, W4 128 caps `0.0025s`.
+- `pytest -q`: `1426 passed, 14 deselected in 57.41s`.
+- `ruff check .`: `All checks passed!`.
+- `pytest -q -m smoke`: `13 passed, 1427 deselected in 6.62s`.
+- i18n catalog parity: `True ()`.
+- Not verified: real-browser rendering, Streamlit Cloud deployment, Linux CI.
+
 ## 2026-11-22 - Hotfix: failure sweep first-run IndexError
 
 ### Fixed

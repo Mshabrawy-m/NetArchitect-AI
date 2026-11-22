@@ -26,11 +26,22 @@ from digital_twin import DigitalTwin, failed_entities
 from network.addressing.dual_stack import validate_dual_stack
 from network.addressing.nat import analyze_nat_plan
 from network.analysis import METRIC_DEFINITIONS, AnalysisReport, analyze_topology
+from network.l2.switching import analyze_l2_design
+from network.qos.admission import demand_traffic_class
+from network.qos.review import DEMAND_STARVED_CODE, qos_findings
 from network.routing import reachability_matrix, routing_table
 from network.routing.ha import analyze_ha_groups
 from network.routing.ospf import analyze_ospf_design
+from network.wan.planning import analyze_wan_design
+from network.wireless import planning as wireless_planning
 from security import SECURITY_DISCLAIMER, SecurityAnalysis
-from simulation import MODEL_NOTE, twin_reference
+from simulation import (
+    MODEL_NOTE,
+    RoutingMode,
+    SimulationAssumptions,
+    evaluate,
+    twin_reference,
+)
 
 from . import templates
 from .formatting import format_number, numeric_tokens
@@ -61,6 +72,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 REPORT_TITLE_PREFIX = "Network design report"
 _REPORT_STEP = "report"
 _REPORT_TOOL = "services.reporting.builder"
+# The W1-W4 design packages are modeled on the same producer page as L2 design.
+_W5_PRODUCER_PAGE = "L2 Design"
 
 
 @dataclass(frozen=True)
@@ -3563,6 +3576,527 @@ class _Builder:
         return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
 
     # ------------------------------------------------------------------
+    # 9d. W1-W4 modeled design engines (optional twin fields)
+    # ------------------------------------------------------------------
+    def _model_finding_notes(
+        self,
+        key_prefix: str,
+        findings: Sequence[Finding],
+        *,
+        step: str,
+        tool: str,
+    ) -> list[Any]:
+        """Render engine findings with their stable codes and traced numbers."""
+        notes: list[Any] = []
+        for index, finding in enumerate(findings):
+            severity = str(getattr(finding.severity, "value", finding.severity))
+            notes.append(
+                NoteBlock(
+                    text=self.numbers.scan(
+                        f"{key_prefix}.finding.{index}",
+                        f"{key_prefix} modeled finding",
+                        f"[{finding.code}] {finding.explanation}",
+                        step=step,
+                        tool=tool,
+                    ),
+                    severity="info" if severity == "info" else "warning",
+                    provenance=self.prov(step, tool),
+                )
+            )
+        return notes
+
+    def l2_switching_design(self) -> ReportSection:
+        section_id = "l2_switching_design"
+        title = "Layer 2 switching design"
+        design = self.twin.l2_design
+        if design is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No Layer 2 switching design is stored in the twin. Model one on "
+                "the L2 Design page.",
+                _W5_PRODUCER_PAGE,
+            )
+        values = self.numbers
+        step = "design"
+        tool = "network.l2.switching.analyze_l2_design"
+        analysis = analyze_l2_design(self.twin)
+        loops = values.number(
+            "l2.loops", "Modeled per-VLAN loop reviews", len(analysis.loops),
+            step=step, tool=tool, digits=0,
+        )
+        blocked = values.number(
+            "l2.blocked_links", "Modeled blocked links", len(analysis.blocked_link_ids),
+            step=step, tool=tool, digits=0,
+        )
+        effective = values.number(
+            "l2.effective_links", "Effective links", len(analysis.effective_link_ids),
+            step=step, tool=tool, digits=0,
+        )
+        bundles = values.number(
+            "l2.bundles", "Modeled EtherChannel bundles", len(analysis.bundles),
+            step=step, tool=tool, digits=0,
+        )
+        findings = values.number(
+            "l2.findings", "Modeled L2 findings", len(analysis.findings),
+            step=step, tool=tool, digits=0,
+        )
+        summary = values.scan(
+            "l2.summary",
+            "Layer 2 design summary",
+            (
+                f"The modeled Layer 2 design produced {loops} per-VLAN loop "
+                f"review(s), {blocked} blocked link(s), {effective} effective link(s), "
+                f"{bundles} EtherChannel bundle(s), and {findings} finding(s). "
+                "Blocking and bundling are documented design rules only; no "
+                "spanning tree, trunk negotiation, or switch behavior is simulated."
+            ),
+            step=step,
+            tool=tool,
+        )
+        blocks: list[Any] = [
+            ParagraphBlock(text=summary, provenance=self.prov(step, tool)),
+            NoteBlock(
+                text=values.scan(
+                    "l2.scope_note",
+                    "Layer 2 scope note",
+                    (
+                        "L2 switching design rules only: VLAN spread, gateway "
+                        "paths, loop blocking, and EtherChannel grouping are "
+                        "modeled intent. No protocol state or live switch "
+                        "behavior is applied."
+                    ),
+                    step=step,
+                    tool=tool,
+                ),
+                severity="limitation",
+                provenance=self.prov(step, tool),
+            ),
+        ]
+        loop_rows: list[tuple[str, ...]] = []
+        for index, loop in enumerate(analysis.loops):
+            loop_rows.append(
+                (
+                    values.number(f"l2.loop.{index}.vlan", "Modeled VLAN",
+                                  loop.vlan_id, step=step, tool=tool, digits=0),
+                    values.number(f"l2.loop.{index}.switches", "Carrying switches",
+                                  len(loop.switch_ids), step=step, tool=tool, digits=0),
+                    values.number(f"l2.loop.{index}.cycles", "Cycle rank",
+                                  loop.cycle_count, step=step, tool=tool, digits=0),
+                    values.number(f"l2.loop.{index}.components", "Components",
+                                  loop.component_count, step=step, tool=tool, digits=0),
+                    values.scan(f"l2.loop.{index}.root", "Modeled root bridge",
+                                loop.root_bridge or "none", step=step, tool=tool),
+                    values.scan(f"l2.loop.{index}.blocked", "Modeled blocked links",
+                                ", ".join(loop.blocked_link_ids) or "none",
+                                step=step, tool=tool),
+                    values.scan(f"l2.loop.{index}.forwarding", "Modeled forwarding links",
+                                ", ".join(loop.forwarding_link_ids) or "none",
+                                step=step, tool=tool),
+                )
+            )
+        blocks.append(
+            self.table(
+                "l2_loop_review",
+                "Modeled per-VLAN loop review",
+                ("VLAN", "Switches", "Cycle rank", "Components", "Root bridge",
+                 "Blocked", "Forwarding"),
+                loop_rows,
+                step=step,
+                tool=tool,
+            )
+        )
+        bundle_rows: list[tuple[str, ...]] = []
+        for index, bundle in enumerate(analysis.bundles):
+            bundle_rows.append(
+                (
+                    values.scan(f"l2.bundle.{index}.id", "Bundle id", bundle.bundle_id,
+                                step=step, tool=tool),
+                    values.number(f"l2.bundle.{index}.members", "Modeled members",
+                                  len(bundle.member_link_ids), step=step, tool=tool,
+                                  digits=0),
+                    values.scan(
+                        f"l2.bundle.{index}.speeds", "Member speeds",
+                        ", ".join(f"{speed:g}" for speed in bundle.member_speeds_mbps)
+                        or "none",
+                        step=step, tool=tool,
+                    ),
+                    values.number(f"l2.bundle.{index}.capacity", "Bundle capacity (Mbps)",
+                                  bundle.capacity_mbps, step=step, tool=tool),
+                    "yes" if bundle.down else "no",
+                    values.scan(f"l2.bundle.{index}.failed", "Failed members",
+                                ", ".join(bundle.failed_member_link_ids) or "none",
+                                step=step, tool=tool),
+                )
+            )
+        blocks.append(
+            self.table(
+                "l2_bundles",
+                "Modeled EtherChannel bundles",
+                ("Bundle", "Members", "Speeds (Mbps)", "Capacity (Mbps)", "Down",
+                 "Failed members"),
+                bundle_rows,
+                step=step,
+                tool=tool,
+            )
+        )
+        blocks.extend(self._model_finding_notes("l2", analysis.findings, step=step, tool=tool))
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def wan_design(self) -> ReportSection:
+        section_id = "wan_design"
+        title = "WAN design"
+        design = self.twin.wan_design
+        if design is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No WAN design is stored in the twin. Model one on the L2 Design "
+                "page.",
+                _W5_PRODUCER_PAGE,
+            )
+        values = self.numbers
+        step = "design"
+        tool = "network.wan.planning.analyze_wan_design"
+        analysis = analyze_wan_design(self.twin, design=design, include_expensive=False)
+        sites = values.number(
+            "wan.sites", "Modeled sites", len(analysis.site_ids),
+            step=step, tool=tool, digits=0,
+        )
+        links = values.number(
+            "wan.links", "Active inter-site WAN links", len(analysis.links),
+            step=step, tool=tool, digits=0,
+        )
+        cost = values.number(
+            "wan.cost_proxy_monthly", "Modeled monthly cost proxy",
+            analysis.total_monthly_cost_proxy, step=step, tool=tool,
+        )
+        evaluated = values.number(
+            "wan.evaluated_demands", "Capacity-aware demands evaluated",
+            analysis.evaluated_demand_count, step=step, tool=tool, digits=0,
+        )
+        summary = values.scan(
+            "wan.summary",
+            "WAN design summary",
+            (
+                f"The modeled WAN design declares {sites} site(s) and {links} "
+                f"active inter-site link(s) with a total modeled monthly cost "
+                f"proxy of {cost}. The opt-in capacity-aware check evaluated "
+                f"{evaluated} demand(s) and was not run for this report. Costs "
+                "and one-way latencies are documented modeled proxies and "
+                "assumptions, not carrier quotes, circuit measurements, or "
+                "protocol behavior."
+            ),
+            step=step,
+            tool=tool,
+        )
+        blocks: list[Any] = [
+            ParagraphBlock(text=summary, provenance=self.prov(step, tool)),
+            NoteBlock(
+                text=values.scan(
+                    "wan.scope_note",
+                    "WAN scope note",
+                    (
+                        "WAN modeled cost proxies and assumed latency only: no "
+                        "carrier circuit, live measurement, shared-risk group "
+                        "state, or routing protocol is modeled."
+                    ),
+                    step=step,
+                    tool=tool,
+                ),
+                severity="limitation",
+                provenance=self.prov(step, tool),
+            ),
+        ]
+        link_rows: list[tuple[str, ...]] = []
+        for index, link in enumerate(analysis.links):
+            link_rows.append(
+                (
+                    values.text(f"wan.link.{index}.id", "WAN link id", link.link_id,
+                                step=step, tool=tool),
+                    values.scan(f"wan.link.{index}.source", "Source site",
+                                link.source_site, step=step, tool=tool),
+                    values.scan(f"wan.link.{index}.target", "Target site",
+                                link.target_site, step=step, tool=tool),
+                    values.scan(f"wan.link.{index}.type", "Modeled WAN type",
+                                link.wan_type.value if link.wan_type else "none",
+                                step=step, tool=tool),
+                    values.number(f"wan.link.{index}.capacity", "Capacity (Mbps)",
+                                  link.capacity_mbps, step=step, tool=tool),
+                    values.number(f"wan.link.{index}.cost_proxy", "Cost proxy/month",
+                                  link.monthly_cost_proxy, step=step, tool=tool),
+                    values.number(f"wan.link.{index}.latency", "Assumed latency (ms)",
+                                  link.latency_ms, step=step, tool=tool),
+                    values.scan(f"wan.link.{index}.srg", "Modeled shared-risk group",
+                                link.srg_tag or "none", step=step, tool=tool),
+                )
+            )
+        blocks.append(
+            self.table(
+                "wan_links",
+                "Modeled inter-site WAN links",
+                ("Link", "Source site", "Target site", "Type", "Capacity (Mbps)",
+                 "Cost proxy/mo", "Latency (ms)", "SRG"),
+                link_rows,
+                step=step,
+                tool=tool,
+            )
+        )
+        blocks.extend(self._model_finding_notes("wan", analysis.findings, step=step, tool=tool))
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def wireless_design(self) -> ReportSection:
+        section_id = "wireless_design"
+        title = "Wireless design"
+        design = self.twin.wireless_design
+        if design is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No wireless design is stored in the twin. Model one on the L2 "
+                "Design page.",
+                _W5_PRODUCER_PAGE,
+            )
+        values = self.numbers
+        step = "design"
+        tool = "network.wireless.planning.analyze_wireless_design"
+        analysis = wireless_planning.analyze_wireless_design(design)
+        areas = values.number(
+            "wireless.areas", "Modeled wireless areas", len(analysis.plans),
+            step=step, tool=tool, digits=0,
+        )
+        aps = values.number(
+            "wireless.total_aps", "Recommended APs", analysis.total_recommended_aps,
+            step=step, tool=tool, digits=0,
+        )
+        uplink = values.number(
+            "wireless.total_uplink_mbps", "Total uplink requirement (Mbps)",
+            analysis.total_uplink_required_mbps, step=step, tool=tool,
+        )
+        summary = values.scan(
+            "wireless.summary",
+            "Wireless design summary",
+            (
+                f"The modeled wireless design covers {areas} abstract area(s) "
+                f"and recommends {aps} AP(s) with a modeled uplink requirement "
+                f"of {uplink} Mbps. These are estimates from stated area and "
+                "capacity assumptions only: there is no RF propagation model, "
+                "no signal prediction, and no site survey."
+            ),
+            step=step,
+            tool=tool,
+        )
+        blocks: list[Any] = [
+            ParagraphBlock(text=summary, provenance=self.prov(step, tool)),
+            NoteBlock(
+                text=values.scan(
+                    "wireless.scope_note",
+                    "Wireless scope note",
+                    (
+                        "Wireless estimates only: clients are never enumerated "
+                        "and no RF propagation, channel, or signal behavior is "
+                        "modeled."
+                    ),
+                    step=step,
+                    tool=tool,
+                ),
+                severity="limitation",
+                provenance=self.prov(step, tool),
+            ),
+        ]
+        plan_rows: list[tuple[str, ...]] = []
+        for index, plan in enumerate(analysis.plans):
+            plan_rows.append(
+                (
+                    values.scan(f"wireless.plan.{index}.area", "Area id",
+                                plan.area_id, step=step, tool=tool),
+                    values.number(f"wireless.plan.{index}.clients", "Modeled clients",
+                                  plan.effective_clients, step=step, tool=tool, digits=0),
+                    values.number(f"wireless.plan.{index}.capacity_aps", "Capacity APs",
+                                  plan.capacity_ap_count, step=step, tool=tool, digits=0),
+                    values.number(f"wireless.plan.{index}.coverage_aps", "Coverage APs",
+                                  plan.coverage_ap_count, step=step, tool=tool, digits=0),
+                    values.number(f"wireless.plan.{index}.recommended_aps",
+                                  "Recommended APs", plan.recommended_ap_count,
+                                  step=step, tool=tool, digits=0),
+                    values.text(f"wireless.plan.{index}.binding", "Binding constraint",
+                                plan.binding_constraint, step=step, tool=tool),
+                    values.number(f"wireless.plan.{index}.uplink_mbps",
+                                  "Uplink requirement (Mbps)",
+                                  plan.uplink_required_mbps, step=step, tool=tool),
+                    values.scan(f"wireless.plan.{index}.switch", "Uplink switch",
+                                plan.uplink_switch_id or "none", step=step, tool=tool),
+                )
+            )
+        blocks.append(
+            self.table(
+                "wireless_areas",
+                "Modeled wireless AP estimates",
+                ("Area", "Clients", "Capacity APs", "Coverage APs", "Recommended APs",
+                 "Binding", "Uplink Mbps", "Uplink switch"),
+                plan_rows,
+                step=step,
+                tool=tool,
+            )
+        )
+        for index, formula in enumerate(wireless_planning.FORMULAS):
+            blocks.append(
+                NoteBlock(
+                    text=values.scan(f"wireless.formula.{index}",
+                                     "Modeled wireless formula", formula,
+                                     step=step, tool=tool),
+                    severity="info",
+                    provenance=self.prov(step, tool),
+                )
+            )
+        for index, assumption in enumerate(wireless_planning.ASSUMPTIONS):
+            blocks.append(
+                NoteBlock(
+                    text=values.scan(f"wireless.assumption.{index}",
+                                     "Modeled wireless assumption", assumption,
+                                     step=step, tool=tool),
+                    severity="info",
+                    provenance=self.prov(step, tool),
+                )
+            )
+        blocks.extend(
+            self._model_finding_notes("wireless", analysis.findings, step=step, tool=tool)
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def qos_design(self) -> ReportSection:
+        section_id = "qos_design"
+        title = "QoS design"
+        design = self.twin.qos_design
+        if design is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No QoS design is stored in the twin. Model one on the L2 Design "
+                "page.",
+                _W5_PRODUCER_PAGE,
+            )
+        values = self.numbers
+        step = "design"
+        tool = "network.qos.review.qos_findings"
+        state = evaluate(
+            self.twin,
+            SimulationAssumptions(
+                routing_mode=RoutingMode.capacity_aware,
+                enable_strict_priority_qos=True,
+            ),
+        )
+        findings = qos_findings(self.twin, state)
+        default_class = values.text(
+            "qos.default_class", "Modeled default traffic class",
+            design.default_class.value, step=step, tool=tool,
+        )
+        caps = values.number(
+            "qos.caps", "Modeled class share caps", len(design.class_share_caps),
+            step=step, tool=tool, digits=0,
+        )
+        demands = values.number(
+            "qos.demands", "Admission-reviewed demands", len(state.demands),
+            step=step, tool=tool, digits=0,
+        )
+        served = values.number(
+            "qos.served", "Admitted demands", state.served_demand_count,
+            step=step, tool=tool, digits=0,
+        )
+        starved = values.number(
+            "qos.starved", "Starved demands",
+            sum(1 for finding in findings if finding.code == DEMAND_STARVED_CODE),
+            step=step, tool=tool, digits=0,
+        )
+        summary = values.scan(
+            "qos.summary",
+            "QoS design summary",
+            (
+                f"The modeled QoS design uses {default_class} as its default "
+                f"class and declares {caps} class share cap(s). Capacity-aware "
+                f"admission reviewed {demands} demand(s): {served} admitted and "
+                f"{starved} starved. This is an admission model, not a queue "
+                "simulation: no queues, drops, schedulers, or device hardware "
+                "behavior are modeled."
+            ),
+            step=step,
+            tool=tool,
+        )
+        blocks: list[Any] = [
+            ParagraphBlock(text=summary, provenance=self.prov(step, tool)),
+            NoteBlock(
+                text=values.scan(
+                    "qos.scope_note",
+                    "QoS scope note",
+                    (
+                        "QoS admission model only: modeled strict-priority "
+                        "class order and share caps decide admission. No queue "
+                        "behavior, drop probability, or hardware scheduling is "
+                        "simulated."
+                    ),
+                    step=step,
+                    tool=tool,
+                ),
+                severity="limitation",
+                provenance=self.prov(step, tool),
+            ),
+        ]
+        cap_rows: list[tuple[str, ...]] = []
+        for index, cap in enumerate(design.class_share_caps):
+            cap_rows.append(
+                (
+                    values.scan(f"qos.cap.{index}.link", "Capped link", cap.link_id,
+                                step=step, tool=tool),
+                    values.scan(f"qos.cap.{index}.class", "Capped traffic class",
+                                cap.traffic_class.value, step=step, tool=tool),
+                    values.number(f"qos.cap.{index}.share", "Share cap",
+                                  cap.share_cap, step=step, tool=tool, digits=6),
+                )
+            )
+        blocks.append(
+            self.table(
+                "qos_class_caps",
+                "Modeled QoS class share caps",
+                ("Link", "Class", "Share cap"),
+                cap_rows,
+                step=step,
+                tool=tool,
+            )
+        )
+        demand_rows: list[tuple[str, ...]] = []
+        for index, outcome in enumerate(state.demands):
+            demand_rows.append(
+                (
+                    values.scan(f"qos.demand.{index}.name", "Demand name",
+                                outcome.name, step=step, tool=tool),
+                    values.text(
+                        f"qos.demand.{index}.class", "Modeled traffic class",
+                        demand_traffic_class(self.twin.demands[index], design).value,
+                        step=step, tool=tool,
+                    ),
+                    values.number(f"qos.demand.{index}.bandwidth", "Bandwidth (Mbps)",
+                                  outcome.bandwidth_mbps, step=step, tool=tool),
+                    "yes" if outcome.served else "no",
+                    values.scan(f"qos.demand.{index}.reason", "Admission reason",
+                                outcome.reason or "none", step=step, tool=tool),
+                )
+            )
+        blocks.append(
+            self.table(
+                "qos_admission",
+                "Modeled strict-priority admission by demand",
+                ("Demand", "Class", "Bandwidth (Mbps)", "Admitted", "Reason"),
+                demand_rows,
+                step=step,
+                tool=tool,
+            )
+        )
+        blocks.extend(
+            self._model_finding_notes("qos", findings, step=step, tool=tool)
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    # ------------------------------------------------------------------
     # 10. Assumptions
     # ------------------------------------------------------------------
     def assumptions(self) -> ReportSection:
@@ -4936,6 +5470,10 @@ class _Builder:
             self.nat_plan(),
             self.ospf_area_design(),
             self.gateway_redundancy(),
+            self.l2_switching_design(),
+            self.wan_design(),
+            self.wireless_design(),
+            self.qos_design(),
             self.graph_analysis(),
             self.simulation(),
             self.capacity(),

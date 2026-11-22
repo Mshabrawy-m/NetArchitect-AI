@@ -31,10 +31,14 @@ from agents import (
 from agents.network_agents import default_agents
 from core.exceptions import LLMProviderError
 from core.schemas.addressing import Subnet
+from core.schemas.network import Device, DeviceRole, DeviceType, Link, Topology
 from core.schemas.requirements import NetworkRequirements, UserFacts
 from digital_twin import DigitalTwin
 from network.addressing.nat import NatPlan, NatRule, NatType
+from network.l2.models import LinkL2Mode
+from network.qos.models import ClassShareCap, QosDesign, TrafficClass
 from network.routing.ospf import OspfArea, OspfDesign
+from network.wan.models import WanLinkType
 from services.llm.testing import FakeProvider
 from tests.unit.agents.helpers import sample_requirements
 from tests.unit.simulation.helpers import (
@@ -343,3 +347,162 @@ def test_critic_does_not_import_execution_or_streamlit_modules() -> None:
     source = Path(critic_module.__file__).read_text(encoding="utf-8")
     for forbidden in ("subprocess", "os.system", "eval(", "exec(", "streamlit"):
         assert forbidden not in source
+
+
+# ---------------------------------------------------------------------------
+# W5: independent L2/WAN/wireless/QoS critic checks.
+# ---------------------------------------------------------------------------
+
+
+def test_w5_design_codes_map_to_their_responsible_steps() -> None:
+    assert responsible_step_for("l2_native_vlan_mismatch") == "topology"
+    assert responsible_step_for("wan_site_single_link_spof") == "topology"
+    assert responsible_step_for("wireless_capacity_binding") == "topology"
+    assert responsible_step_for("qos_demand_starved") == "optimization"
+    # Future codes in the same families remain deterministic.
+    assert responsible_step_for("l2_future_rule") == "topology"
+    assert responsible_step_for("wan_future_rule") == "topology"
+    assert responsible_step_for("wireless_future_rule") == "topology"
+    assert responsible_step_for("qos_future_rule") == "optimization"
+
+
+def test_critic_rederives_an_l2_blocking_finding() -> None:
+    twin = line_twin()
+    link = twin.topology.links[0].model_copy(
+        update={
+            "l2_mode": LinkL2Mode.trunk,
+            "l2_allowed_vlans": (10,),
+            "l2_native_vlan": 10,
+            "l2_peer_native_vlan": 20,
+        }
+    )
+    modeled = twin.model_copy(
+        update={
+            "topology": twin.topology.model_copy(
+                update={"links": [link, *twin.topology.links[1:]]}
+            )
+        }
+    )
+
+    output, _ = run_critic(modeled)
+
+    # Hand check: native VLAN 10 on one end and 20 on the other is one modeled
+    # error, so the critic rejects the design without trusting validation output.
+    finding = next(
+        item for item in output.findings if item.code == "l2_native_vlan_mismatch"
+    )
+    assert finding.blocking is True
+    assert finding.responsible_step == "topology"
+    assert output.verdict is CriticVerdict.rejected
+    assert output.replan_target == "topology"
+    assert finding.entities[0] == "ab"
+
+
+def test_critic_rederives_wan_blocking_findings() -> None:
+    topology = Topology(
+        name="Two-site WAN",
+        devices=[
+            Device(
+                id="hq-r",
+                type=DeviceType.router,
+                site="hq",
+                role=DeviceRole.border,
+            ),
+            Device(
+                id="br-r",
+                type=DeviceType.router,
+                site="branch",
+                role=DeviceRole.wan,
+            ),
+        ],
+        links=[
+            Link(
+                id="wan-1",
+                endpoints=("hq-r", "br-r"),
+                capacity_mbps=100.0,
+                cost=1.0,
+                wan_type=WanLinkType.leased,
+                wan_monthly_cost_proxy=120.0,
+            )
+        ],
+    )
+    output, _ = run_critic(make_twin(topology))
+
+    # Hand check: one inter-site link leaves both sites single-homed, producing
+    # two independent blocking WAN findings mapped to the topology step.
+    wan_findings = [
+        item for item in output.findings if item.code == "wan_site_single_link_spof"
+    ]
+    assert len(wan_findings) == 2
+    assert all(item.blocking for item in wan_findings)
+    assert all(item.responsible_step == "topology" for item in wan_findings)
+    assert any("120" in item.explanation for item in output.findings)
+    assert output.verdict is CriticVerdict.rejected
+
+
+def test_critic_rederives_wireless_informational_finding() -> None:
+    from network.wireless.models import WirelessArea, WirelessDesign
+
+    twin = line_twin().model_copy(
+        update={
+            "wireless_design": WirelessDesign(
+                areas=(WirelessArea(id="empty"),)
+            )
+        }
+    )
+
+    output, _ = run_critic(twin)
+
+    # Zero area and zero clients produce one modeled no-demand note, not a block.
+    finding = next(
+        item for item in output.findings if item.code == "wireless_no_modeled_demand"
+    )
+    assert finding.severity.value == "info"
+    assert finding.blocking is False
+    assert finding.responsible_step == "topology"
+    assert output.verdict is CriticVerdict.approved
+
+
+def test_critic_rederives_qos_blocking_findings() -> None:
+    topology = Topology(
+        name="QoS admission",
+        devices=[
+            Device(id="a", type=DeviceType.router, site="hq", role=DeviceRole.core),
+            Device(id="b", type=DeviceType.router, site="hq", role=DeviceRole.core),
+        ],
+        links=[
+            Link(id="ab", endpoints=("a", "b"), capacity_mbps=100.0, cost=1.0),
+            Link(id="ab-2", endpoints=("a", "b"), capacity_mbps=100.0, cost=2.0),
+        ],
+    )
+    voice = make_demand("voice", "a", "b", 80.0).model_copy(
+        update={"traffic_class": TrafficClass.voice}
+    )
+    bulk = make_demand("bulk", "a", "b", 80.0).model_copy(
+        update={"traffic_class": TrafficClass.best_effort}
+    )
+    twin = make_twin(topology, (voice, bulk)).model_copy(
+        update={
+            "qos_design": QosDesign(
+                class_share_caps=(
+                    ClassShareCap(
+                        link_id="missing",
+                        traffic_class=TrafficClass.voice,
+                        share_cap=0.2,
+                    ),
+                )
+            )
+        }
+    )
+
+    output, _ = run_critic(twin)
+
+    # Hand check: voice takes 80 of the modeled 100 Mbps first, so the 80 Mbps
+    # best-effort demand is starved; the nonexistent cap link is a second error.
+    codes = {item.code for item in output.findings}
+    assert {"qos_demand_starved", "qos_unknown_cap_link"} <= codes
+    qos_findings = [item for item in output.findings if item.code.startswith("qos_")]
+    assert all(item.blocking for item in qos_findings)
+    assert all(item.responsible_step == "optimization" for item in qos_findings)
+    assert output.verdict is CriticVerdict.rejected
+    assert output.replan_target == "optimization"

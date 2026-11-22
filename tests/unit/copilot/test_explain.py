@@ -8,9 +8,20 @@ import pytest
 
 from config.limits import MAX_COPILOT_EXPLANATION_CHARS
 from core.exceptions import OversizedInputError
+from core.schemas.network import Device, DeviceRole, DeviceType, Link, Topology
+from core.schemas.routing import TrafficDemand
 from core.schemas.scenario import Scenario, ScenarioType
+from core.schemas.validation import Finding, Severity
+from network.l2.models import EtherChannelBundle, L2Design, LinkL2Mode
+from network.l2.switching import analyze_l2_design
+from network.qos.admission import build_qos_admission_plan
+from network.qos.models import ClassShareCap, QosDesign, TrafficClass
 from network.routing.ha import HaGroup, HaMember, analyze_ha_groups
 from network.routing.ospf import OspfArea, OspfDesign, analyze_ospf_design
+from network.wan.models import SiteType, WanDesign, WanLinkType
+from network.wan.planning import analyze_wan_design
+from network.wireless.models import WirelessArea, WirelessDesign
+from network.wireless.planning import analyze_wireless_design
 from optimization import Algorithm, run_optimization
 from security import analyze_design
 from services.copilot import (
@@ -23,11 +34,15 @@ from services.copilot import (
     explain,
     finding_request,
     ha_group_request,
+    l2_design_request,
     optimization_request,
     ospf_design_request,
+    qos_design_request,
     route_request,
     segmentation_score_request,
     simulation_request,
+    wan_design_request,
+    wireless_design_request,
 )
 from services.llm import EXPLAIN_RESULT, LLMProvider, PromptSpec
 from services.llm.budget import RequestBudget
@@ -57,6 +72,138 @@ def _request() -> ExplanationRequest:
         ),
         facts=_FACTS,
     )
+
+
+def _l2_explanation_request() -> ExplanationRequest:
+    devices = [
+        Device(
+            id=device_id,
+            type=DeviceType.switch,
+            site="hq",
+            role=DeviceRole.access,
+        )
+        for device_id in ("sw1", "sw2", "sw3")
+    ]
+    links = [
+        Link(
+            id=link_id,
+            endpoints=endpoints,
+            capacity_mbps=1000.0,
+            cost=1.0,
+            l2_mode=LinkL2Mode.trunk,
+            l2_allowed_vlans=(10,),
+        )
+        for link_id, endpoints in (
+            ("l_ab", ("sw1", "sw2")),
+            ("l_bc", ("sw2", "sw3")),
+            ("l_ca", ("sw3", "sw1")),
+        )
+    ]
+    twin = make_twin(topology=Topology(name="L2 why", devices=devices, links=links))
+    design = L2Design(
+        gateway_by_vlan={10: "sw1"},
+        root_priorities={"sw1": 100},
+        etherchannel_bundles=(
+            EtherChannelBundle(id="bundle-1", link_ids=("l_ab", "l_bc")),
+        ),
+    )
+    analysis = analyze_l2_design(twin, design=design)
+    return l2_design_request(design, analysis)
+
+
+def _wan_explanation_request() -> ExplanationRequest:
+    devices = [
+        Device(
+            id="hq-r",
+            type=DeviceType.router,
+            site="hq-1",
+            role=DeviceRole.border,
+        ),
+        Device(
+            id="br-r",
+            type=DeviceType.router,
+            site="branch-1",
+            role=DeviceRole.wan,
+        ),
+    ]
+    links = [
+        Link(
+            id="wan-1",
+            endpoints=("hq-r", "br-r"),
+            capacity_mbps=100.0,
+            cost=1.0,
+            wan_type=WanLinkType.leased,
+            wan_monthly_cost_proxy=120.5,
+            wan_latency_ms=25.0,
+        )
+    ]
+    twin = make_twin(topology=Topology(name="WAN why", devices=devices, links=links))
+    design = WanDesign(
+        site_types={"hq-1": SiteType.hq, "branch-1": SiteType.branch},
+        hq_site_ids=("hq-1",),
+    )
+    analysis = analyze_wan_design(twin, design=design)
+    return wan_design_request(design, analysis)
+
+
+def _wireless_explanation_request() -> ExplanationRequest:
+    design = WirelessDesign(
+        areas=(
+            WirelessArea(
+                id="floor-1",
+                area_m2=1000,
+                clients=200,
+                client_mbps=10,
+                ap_capacity_mbps=100,
+                utilization_target=0.5,
+                coverage_radius_m=20,
+                overlap_factor=0.8,
+            ),
+        )
+    )
+    analysis = analyze_wireless_design(design)
+    return wireless_design_request(design, analysis)
+
+
+def _qos_explanation_request() -> ExplanationRequest:
+    demands = (
+        TrafficDemand(
+            name="bulk",
+            source="sw1",
+            destination="sw2",
+            bandwidth_mbps=50.0,
+            traffic_class=TrafficClass.best_effort,
+        ),
+        TrafficDemand(
+            name="voice",
+            source="sw1",
+            destination="sw2",
+            bandwidth_mbps=5.0,
+            traffic_class=TrafficClass.voice,
+        ),
+    )
+    design = QosDesign(
+        default_class=TrafficClass.best_effort,
+        class_share_caps=(
+            ClassShareCap(
+                link_id="l1",
+                traffic_class=TrafficClass.voice,
+                share_cap=0.2,
+            ),
+        ),
+    )
+    twin = make_twin(demands=demands, qos_design=design)
+    plan = build_qos_admission_plan(twin, design)
+    findings = (
+        Finding(
+            severity=Severity.error,
+            code="qos_unknown_cap_link",
+            affected_entities=["missing", "voice"],
+            explanation="Modeled cap refers to an unknown link.",
+            remediation="Use an existing topology link id.",
+        ),
+    )
+    return qos_design_request(design, plan, findings)
 
 
 def test_no_provider_returns_deterministic_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -281,3 +428,67 @@ def test_l3_design_builders_are_deterministic_first() -> None:
     assert "No VRRP or HSRP" in gateway.deterministic_text
     assert "active r1" in gateway.facts
     assert explain(gateway).deterministic_text == gateway.deterministic_text
+
+
+def test_l2_design_targets_and_builders_cover_w1_to_w4() -> None:
+    assert [target.value for target in (
+        ExplanationTarget.l2_design,
+        ExplanationTarget.wan_design,
+        ExplanationTarget.wireless_design,
+        ExplanationTarget.qos_design,
+    )] == ["l2_design", "wan_design", "wireless_design", "qos_design"]
+
+    l2 = _l2_explanation_request()
+    # Hand check: 3 edges - 3 switches + 1 component = cycle rank 1; equal
+    # costs block the lexicographically last edge, and the bundle sums to 2000.
+    assert l2.target is ExplanationTarget.l2_design
+    assert "VLAN 10 rank 1" in l2.deterministic_text
+    assert "no live protocol state is simulated" in l2.deterministic_text
+    assert "l_ca" in l2.facts
+    assert "bundle-1 2000 Mbps" in l2.facts
+
+    wan = _wan_explanation_request()
+    assert wan.target is ExplanationTarget.wan_design
+    assert "2 site(s)" in wan.deterministic_text
+    assert "1 active inter-site WAN link(s)" in wan.deterministic_text
+    assert "120.5" in wan.deterministic_text
+    assert "not a vendor quote or measured charge" in wan.deterministic_text
+    assert "no live protocol is run" in wan.deterministic_text
+
+    wireless = _wireless_explanation_request()
+    # Hand check: ceil(200 * 10 / (100 * 0.5)) = 40 capacity APs, coverage is 1,
+    # and uplink is 40 * 100 * 0.5 = 2000 Mbps.
+    assert wireless.target is ExplanationTarget.wireless_design
+    assert "40 recommended AP(s)" in wireless.deterministic_text
+    assert "2000 Mbps" in wireless.deterministic_text
+    assert "capacity-bound" in wireless.deterministic_text
+    assert "no RF propagation" in wireless.deterministic_text
+
+    qos = _qos_explanation_request()
+    assert qos.target is ExplanationTarget.qos_design
+    # Hand check: voice (priority 0) precedes best effort (priority 3).
+    assert "voice, video, critical, best_effort" in qos.deterministic_text
+    assert "2 modeled demand(s)" in qos.deterministic_text
+    assert "l1: voice=0.2" in qos.facts
+    assert "qos_unknown_cap_link" in qos.deterministic_text
+    assert "no queue simulation" in qos.deterministic_text
+
+
+def test_l2_builders_are_deterministic_without_any_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _must_not_call(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("l2 explanation called an LLM provider")
+
+    monkeypatch.setattr(LLMProvider, "complete", _must_not_call)
+    for request in (
+        _l2_explanation_request(),
+        _wan_explanation_request(),
+        _wireless_explanation_request(),
+        _qos_explanation_request(),
+    ):
+        result = explain(request)
+        assert result.deterministic_text == request.deterministic_text
+        assert result.target is request.target
+        assert result.has_ai is False
+        assert result.provider_used is False

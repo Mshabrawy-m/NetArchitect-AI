@@ -80,6 +80,10 @@ SECTION_IDS = (
     "nat_plan",
     "ospf_area_design",
     "gateway_redundancy",
+    "l2_switching_design",
+    "wan_design",
+    "wireless_design",
+    "qos_design",
     "graph_analysis",
     "simulation",
     "capacity",
@@ -228,6 +232,10 @@ def test_sections_without_inputs_are_marked_not_run_with_a_pointer(
         ("nat_plan", "L3 Design"),
         ("ospf_area_design", "L3 Design"),
         ("gateway_redundancy", "L3 Design"),
+        ("l2_switching_design", "L2 Design"),
+        ("wan_design", "L2 Design"),
+        ("wireless_design", "L2 Design"),
+        ("qos_design", "L2 Design"),
         ("agent_trace", "AI Network Designer"),
     ):
         section = base_report.section(section_id)

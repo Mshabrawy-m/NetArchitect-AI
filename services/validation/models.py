@@ -27,6 +27,10 @@ class ValidationCategory(str, Enum):
     dhcp = "dhcp"
     routing = "routing"
     ospf = "ospf"
+    l2 = "l2"
+    wan = "wan"
+    wireless = "wireless"
+    qos = "qos"
     capacity = "capacity"
     redundancy = "redundancy"
     ha = "ha"
@@ -46,6 +50,10 @@ CATEGORY_ORDER: tuple[ValidationCategory, ...] = (
     ValidationCategory.dhcp,
     ValidationCategory.routing,
     ValidationCategory.ospf,
+    ValidationCategory.l2,
+    ValidationCategory.wan,
+    ValidationCategory.wireless,
+    ValidationCategory.qos,
     ValidationCategory.capacity,
     ValidationCategory.redundancy,
     ValidationCategory.ha,
@@ -64,6 +72,10 @@ CATEGORY_LABELS: dict[ValidationCategory, str] = {
     ValidationCategory.dhcp: "DHCP pools",
     ValidationCategory.routing: "Routing reachability",
     ValidationCategory.ospf: "OSPF area design",
+    ValidationCategory.l2: "Layer-2 switching design",
+    ValidationCategory.wan: "WAN and multi-site design",
+    ValidationCategory.wireless: "Abstract wireless planning",
+    ValidationCategory.qos: "QoS admission model",
     ValidationCategory.capacity: "Capacity and utilization",
     ValidationCategory.redundancy: "Redundancy",
     ValidationCategory.ha: "Gateway redundancy",
@@ -87,16 +99,19 @@ BASIC_CHECK_NOTE = (
     "Basic checks cover schema and references, addressing, IPv6 dual-stack, "
     "NAT/PAT sizing, VLAN, DHCP, per-demand routing, OSPF area design, gateway "
     "redundancy, one capacity evaluation, and supplied design-time security "
-    "findings. Optional L3 design plans are checked only when present in the twin."
+    "findings. Optional L3 and L2/WAN/wireless/QoS design models are checked "
+    "only when present in the twin."
 )
 EXPENSIVE_CHECK_NOTE = (
     "Expensive checks add all-pairs reachability (one Dijkstra search per "
-    "device) and redundancy analysis (one removal analysis per device and link)."
+    "device), redundancy analysis (one removal analysis per device and link), "
+    "and the capacity-aware WAN check when a WAN design is present."
 )
 SKIPPED_EXPENSIVE_NOTE = (
-    "All-pairs reachability and redundancy analysis were skipped. They run one "
-    "Dijkstra search per device and one removal analysis per device and link, so "
-    "enable expensive checks only when a full structural review is needed."
+    "All-pairs reachability, redundancy analysis, and the capacity-aware WAN "
+    "check were skipped. They run one Dijkstra search per device and one removal "
+    "analysis per device and link, so enable expensive checks only when a full "
+    "structural review is needed."
 )
 
 

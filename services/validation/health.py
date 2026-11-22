@@ -21,10 +21,15 @@ from digital_twin import (
 from network.addressing.dual_stack import validate_dual_stack
 from network.addressing.nat import analyze_nat_plan
 from network.analysis import spof_findings, spof_report
+from network.l2.switching import analyze_l2_design
+from network.qos.review import qos_findings
 from network.routing import reachability_matrix
 from network.routing.ha import analyze_ha_groups
 from network.routing.ospf import analyze_ospf_design
+from network.wan.planning import analyze_wan_design
+from network.wireless.planning import analyze_wireless_design
 from simulation import CongestionLevel, NetworkState, evaluate
+from simulation.models import RoutingMode, SimulationAssumptions
 
 from .constraints import constraint_findings
 from .models import (
@@ -72,6 +77,14 @@ def categorize_twin_finding(finding: Finding) -> ValidationCategory:
         return ValidationCategory.nat
     if finding.code.startswith("ospf_"):
         return ValidationCategory.ospf
+    if finding.code.startswith("l2_"):
+        return ValidationCategory.l2
+    if finding.code.startswith("wan_"):
+        return ValidationCategory.wan
+    if finding.code.startswith("wireless_"):
+        return ValidationCategory.wireless
+    if finding.code.startswith("qos_"):
+        return ValidationCategory.qos
     if finding.code.startswith("ha_"):
         return ValidationCategory.ha
     if finding.code.startswith(("subnet_", "duplicate_ip")):
@@ -89,11 +102,24 @@ def categorize_twin_finding(finding: Finding) -> ValidationCategory:
     return ValidationCategory.references
 
 
+def categorize_design_finding(finding: Finding) -> ValidationCategory:
+    """Return the category for an optional L2/WAN/wireless/QoS design finding."""
+    if finding.code.startswith("l2_"):
+        return ValidationCategory.l2
+    if finding.code.startswith("wan_"):
+        return ValidationCategory.wan
+    if finding.code.startswith("wireless_"):
+        return ValidationCategory.wireless
+    if finding.code.startswith("qos_"):
+        return ValidationCategory.qos
+    return categorize_twin_finding(finding)
+
+
 def categorize_security_finding(finding: Finding) -> ValidationCategory:
     """Return the design-health category for a supplied security finding."""
     if finding.code.startswith(("SEC-", "POLICY-")):
         return ValidationCategory.security
-    return categorize_twin_finding(finding)
+    return categorize_design_finding(finding)
 
 
 def _check_failure(check: str, error: Exception) -> Finding:
@@ -165,6 +191,102 @@ def _basic_l3_design(
             )
         else:
             groups[ValidationCategory.ha].extend(findings)
+
+
+def _has_l2_fields(twin: DigitalTwin) -> bool:
+    """Whether any additive Layer-2 design fact exists on the twin."""
+    if twin.l2_design is not None:
+        return True
+    return any(
+        link.l2_mode is not None
+        or link.l2_access_vlan is not None
+        or link.l2_native_vlan is not None
+        or link.l2_peer_native_vlan is not None
+        or bool(link.l2_allowed_vlans)
+        for link in twin.topology.links
+    )
+
+
+def _has_wan_fields(twin: DigitalTwin) -> bool:
+    """Whether any additive WAN design fact exists on the twin."""
+    if twin.wan_design is not None:
+        return True
+    return any(
+        link.wan_type is not None
+        or link.wan_capacity_mbps is not None
+        or link.wan_monthly_cost_proxy is not None
+        or link.wan_latency_ms is not None
+        or link.wan_srg_tag is not None
+        for link in twin.topology.links
+    )
+
+
+def _has_qos_fields(twin: DigitalTwin) -> bool:
+    """Whether any additive QoS design fact exists on the twin."""
+    return twin.qos_design is not None or any(
+        demand.traffic_class is not None for demand in twin.demands
+    )
+
+
+def _basic_l2_design_models(
+    twin: DigitalTwin,
+    groups: dict[ValidationCategory, list[Finding]],
+    *,
+    include_expensive: bool,
+) -> None:
+    """Add findings from optional L2/WAN/wireless/QoS models when present.
+
+    Each engine is bounded by the documented design limits. A failure in one
+    optional model is reported in that model's category without suppressing the
+    remaining engines.
+    """
+    if _has_l2_fields(twin):
+        try:
+            findings = analyze_l2_design(twin).findings
+        except (NetArchitectError, ValueError) as error:
+            groups[ValidationCategory.l2].append(
+                _check_failure("Layer-2 design", error)
+            )
+        else:
+            groups[ValidationCategory.l2].extend(findings)
+
+    if _has_wan_fields(twin):
+        try:
+            analysis = analyze_wan_design(
+                twin,
+                design=twin.wan_design,
+                include_expensive=include_expensive,
+            )
+        except (NetArchitectError, ValueError) as error:
+            groups[ValidationCategory.wan].append(
+                _check_failure("WAN design", error)
+            )
+        else:
+            groups[ValidationCategory.wan].extend(analysis.findings)
+
+    if twin.wireless_design is not None:
+        try:
+            findings = analyze_wireless_design(twin.wireless_design).findings
+        except (NetArchitectError, ValueError) as error:
+            groups[ValidationCategory.wireless].append(
+                _check_failure("wireless planning", error)
+            )
+        else:
+            groups[ValidationCategory.wireless].extend(findings)
+
+    if _has_qos_fields(twin):
+        try:
+            state = evaluate(
+                twin,
+                SimulationAssumptions(
+                    routing_mode=RoutingMode.capacity_aware,
+                    enable_strict_priority_qos=True,
+                ),
+            )
+        except (NetArchitectError, ValueError) as error:
+            groups[ValidationCategory.qos].append(_check_failure("QoS admission", error))
+        else:
+            groups[ValidationCategory.qos].extend(qos_findings(twin, state))
 
 
 def _capacity_state(
@@ -348,6 +470,7 @@ def build_design_health(
         groups[categorize_twin_finding(finding)].append(finding)
 
     _basic_l3_design(twin, groups)
+    _basic_l2_design_models(twin, groups, include_expensive=include_expensive)
 
     state = _capacity_state(twin, groups)
     if state is not None:
@@ -405,6 +528,7 @@ def build_design_health(
 
 __all__ = [
     "build_design_health",
+    "categorize_design_finding",
     "categorize_security_finding",
     "categorize_twin_finding",
 ]

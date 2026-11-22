@@ -187,6 +187,10 @@ class ExplanationTarget(str, Enum):
     segmentation_score = "segmentation_score"
     ospf_design = "ospf_design"
     ha_group = "ha_group"
+    l2_design = "l2_design"
+    wan_design = "wan_design"
+    wireless_design = "wireless_design"
+    qos_design = "qos_design"
 
 
 class ExplanationResult(BaseModel):

@@ -3,7 +3,8 @@
 The critic derives its own verdict from deterministic tools. It never reads a
 previous validation agent's ``is_valid`` flag and never accepts an LLM's claim
 about validity: the verdict is computed in Python from the findings returned by
-the topology, addressing, twin, routing, load, and SPOF tools.
+the topology, addressing, twin, routing, load, SPOF, and optional L2/WAN/
+wireless/QoS design-model tools.
 
 An optional language model may add a short narrative note after the verdict is
 fixed. That note is stored separately and cannot change the verdict, the
@@ -24,12 +25,21 @@ from core.schemas.validation import Finding, Severity
 from digital_twin import DigitalTwin, addressing_subnets
 from network.addressing.dual_stack import validate_dual_stack
 from network.addressing.nat import analyze_nat_plan
+from network.l2.switching import analyze_l2_design
+from network.qos.review import qos_findings
 from network.routing.ha import analyze_ha_groups
 from network.routing.ospf import analyze_ospf_design
+from network.wan.planning import analyze_wan_design
+from network.wireless.planning import analyze_wireless_design
 from security import RiskLevel, SecurityAnalysis
 from services.llm.models import LLMMessage, MessageRole
 from services.llm.provider import LLMProvider
-from simulation import CongestionLevel
+from simulation import (
+    CongestionLevel,
+    RoutingMode,
+    SimulationAssumptions,
+    evaluate,
+)
 
 from .base import AgentContext, BaseAgent
 from .network_agents import IpVlanOutput
@@ -78,6 +88,24 @@ RESPONSIBLE_STEPS: dict[str, str] = {
     "ha_vip_outside_subnet": "topology",
     "ha_vip_collision": "topology",
     "ha_member_not_on_vlan": "topology",
+    # W5 modeled L2/WAN/wireless/QoS rules. There is no separate workflow task
+    # for these design pages, so each code maps to the existing task that owns
+    # the underlying topology or capacity decision.
+    "l2_loop_needs_blocking": "topology",
+    "l2_native_vlan_mismatch": "topology",
+    "l2_access_vlan_not_in_plan": "topology",
+    "l2_trunk_missing_downstream_vlan": "topology",
+    "l2_single_member_bundle": "topology",
+    "l2_mismatched_bundle_speeds": "topology",
+    "wan_site_single_link_spof": "topology",
+    "wan_site_links_same_srg": "topology",
+    "wan_branch_no_path_to_hq_dc": "topology",
+    "wan_capacity_shortfall": "topology",
+    "wireless_no_modeled_demand": "topology",
+    "wireless_capacity_binding": "topology",
+    "wireless_coverage_binding": "topology",
+    "qos_unknown_cap_link": "optimization",
+    "qos_demand_starved": "optimization",
 }
 
 
@@ -90,6 +118,10 @@ def responsible_step_for(code: str) -> str:
         return "security"
     if code == "security_high_risk":
         return "security"
+    if code.startswith(("l2_", "wan_", "wireless_")):
+        return "topology"
+    if code.startswith("qos_"):
+        return "optimization"
     if code.startswith(("ipv6_", "ipv4_ipv6_", "nat_")):
         return "ip_vlan"
     if code.startswith("ospf_"):
@@ -97,6 +129,37 @@ def responsible_step_for(code: str) -> str:
     if code.startswith("ha_"):
         return "topology"
     return "revalidation"
+
+
+def _has_l2_fields(twin: DigitalTwin) -> bool:
+    """Whether any additive Layer-2 design fact exists on the twin."""
+    return twin.l2_design is not None or any(
+        link.l2_mode is not None
+        or link.l2_access_vlan is not None
+        or link.l2_native_vlan is not None
+        or link.l2_peer_native_vlan is not None
+        or bool(link.l2_allowed_vlans)
+        for link in twin.topology.links
+    )
+
+
+def _has_wan_fields(twin: DigitalTwin) -> bool:
+    """Whether any additive WAN design fact exists on the twin."""
+    return twin.wan_design is not None or any(
+        link.wan_type is not None
+        or link.wan_capacity_mbps is not None
+        or link.wan_monthly_cost_proxy is not None
+        or link.wan_latency_ms is not None
+        or link.wan_srg_tag is not None
+        for link in twin.topology.links
+    )
+
+
+def _has_qos_fields(twin: DigitalTwin) -> bool:
+    """Whether any additive QoS design fact exists on the twin."""
+    return twin.qos_design is not None or any(
+        demand.traffic_class is not None for demand in twin.demands
+    )
 
 
 class CriticVerdict(str, Enum):
@@ -224,6 +287,7 @@ class CriticAgent(BaseAgent):
             self._check_addressing(context, twin, add_finding, add_engine_finding)
             self._check_twin(twin, context, add_engine_finding)
             self._check_l3_design(twin, add_engine_finding)
+            self._check_l2_design(twin, add_engine_finding)
             self._check_routing(twin, context, add_finding)
             self._check_load(twin, context, add_finding)
             self._check_redundancy(payload, twin, context, add_finding)
@@ -347,6 +411,51 @@ class CriticAgent(BaseAgent):
             # A malformed optional model cannot invalidate the whole design;
             # the design-health panel reports the check failure separately.
             return
+
+    @staticmethod
+    def _check_l2_design(twin: DigitalTwin, add_engine_finding) -> None:
+        """Re-derive optional W1-W4 findings without trusting validation output.
+
+        Every engine is bounded and runs only when its additive fields exist. A
+        malformed optional model is isolated to that engine, so one bad model
+        cannot suppress findings from the other three.
+        """
+        if _has_l2_fields(twin):
+            try:
+                for finding in analyze_l2_design(twin).findings:
+                    add_engine_finding(finding)
+            except (NetArchitectError, ValueError):
+                pass
+
+        if _has_wan_fields(twin):
+            try:
+                analysis = analyze_wan_design(twin, design=twin.wan_design)
+            except (NetArchitectError, ValueError):
+                pass
+            else:
+                for finding in analysis.findings:
+                    add_engine_finding(finding)
+
+        if twin.wireless_design is not None:
+            try:
+                for finding in analyze_wireless_design(twin.wireless_design).findings:
+                    add_engine_finding(finding)
+            except (NetArchitectError, ValueError):
+                pass
+
+        if _has_qos_fields(twin):
+            try:
+                state = evaluate(
+                    twin,
+                    SimulationAssumptions(
+                        routing_mode=RoutingMode.capacity_aware,
+                        enable_strict_priority_qos=True,
+                    ),
+                )
+            except (NetArchitectError, ValueError):
+                return
+            for finding in qos_findings(twin, state):
+                add_engine_finding(finding)
 
     @staticmethod
     def _check_routing(twin: DigitalTwin, context: AgentContext, add_finding) -> None:

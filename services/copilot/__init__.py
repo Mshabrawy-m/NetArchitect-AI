@@ -17,11 +17,15 @@ from .explain import (
     explain,
     finding_request,
     ha_group_request,
+    l2_design_request,
     optimization_request,
     ospf_design_request,
+    qos_design_request,
     route_request,
     segmentation_score_request,
     simulation_request,
+    wan_design_request,
+    wireless_design_request,
 )
 from .interpret import interpret_scenario
 from .llm_bridge import request_structured
@@ -83,11 +87,15 @@ __all__ = [
     "ha_group_request",
     "input_hash",
     "interpret_scenario",
+    "l2_design_request",
     "optimization_request",
     "ospf_design_request",
+    "qos_design_request",
     "request_structured",
     "route_request",
     "segmentation_score_request",
     "simulation_request",
     "suggest",
+    "wan_design_request",
+    "wireless_design_request",
 ]

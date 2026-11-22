@@ -52,6 +52,7 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "nav.label.ip_addressing_subnetting": "IP",
         "nav.label.vlan_dhcp_planner": "VLAN/DHCP",
         "nav.label.l3_design": "L3 Design",
+        "nav.label.l2_design": "L2 Design",
         "nav.label.routing_analysis": "Routing",
         "nav.label.network_analytics": "Analytics",
         "nav.label.security_analysis": "Security",
@@ -79,6 +80,9 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         ),
         "nav.help.l3_design": (
             "Model dual-stack, NAT/PAT, OSPF areas, and gateway redundancy rules."
+        ),
+        "nav.help.l2_design": (
+            "Model switching, WAN, wireless, and QoS design rules from the current twin."
         ),
         "nav.help.routing_analysis": (
             "Inspect reachability, shortest paths, and failure paths."
@@ -121,6 +125,11 @@ EN: MappingProxyType[str, str] = MappingProxyType(
             "Deterministic dual-stack, NAT/PAT, OSPF area, and gateway redundancy "
             "models derived from the current twin."
         ),
+        "page.l2_design": "L2 Design",
+        "page.l2_design.description": (
+            "Deterministic Layer-2, WAN, wireless, and QoS design models derived "
+            "from the current twin."
+        ),
         "l3.scope": (
             "Modeled design rules only; no device access or packet behavior."
         ),
@@ -129,6 +138,134 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "l3.tab.ospf": "OSPF areas",
         "l3.tab.ha": "Gateway redundancy",
         "l3.tab.findings": "Findings",
+        # W5 modeled L2/WAN/wireless/QoS design workspace
+        "l2.scope": (
+            "Design models only; no live protocol, RF propagation, or queue "
+            "simulation is included."
+        ),
+        "l2.model_notes": (
+            "All counts and estimates are hand-checkable from the stated twin "
+            "facts and assumptions."
+        ),
+        "l2.tab.l2": "L2 switching",
+        "l2.tab.wan": "WAN design",
+        "l2.tab.wireless": "Wireless planning",
+        "l2.tab.qos": "QoS admission",
+        "l2.tab.findings": "Findings",
+        "l2.tab.l2.description": (
+            "Modeled VLAN, trunk, loop, and parallel-link bundle rules."
+        ),
+        "l2.tab.wan.description": (
+            "Modeled sites, inter-site links, cost proxies, and reachability."
+        ),
+        "l2.tab.wireless.description": (
+            "Abstract AP counts from stated area and capacity assumptions."
+        ),
+        "l2.tab.qos.description": (
+            "Modeled strict-priority admission order and per-link class caps."
+        ),
+        "l2.tab.findings.description": (
+            "Deterministic findings from the active design models."
+        ),
+        "l2.l2.title": "Modeled Layer-2 switching",
+        "l2.wan.title": "Modeled WAN design",
+        "l2.wireless.title": "Modeled wireless planning",
+        "l2.qos.title": "Modeled QoS admission",
+        "l2.findings.title": "Design findings",
+        "l2.l2.scope": "Modeled switching rules only; no STP or LACP protocol state.",
+        "l2.wan.scope": (
+            "Modeled sites and links only; no carrier circuit or live protocol."
+        ),
+        "l2.wireless.scope": (
+            "Modeled AP estimates only; no RF propagation or site survey."
+        ),
+        "l2.qos.scope": (
+            "Modeled admission order only; no queue simulation or scheduler state."
+        ),
+        "l2.editor.gateways": "Gateway by VLAN",
+        "l2.editor.root_priorities": "Root priority by switch",
+        "l2.editor.vlan_spread_threshold": "VLAN spread threshold",
+        "l2.editor.bundles": "EtherChannel bundles",
+        "l2.editor.site_types": "Site type by site",
+        "l2.editor.hq_sites": "HQ target sites",
+        "l2.editor.areas": "Wireless areas",
+        "l2.editor.default_class": "Default traffic class",
+        "l2.editor.class_caps": "Class share caps",
+        "l2.l2.editor": "Edit Layer-2 design",
+        "l2.wan.editor": "Edit WAN design",
+        "l2.wireless.editor": "Edit wireless design",
+        "l2.qos.editor": "Edit QoS design",
+        "l2.button.apply_design": "Apply design to twin",
+        "l2.button.clear_design": "Clear stored design",
+        "l2.button.add_bundle": "Add bundle",
+        "l2.button.add_area": "Add area",
+        "l2.button.add_cap": "Add class cap",
+        "l2.button.remove_selected": "Remove selected",
+        "l2.l2.apply": "Apply L2 design",
+        "l2.wan.apply": "Apply WAN design",
+        "l2.wireless.apply": "Apply wireless design",
+        "l2.qos.apply": "Apply QoS design",
+        "l2.l2.clear": "Clear L2 design",
+        "l2.wan.clear": "Clear WAN design",
+        "l2.wireless.clear": "Clear wireless design",
+        "l2.qos.clear": "Clear QoS design",
+        "l2.notice.no_twin": "Load a digital twin before reviewing design models.",
+        "l2.notice.no_design": "No design of this type is stored on the twin.",
+        "l2.notice.design_saved": "Design saved to the current twin.",
+        "l2.notice.design_cleared": "Design removed from the current twin.",
+        "l2.notice.no_findings": "No design findings were produced.",
+        "l2.notice.model_only": (
+            "Modeled design values only; nothing was applied to a device."
+        ),
+        "l2.notice.no_live_protocol": (
+            "No live protocol, adjacency, or packet behavior is simulated."
+        ),
+        "l2.notice.no_rf": "No RF propagation or signal-strength model is used.",
+        "l2.notice.no_queue": "No queueing, drop, or scheduler behavior is simulated.",
+        "l2.why.l2": "Why this L2 design?",
+        "l2.why.wan": "Why this WAN design?",
+        "l2.why.wireless": "Why this wireless plan?",
+        "l2.why.qos": "Why this QoS admission?",
+        "l2.why.findings": "Why these findings?",
+        "l2.why.button": "Why this result?",
+        "l2.l2.why": "Why this L2 design?",
+        "l2.wan.why": "Why this WAN design?",
+        "l2.wireless.why": "Why this wireless plan?",
+        "l2.qos.why": "Why this QoS admission?",
+        "l2.field.vlan_id": "VLAN id",
+        "l2.field.gateway_device": "Gateway device",
+        "l2.field.switch_id": "Switch id",
+        "l2.field.priority": "Priority",
+        "l2.field.link_ids": "Link ids (comma separated)",
+        "l2.field.site_id": "Site id",
+        "l2.field.site_type": "Site type",
+        "l2.field.area_id": "Area id",
+        "l2.field.area_m2": "Area (m2)",
+        "l2.field.clients": "Modeled clients",
+        "l2.field.client_mbps": "Mbps per client",
+        "l2.field.ap_capacity_mbps": "AP capacity (Mbps)",
+        "l2.field.coverage_radius_m": "Coverage radius (m)",
+        "l2.field.utilization_target": "Utilization target",
+        "l2.field.overlap_factor": "Overlap factor",
+        "l2.field.link_id": "Link id",
+        "l2.field.traffic_class": "Traffic class",
+        "l2.field.share_cap": "Share cap (0-1)",
+        "l2.field.default_class": "Default class",
+        "l2.empty.no_bundles": "No EtherChannel bundles are modeled.",
+        "l2.empty.no_areas": "No wireless areas are modeled.",
+        "l2.empty.no_caps": "No modeled class share caps are stored.",
+        "l2.empty.no_findings": "No findings are retained for this model.",
+        "l2.review.run": "Run bounded design review",
+        "l2.review.cancel": "Cancel review",
+        "l2.review.clear": "Clear review result",
+        "l2.review.running": "Bounded design review is running.",
+        "l2.review.empty": "No bounded design review result is retained.",
+        "l2.review.done": "Bounded design review complete.",
+        "l2.section.layer2": "Layer-2 switching",
+        "l2.section.wan": "WAN and multi-site",
+        "l2.section.wireless": "Abstract wireless",
+        "l2.section.qos": "QoS admission",
+        "l2.section.findings": "Bounded design review",
         "ip.tab.dual_stack": "Dual-stack planner",
         "ip.tab.nat": "NAT/PAT planner",
         "page.settings": "Settings",
@@ -650,6 +787,7 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "nav.label.ip_addressing_subnetting": "عناوين IP",
         "nav.label.vlan_dhcp_planner": "VLAN/DHCP",
         "nav.label.l3_design": "تصميم الطبقة الثالثة",
+        "nav.label.l2_design": "تصميم الطبقة الثانية (L2)",
         "nav.label.routing_analysis": "التوجيه",
         "nav.label.network_analytics": "التحليلات",
         "nav.label.security_analysis": "الأمان",
@@ -666,6 +804,9 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "nav.help.ip_addressing_subnetting": "تخطيط CIDR ومجموعات VLSM من التصميم الحالي.",
         "nav.help.vlan_dhcp_planner": "تخصيص VLAN ونطاقات DHCP من متطلبات الأقسام.",
         "nav.help.l3_design": "نمذجة قواعد IPv6 وNAT/PAT وOSPF وتكرار البوابة.",
+        "nav.help.l2_design": (
+            "نمذجة قواعد التبديل وشبكة WAN واللاسلكي وجودة الخدمة من التوأم الحالي."
+        ),
         "nav.help.routing_analysis": "فحص الوصول وأقصر المسارات ومسارات الأعطال.",
         "nav.help.network_analytics": "حساب مقاييس الرسم وتحديد المخاطر الهيكلية.",
         "nav.help.security_analysis": "نمذجة المناطق والسياسات وفحوص التدفق وقت التصميم.",
@@ -686,12 +827,149 @@ AR: MappingProxyType[str, str] = MappingProxyType(
             "نماذج حتمية لـ IPv6 وNAT/PAT ومناطق OSPF وتكرار البوابة مستمدة من "
             "التوأم الرقمي الحالي."
         ),
+        "page.l2_design": "تصميم الطبقة الثانية",
+        "page.l2_design.description": (
+            "نماذج حتمية لتبديل الطبقة الثانية وشبكة WAN واللاسلكي وجودة الخدمة "
+            "مستمدة من التوأم الرقمي الحالي."
+        ),
         "l3.scope": "قواعد تصميم ممذجة فقط؛ لا وصول إلى الأجهزة ولا سلوك حزم.",
         "l3.tab.ipv6": "IPv6 مزدوج",
         "l3.tab.nat": "NAT/PAT",
         "l3.tab.ospf": "مناطق OSPF",
         "l3.tab.ha": "تكرار البوابة",
         "l3.tab.findings": "النتائج",
+        # W5 modeled L2/WAN/wireless/QoS design workspace
+        "l2.scope": (
+            "نماذج تصميم فقط؛ لا يتضمن ذلك بروتوكلاً مباشراً أو انتشاراً "
+            "لاسلكياً أو محاكاة قوائم انتظار."
+        ),
+        "l2.model_notes": (
+            "كل الأعداد والتقديرات قابلة للتحقق يدوياً من حقائق التوأم "
+            "والافتراضات المذكورة."
+        ),
+        "l2.tab.l2": "تبديل الطبقة الثانية",
+        "l2.tab.wan": "تصميم WAN",
+        "l2.tab.wireless": "التخطيط اللاسلكي",
+        "l2.tab.qos": "قبول جودة الخدمة",
+        "l2.tab.findings": "النتائج",
+        "l2.tab.l2.description": (
+            "قواعد VLAN والروابط الجذعية والحلقات والمجموعات المتوازية المُنمذجة."
+        ),
+        "l2.tab.wan.description": (
+            "مواقع وروابط بين المواقع وتكاليف تقديرية وقابلية وصول مُنمذجة."
+        ),
+        "l2.tab.wireless.description": (
+            "عدد نقاط الوصول المُقدَّر من مساحة وافتراضات سعة مذكورة."
+        ),
+        "l2.tab.qos.description": (
+            "ترتيب قبول صارم حسب الأولوية وحدود حصة لكل رابط."
+        ),
+        "l2.tab.findings.description": (
+            "نتائج حتمية من نماذج التصميم النشطة."
+        ),
+        "l2.l2.title": "تبديل الطبقة الثانية المُنمذج",
+        "l2.wan.title": "تصميم WAN المُنمذج",
+        "l2.wireless.title": "التخطيط اللاسلكي المُنمذج",
+        "l2.qos.title": "قبول جودة الخدمة المُنمذج",
+        "l2.findings.title": "نتائج التصميم",
+        "l2.l2.scope": (
+            "قواعد تبديل مُنمذجة فقط؛ لا توجد حالة بروتوكول STP أو LACP."
+        ),
+        "l2.wan.scope": (
+            "مواقع وروابط مُنمذجة فقط؛ لا توجد دائرة ناقل أو بروتوكول مباشر."
+        ),
+        "l2.wireless.scope": (
+            "تقديرات نقاط وصول مُنمذجة فقط؛ لا انتشار لاسلكي ولا مسح موقع."
+        ),
+        "l2.qos.scope": (
+            "ترتيب قبول مُنمذج فقط؛ لا محاكاة قوائم انتظار ولا حالة مجدول."
+        ),
+        "l2.editor.gateways": "البوابة حسب VLAN",
+        "l2.editor.root_priorities": "أولوية الجذر حسب المبدل",
+        "l2.editor.vlan_spread_threshold": "حد انتشار VLAN",
+        "l2.editor.bundles": "مجموعات EtherChannel",
+        "l2.editor.site_types": "نوع الموقع حسب الموقع",
+        "l2.editor.hq_sites": "مواقع الهدف الرئيسية",
+        "l2.editor.areas": "المناطق اللاسلكية",
+        "l2.editor.default_class": "فئة الحركة الافتراضية",
+        "l2.editor.class_caps": "حدود حصة الفئة",
+        "l2.l2.editor": "تعديل تصميم الطبقة الثانية",
+        "l2.wan.editor": "تعديل تصميم WAN",
+        "l2.wireless.editor": "تعديل التخطيط اللاسلكي",
+        "l2.qos.editor": "تعديل قبول جودة الخدمة",
+        "l2.button.apply_design": "تطبيق التصميم على التوأم",
+        "l2.button.clear_design": "مسح التصميم المخزن",
+        "l2.button.add_bundle": "إضافة مجموعة",
+        "l2.button.add_area": "إضافة منطقة",
+        "l2.button.add_cap": "إضافة حد فئة",
+        "l2.button.remove_selected": "إزالة المحدد",
+        "l2.l2.apply": "تطبيق تصميم الطبقة الثانية",
+        "l2.wan.apply": "تطبيق تصميم WAN",
+        "l2.wireless.apply": "تطبيق التخطيط اللاسلكي",
+        "l2.qos.apply": "تطبيق قبول جودة الخدمة",
+        "l2.l2.clear": "مسح تصميم الطبقة الثانية",
+        "l2.wan.clear": "مسح تصميم WAN",
+        "l2.wireless.clear": "مسح التخطيط اللاسلكي",
+        "l2.qos.clear": "مسح قبول جودة الخدمة",
+        "l2.notice.no_twin": "حمّل توأماً رقمياً قبل مراجعة نماذج التصميم.",
+        "l2.notice.no_design": "لا يوجد تصميم من هذا النوع مخزن على التوأم.",
+        "l2.notice.design_saved": "تم حفظ التصميم في التوأم الحالي.",
+        "l2.notice.design_cleared": "تمت إزالة التصميم من التوأم الحالي.",
+        "l2.notice.no_findings": "لم يتم إنتاج نتائج تصميم.",
+        "l2.notice.model_only": (
+            "قيم تصميم مُنمذجة فقط؛ لم يُطبّق شيء على أي جهاز."
+        ),
+        "l2.notice.no_live_protocol": (
+            "لا يتم محاكاة أي بروتوكول مباشر أو تجاور أو سلوك حزم."
+        ),
+        "l2.notice.no_rf": "لا يُستخدم نموذج انتشار لاسلكي أو قوة إشارة.",
+        "l2.notice.no_queue": (
+            "لا يتم محاكاة قوائم الانتظار أو الإسقاط أو المجدول."
+        ),
+        "l2.why.l2": "لماذا تصميم الطبقة الثانية هذا؟",
+        "l2.why.wan": "لماذا تصميم WAN هذا؟",
+        "l2.why.wireless": "لماذا هذا التخطيط اللاسلكي؟",
+        "l2.why.qos": "لماذا قبول جودة الخدمة هذا؟",
+        "l2.why.findings": "لماذا هذه النتائج؟",
+        "l2.why.button": "لماذا هذه النتيجة؟",
+        "l2.l2.why": "لماذا تصميم الطبقة الثانية هذا؟",
+        "l2.wan.why": "لماذا تصميم WAN هذا؟",
+        "l2.wireless.why": "لماذا هذا التخطيط اللاسلكي؟",
+        "l2.qos.why": "لماذا قبول جودة الخدمة هذا؟",
+        "l2.field.vlan_id": "معرّف VLAN",
+        "l2.field.gateway_device": "جهاز البوابة",
+        "l2.field.switch_id": "معرّف المبدل",
+        "l2.field.priority": "الأولوية",
+        "l2.field.link_ids": "معرّفات الروابط (مفصولة بفواصل)",
+        "l2.field.site_id": "معرّف الموقع",
+        "l2.field.site_type": "نوع الموقع",
+        "l2.field.area_id": "معرّف المنطقة",
+        "l2.field.area_m2": "المساحة (م2)",
+        "l2.field.clients": "العملاء المُنمذجون",
+        "l2.field.client_mbps": "ميجابت في الثانية لكل عميل",
+        "l2.field.ap_capacity_mbps": "سعة نقطة الوصول (ميجابت/ث)",
+        "l2.field.coverage_radius_m": "نطاق التغطية (م)",
+        "l2.field.utilization_target": "هدف الاستخدام",
+        "l2.field.overlap_factor": "معامل التداخل",
+        "l2.field.link_id": "معرّف الرابط",
+        "l2.field.traffic_class": "فئة الحركة",
+        "l2.field.share_cap": "حد الحصة (0-1)",
+        "l2.field.default_class": "الفئة الافتراضية",
+        "l2.empty.no_bundles": "لا توجد مجموعات EtherChannel مُنمذجة.",
+        "l2.empty.no_areas": "لا توجد مناطق لاسلكية مُنمذجة.",
+        "l2.empty.no_caps": "لا توجد حدود حصة مُنمذجة مخزنة.",
+        "l2.empty.no_findings": "لا توجد نتائج محفوظة لهذا النموذج.",
+        "l2.review.run": "تشغيل مراجعة تصميم محدودة",
+        "l2.review.cancel": "إلغاء المراجعة",
+        "l2.review.clear": "مسح نتيجة المراجعة",
+        "l2.review.running": "مراجعة التصميم المحدودة قيد التشغيل.",
+        "l2.review.empty": "لا توجد نتيجة مراجعة تصميم محدودة محفوظة.",
+        "l2.review.done": "اكتملت مراجعة التصميم المحدودة.",
+        "l2.section.layer2": "تبديل الطبقة الثانية",
+        "l2.section.wan": "شبكة WAN والمواقع المتعددة",
+        "l2.section.wireless": "اللاسلكي المجرد",
+        "l2.section.qos": "قبول جودة الخدمة",
+        "l2.section.findings": "مراجعة تصميم محدودة",
         "ip.tab.dual_stack": "مخطط IPv6 مزدوج",
         "ip.tab.nat": "مخطط NAT/PAT",
         "page.settings": "الإعدادات",

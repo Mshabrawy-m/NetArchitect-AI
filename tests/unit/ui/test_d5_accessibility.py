@@ -159,6 +159,16 @@ def test_rtl_stylesheet_is_declared_once() -> None:
 
 def test_design_tokens_keep_text_contrast() -> None:
     assert theme.minimum_text_contrast() >= 4.5
+    for token in (
+        "l2_accent",
+        "wan_accent",
+        "wireless_accent",
+        "qos_accent",
+        "findings_accent",
+    ):
+        assert token in theme.LIGHT
+        assert token in theme.DARK
+        assert (token, "surface") in theme.TEXT_CONTRAST_PAIRS
 
 
 def test_number_formatters_are_grouped_and_explicit() -> None:

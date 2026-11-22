@@ -69,6 +69,13 @@ PAGE_SPECS: tuple[PageSpec, ...] = (
         "Model dual-stack, NAT/PAT, OSPF areas, and gateway redundancy rules.",
     ),
     PageSpec(
+        "L2 Design",
+        "L2 Design",
+        "app_pages/l2_design.py",
+        ":material/lan:",
+        "Model switching, WAN, wireless, and QoS design rules from the current twin.",
+    ),
+    PageSpec(
         "Routing Analysis",
         "Routing",
         "app_pages/routing.py",
@@ -153,6 +160,7 @@ NAVIGATION_GROUPS: MappingProxyType[str, tuple[PageSpec, ...]] = MappingProxyTyp
                 "IP Addressing & Subnetting",
                 "VLAN & DHCP Planner",
                 "L3 Design",
+                "L2 Design",
             }
         ),
         "Analyze": tuple(

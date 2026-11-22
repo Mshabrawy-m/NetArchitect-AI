@@ -1,11 +1,80 @@
 # Current Project Status
 
 ## Overall
-- Current phase: v1.0.0 released; V2 L3 package on `feature/v2-l3`
-- Current task: L1-L5 complete (L3 design package ready for review)
-- Overall status: `feature/v2-security` was merged and pushed to `main` (`ddd02cc S6: integrate design-time security workflow`). `feature/v2-l3` was created from that `main` and adds deterministic, offline design-time L3 planning: L1 modeled IPv6 dual-stack, L2 modeled NAT/PAT sizing, L3 modeled OSPF area design, L4 modeled gateway redundancy/HA, and L5 design-health, Copilot, Critic, report, and UI integration. All additions are additive optional fields: legacy twin JSON and the schema-v1 fingerprint remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added. The feature branch is not pushed.
+- Current phase: v1.0.0 released; V2 L2 package on `feature/v2-l2`
+- Current task: W1-W5 complete (L2/WAN/Wireless/QoS design package ready for review)
+- Overall status: `main` was synchronized and pushed through `3a4aa53 Merge feature/v2-l3 into main`, including hotfix `6f3cd7a hotfix: failure sweep first-run IndexError`. `feature/v2-l2` was created from that `main` and adds deterministic, offline, design-time L2 switching, WAN, abstract wireless, and QoS admission models plus W5 validation, Critic, Copilot, report, and UI integration. All additions are additive optional fields: legacy twin JSON and the schema-v1 fingerprint remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added. The feature branch is not pushed.
 - Last updated: 2026-11-22
-- Branch: `feature/v2-l3` (created from `main` at `ddd02cc`)
+- Branch: `feature/v2-l2` (created from `main` at `3a4aa53`)
+
+## V2 L2 package (feature/v2-l2)
+
+- Scope: DESIGN MODELS only. L2 switching derives deterministic modeled trunk,
+  access VLAN, bundle, and loop-blocking rules; WAN uses explicit site/cost/
+  latency assumptions; wireless uses circular-area and per-client Mbps estimates
+  with no RF propagation; QoS is a strict-priority admission model with no
+  queueing simulation. Nothing contacts a device, runs a protocol, measures a
+  circuit, pushes configuration, or simulates packets. `TWIN_SCHEMA_VERSION`
+  stays `2`, supported versions remain `(1, 2)`, defaults are omitted from
+  canonical JSON, and no new runtime dependency, worker, thread, or app disk
+  write was added.
+- W1 (`9c25860`, lint fix `312e049`): `network/l2/switching.py` adds bounded
+  per-VLAN graph review, deterministic minimum-spanning-forest blocking, trunk
+  downstream-VLAN checks, native-VLAN mismatch, VLAN sprawl heuristics, and
+  EtherChannel capacity grouping. Additive twin/link/demand fields and local
+  VLAN constants keep schema imports acyclic and legacy bytes unchanged.
+- W2 (`bb9c1c5`): `network/wan/planning.py` adds inter-site link discovery,
+  modeled monthly cost proxies, assumed latency, site-type checks, SRG/SPOF
+  findings, and an opt-in capacity-aware evaluation. `optimization/objectives.py`
+  adds baseline inter-site and explicit selected-pool proxy terms that contribute
+  zero under legacy inputs. Hand checks preserved: infrastructure proxy `220`,
+  same-tier upgrade `0.0`, unknown capacity `100.0`, and new WAN case `245.0`.
+- W3 (`b34f0ad`): `network/wireless/planning.py` adds capacity/coverage AP
+  counts, deterministic binding-constraint labels, uplink requirements, and
+  explicit no-RF/modeled-estimate notes. IPv4/IPv6 VLSM, VLAN, and DHCP engines
+  are untouched.
+- W4 (`465973d`): `network/qos/admission.py` and
+  `SimulationAssumptions.enable_strict_priority_qos` add default-off class
+  ordering, per-link share caps, and modeled starvation labels. Legacy
+  best-effort results are byte-identical. `network/qos/review.py` is a W5 pure
+  review layer and is intentionally imported directly to avoid a
+  `core.schemas.routing` / `network.qos` circular import.
+- W5: `services/validation` adds bounded `l2`, `wan`, `wireless`, and `qos`
+  categories and runs each engine only when its additive fields exist; WAN's
+  capacity-aware check runs only under `include_expensive=True`. `agents/critic.py`
+  re-derives W1-W4 findings independently, maps their codes to `topology` or
+  `optimization`, and lets error/critical findings block with a deterministic
+  re-plan target. `services/reporting` adds four provenance-tagged sections with
+  `not_run` producer page `L2 Design`. `services/copilot` adds four
+  `ExplanationTarget` values and deterministic “why?” requests.
+  `ui/pages/l2_design.py` provides five tabs, versioned editors, notices,
+  theme-backed tokens, and a bounded Run/Cancel/Clear review fragment.
+  Navigation grows from 16 to 17 pages. EN/AR catalog parity, first-click
+  AppTests, fingerprint caches, and an offline import audit are covered by tests.
+- Additive twin fields: `DigitalTwin.l2_design`, `DigitalTwin.wan_design`,
+  `DigitalTwin.wireless_design`, `DigitalTwin.qos_design`; additive link fields
+  `l2_mode`, `l2_access_vlan`, `l2_native_vlan`, `l2_peer_native_vlan`,
+  `l2_allowed_vlans`, `wan_type`, `wan_capacity_mbps`,
+  `wan_monthly_cost_proxy`, `wan_latency_ms`, `wan_srg_tag`; additive demand
+  field `traffic_class`; additive assumption field
+  `SimulationAssumptions.enable_strict_priority_qos`. Bounds:
+  `MAX_ETHERCHANNEL_BUNDLES=32`, `MAX_ETHERCHANNEL_MEMBERS=8`,
+  `MAX_WAN_DESIGN_SITES=64`, `MAX_WAN_LINKS=128`, `MAX_WIRELESS_AREAS=32`,
+  `MAX_QOS_CLASS_CAPS=128`.
+- Additive non-twin APIs: validation categories `l2`, `wan`, `wireless`, `qos`;
+  `ExplanationTarget.l2_design`, `wan_design`, `wireless_design`, `qos_design`;
+  request builders with the same four names; report IDs
+  `l2_switching_design`, `wan_design`, `wireless_design`, `qos_design`; and
+  `L2DesignReview`. The schema-v1 fingerprint
+  `4212909d2624a026229027d4266267906ae6a040df00678bf200d0430c2d802c`
+  is unchanged and tested.
+- Max-size W-check timing (`pytest -q -m perf -o addopts= tests/unit/test_w5_design_perf.py -s`):
+  W1 32 x 8 bundles `0.0022s`, W2 64 sites / 128 links `0.0022s`, W3 32 areas
+  `0.0002s`, W4 128 caps `0.0025s`.
+- Final verification: `pytest -q` → `1426 passed, 14 deselected in 57.41s`;
+  `ruff check .` → `All checks passed!`; `pytest -q -m smoke` → `13 passed,
+  1427 deselected in 6.62s`; i18n parity → `True ()`.
+- Not verified: real-browser rendering, Streamlit Cloud deployment, Linux CI.
 
 ## V2 L3 package (feature/v2-l3)
 

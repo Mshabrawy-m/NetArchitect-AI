@@ -11,15 +11,15 @@ from app import PAGES
 from tests.unit.digital_twin.helpers import make_twin
 from tests.unit.ui.nav_helpers import open_page
 from ui import state
-from ui.navigation import NAVIGATION_GROUPS, PAGE_SPECS
+from ui.navigation import NAVIGATION_GROUPS, PAGE_FILES, PAGE_SPECS
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 
 _PLACEHOLDER_WORDS = ("coming soon", "later phase", "will be implemented")
 
 
-def test_navigation_has_sixteen_declared_pages() -> None:
-    assert len(PAGES) == 16
+def test_navigation_has_seventeen_declared_pages() -> None:
+    assert len(PAGES) == 17
     assert PAGES[0] == "Dashboard"
     assert "Security Analysis" in PAGES
     assert "Settings" == PAGES[-1]
@@ -34,6 +34,7 @@ def test_navigation_groups_match_the_product_spec() -> None:
         "IP",
         "VLAN/DHCP",
         "L3 Design",
+        "L2 Design",
     ]
     assert [spec.label for spec in NAVIGATION_GROUPS["Analyze"]] == [
         "Routing",
@@ -52,6 +53,18 @@ def test_navigation_groups_match_the_product_spec() -> None:
         "Settings",
     ]
     assert sum(len(specs) for specs in NAVIGATION_GROUPS.values()) == len(PAGE_SPECS)
+
+
+def test_l2_design_registration_is_design_only() -> None:
+    titles = [spec.title for spec in PAGE_SPECS]
+    assert titles.index("L2 Design") == titles.index("L3 Design") + 1
+
+    spec = next(item for item in PAGE_SPECS if item.title == "L2 Design")
+    assert spec.label == "L2 Design"
+    assert PAGE_FILES["L2 Design"] == "app_pages/l2_design.py"
+    assert spec.icon == ":material/lan:"
+    assert "model" in spec.help.lower()
+    assert "twin" in spec.help.lower()
 
 
 def test_legacy_selectbox_navigation_is_absent() -> None:

@@ -10,6 +10,7 @@ from capacity import DemandMapping, evaluate_capacity
 from digital_twin import DigitalTwin
 from forecasting import GapPolicy
 from network.addressing.nat import NatPlan, NatRule, NatType
+from network.l2.models import L2Design
 from optimization import (
     Algorithm,
     CostModel,
@@ -38,14 +39,18 @@ from tests.unit.optimization.helpers import settings, tiny_twin
 from tests.unit.security.design_helpers import hardened_design
 from ui import cache
 from ui.cache import (
+    L2_REVIEW_SECTIONS,
+    L2DesignReview,
     cached_capacity_run,
     cached_design_health,
     cached_forecast_run,
+    cached_l2_design_review,
     cached_l3_design_review,
     cached_report,
     cached_security_analysis,
     capacity_series_payload,
     capacity_source_payload,
+    l2_review_key,
     security_flows_payload,
     source_payload,
     twin_cache_key,
@@ -386,6 +391,142 @@ def test_l3_design_review_cache_is_keyed_by_twin_content() -> None:
     )
     assert review.twin_version == twin_cache_key(changed)
     assert review.twin_version != empty.twin_version
+
+
+def test_l2_review_key_is_stable_for_one_twin_and_changes_with_content() -> None:
+    twin = make_twin()
+    same = make_twin()
+
+    assert L2_REVIEW_SECTIONS == ("l2", "wan", "wireless", "qos")
+    assert l2_review_key(twin) == l2_review_key(same)
+    assert l2_review_key(twin).startswith(f"{twin_cache_key(twin)}:")
+
+    changed = twin.model_copy(
+        update={"l2_design": L2Design(root_priorities={"sw1": 4096})}
+    )
+    assert l2_review_key(changed) != l2_review_key(twin)
+
+
+def test_cached_l2_design_review_is_keyed_by_twin_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    original = cache.analyze_l2_design
+
+    def spy(twin_arg, **kwargs):
+        calls.append(twin_arg.metadata.name)
+        return original(twin_arg, **kwargs)
+
+    monkeypatch.setattr(cache, "analyze_l2_design", spy)
+    cached_l2_design_review.clear()
+    twin = make_twin()
+    args = (twin_payload(twin), twin_cache_key(twin), ("l2",))
+
+    first = cached_l2_design_review(*args)
+    second = cached_l2_design_review(*args)
+    assert first == second
+    assert first.twin_version == twin_cache_key(twin)
+    assert first.sections == ("l2",)
+    assert calls == [twin.metadata.name]
+
+    changed = twin.model_copy(update={"l2_design": L2Design(root_priorities={"sw1": 4096})})
+    third = cached_l2_design_review(
+        twin_payload(changed), twin_cache_key(changed), ("l2",)
+    )
+    assert third.twin_version == twin_cache_key(changed)
+    assert third.twin_version != first.twin_version
+    assert calls == [twin.metadata.name, twin.metadata.name]
+
+
+def test_cached_l2_design_review_uses_fixed_section_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, int] = {"l2": 0, "wan": 0, "wireless": 0, "qos": 0}
+    original_l2 = cache.analyze_l2_design
+    original_wan = cache.analyze_wan_design
+    original_wireless = cache.analyze_wireless_design
+    original_qos = cache.qos_findings
+
+    def l2_spy(twin_arg, **kwargs):
+        calls["l2"] += 1
+        return original_l2(twin_arg, **kwargs)
+
+    def wan_spy(twin_arg, **kwargs):
+        calls["wan"] += 1
+        return original_wan(twin_arg, **kwargs)
+
+    def wireless_spy(design_arg, **kwargs):
+        calls["wireless"] += 1
+        return original_wireless(design_arg, **kwargs)
+
+    def qos_spy(twin_arg, state_arg, **kwargs):
+        calls["qos"] += 1
+        return original_qos(twin_arg, state_arg, **kwargs)
+
+    monkeypatch.setattr(cache, "analyze_l2_design", l2_spy)
+    monkeypatch.setattr(cache, "analyze_wan_design", wan_spy)
+    monkeypatch.setattr(cache, "analyze_wireless_design", wireless_spy)
+    monkeypatch.setattr(cache, "qos_findings", qos_spy)
+    cached_l2_design_review.clear()
+    twin = make_twin()
+    args = (twin_payload(twin), twin_cache_key(twin))
+
+    first = cached_l2_design_review(*args, ("l2", "wan"))
+    assert isinstance(first, L2DesignReview)
+    assert first.sections == ("l2", "wan")
+    assert calls == {"l2": 1, "wan": 1, "wireless": 0, "qos": 0}
+
+    second = cached_l2_design_review(*args, ("wireless", "qos"))
+    assert second.sections == ("wireless", "qos")
+    assert calls == {"l2": 1, "wan": 1, "wireless": 1, "qos": 1}
+
+    # A reordered subset reuses the same per-section cache entries.
+    third = cached_l2_design_review(*args, ("qos", "l2", "qos"))
+    assert third.sections == ("qos", "l2")
+    assert calls == {"l2": 1, "wan": 1, "wireless": 1, "qos": 1}
+
+    with pytest.raises(ValueError, match="Unknown L2 review sections"):
+        cached_l2_design_review(*args, ("l2", "unknown"))
+
+
+def test_cached_l2_design_review_handles_empty_w1_w4_state() -> None:
+    cached_l2_design_review.clear()
+    twin = make_twin()
+    version = l2_review_key(twin)
+
+    # No designer-supplied W1-W4 models are stored on this legacy twin. The
+    # cache must still surface the engines' deterministic default results: one
+    # loop record for the modeled VLAN plan and informational WAN/wireless
+    # findings for the absent models.
+    assert twin.l2_design is None
+    assert twin.wan_design is None
+    assert twin.wireless_design is None
+    assert twin.qos_design is None
+
+    review = cached_l2_design_review(twin_payload(twin), version)
+
+    assert isinstance(review, L2DesignReview)
+    assert review.twin_version == version
+    assert review.sections == L2_REVIEW_SECTIONS
+    assert review.l2_loops == ((10, None, 0, ()),)
+    assert review.l2_blocked_links == ()
+    assert review.l2_bundles == ()
+    assert review.l2_findings == ()
+    assert review.wan_links == ()
+    assert review.wan_site_ids == ("hq",)
+    assert review.wan_total_monthly_cost_proxy == 0.0
+    assert [(severity, code) for severity, code, _ in review.wan_findings] == [
+        ("info", "wan_cost_proxy_total")
+    ]
+    assert review.wireless_areas == ()
+    assert review.wireless_total_aps == 0
+    assert review.wireless_total_uplink_mbps == 0.0
+    assert [(severity, code) for severity, code, _ in review.wireless_findings] == [
+        ("info", "wireless_no_modeled_demand")
+    ]
+    assert review.qos_caps == ()
+    assert review.qos_default_class == ""
+    assert review.qos_findings == ()
 
 
 def test_security_analysis_cache_is_keyed_by_twin_model_and_flows(

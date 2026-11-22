@@ -19,9 +19,24 @@ from config.limits import (
 )
 from core.exceptions import LLMError, LLMMissingKeyError, OversizedInputError
 from core.inputs import reject_unsafe_text
+from core.schemas.validation import Finding
 from digital_twin import DigitalTwin
+from network.l2.models import L2Design
+from network.l2.switching import L2Analysis
+from network.qos.admission import ADMISSION_NOTE, QosAdmissionPlan
+from network.qos.models import TRAFFIC_CLASS_PRIORITY, QosDesign
 from network.routing.ha import HaAnalysis, HaGroup
 from network.routing.ospf import OspfAnalysis, OspfDesign
+from network.wan.models import WanDesign
+from network.wan.planning import LATENCY_NOTE, MONTHLY_COST_NOTE, WanAnalysis
+from network.wireless.models import WirelessDesign
+from network.wireless.planning import (
+    CAPACITY_FORMULA,
+    COVERAGE_FORMULA,
+    NO_RF_NOTE,
+    UPLINK_FORMULA,
+    WirelessAnalysis,
+)
 from optimization import (
     CandidateEvaluation,
     CandidateRecord,
@@ -376,6 +391,205 @@ def ha_group_request(group: HaGroup, analysis: HaAnalysis) -> ExplanationRequest
     )
 
 
+def l2_design_request(design: L2Design, analysis: L2Analysis) -> ExplanationRequest:
+    """Build a hand-checkable Layer-2 design explanation.
+
+    The rationale is rule based: cycle rank is edges minus vertices plus
+    components, the modeled root is the smallest ``(priority, device id)``, and
+    bundle capacity is the sum of the surviving modeled member links. No live
+    switching protocol, STP election, or LACP negotiation is simulated.
+    """
+    loops = "; ".join(
+        f"VLAN {loop.vlan_id} rank {loop.cycle_count}, root "
+        f"{loop.root_bridge or 'none'}, blocked "
+        f"{', '.join(loop.blocked_link_ids) or 'none'}"
+        for loop in analysis.loops
+    ) or "no VLAN loop reviews"
+    bundles = "; ".join(
+        f"{bundle.bundle_id} {_number(bundle.capacity_mbps)} Mbps from "
+        f"{len(bundle.member_link_ids)} modeled member link(s)"
+        for bundle in analysis.bundles
+    ) or "none"
+    deterministic = (
+        f"Modeled Layer-2 design covers {len(analysis.loops)} VLAN review(s), "
+        f"{len(analysis.blocked_link_ids)} blocked link(s), and "
+        f"{len(analysis.bundles)} EtherChannel bundle(s). Loop detail: {loops}. "
+        f"Bundle detail: {bundles}. Gateways are modeled for "
+        f"{len(design.gateway_by_vlan)} VLAN(s), root priorities for "
+        f"{len(design.root_priorities)} switch(es), and the sprawl heuristic "
+        f"threshold is {design.vlan_spread_threshold} switch(es). The review "
+        f"recorded {len(analysis.findings)} finding(s). This is a design model "
+        "only: no live protocol state is simulated."
+    )
+    facts = (
+        f"VLAN reviews {len(analysis.loops)}, blocked links "
+        f"{', '.join(analysis.blocked_link_ids) or 'none'}, bundles {bundles}, "
+        f"findings {len(analysis.findings)}, gateway VLANs "
+        f"{len(design.gateway_by_vlan)}, root-priority switches "
+        f"{len(design.root_priorities)}, sprawl threshold "
+        f"{design.vlan_spread_threshold}, loop detail {loops}"
+    )
+    return ExplanationRequest(
+        target=ExplanationTarget.l2_design,
+        target_id="l2",
+        deterministic_text=deterministic,
+        facts=facts,
+    )
+
+
+def wan_design_request(
+    design: WanDesign | None,
+    analysis: WanAnalysis,
+) -> ExplanationRequest:
+    """Build a hand-checkable WAN design explanation.
+
+    The rationale is rule based: the monthly proxy is the sum of active
+    inter-site link proxies, site reachability uses a bounded breadth-first walk
+    over those links, and single-link groups are counted per site. No circuit is
+    measured, no live protocol is run, and stated cost and latency assumptions
+    are the only numbers used.
+    """
+    site_types = len(design.site_types) if design is not None else 0
+    hq_targets = len(design.hq_site_ids) if design is not None else 0
+    links = "; ".join(
+        f"{info.link_id} monthly proxy {_number(info.monthly_cost_proxy)}, "
+        f"latency {_number(info.latency_ms)} ms"
+        for info in analysis.links
+    ) or "none"
+    deterministic = (
+        f"Modeled WAN design covers {len(analysis.site_ids)} site(s) with "
+        f"{len(analysis.links)} active inter-site WAN link(s) and a total monthly "
+        f"cost proxy of {_number(analysis.total_monthly_cost_proxy)}. "
+        f"{site_types} site type(s) and {hq_targets} explicit HQ target(s) come "
+        f"from the modeled design; {analysis.evaluated_demand_count} demand(s) "
+        f"were evaluated in the optional capacity-aware check. The review "
+        f"recorded {len(analysis.findings)} finding(s). {MONTHLY_COST_NOTE} "
+        f"{LATENCY_NOTE} This is a design model only: no circuit is measured "
+        "and no live protocol is run."
+    )
+    facts = (
+        f"Sites {len(analysis.site_ids)}, active links "
+        f"{', '.join(info.link_id for info in analysis.links) or 'none'}, link "
+        f"detail {links}, total monthly proxy "
+        f"{_number(analysis.total_monthly_cost_proxy)}, modeled site types "
+        f"{site_types}, explicit HQ targets {hq_targets}, evaluated demands "
+        f"{analysis.evaluated_demand_count}, findings {len(analysis.findings)}, "
+        f"{MONTHLY_COST_NOTE} {LATENCY_NOTE}"
+    )
+    return ExplanationRequest(
+        target=ExplanationTarget.wan_design,
+        target_id="wan",
+        deterministic_text=deterministic,
+        facts=facts,
+    )
+
+
+def wireless_design_request(
+    design: WirelessDesign | None,
+    analysis: WirelessAnalysis,
+) -> ExplanationRequest:
+    """Build a hand-checkable wireless AP explanation.
+
+    The rationale is hand computable from stated assumptions: capacity APs are
+    ``ceil(clients * client_mbps / (ap_capacity * utilization_target))``,
+    coverage APs are ``ceil(area / (pi * radius^2 * overlap))``, and the
+    recommendation is the larger. Clients are never enumerated and no RF
+    propagation or signal modeling is performed.
+    """
+    stated_areas = len(design.areas) if design is not None else 0
+    capacity_bound = sum(
+        plan.binding_constraint == "capacity" for plan in analysis.plans
+    )
+    coverage_bound = sum(
+        plan.binding_constraint == "coverage" for plan in analysis.plans
+    )
+    plans = "; ".join(
+        f"{plan.area_id} {plan.recommended_ap_count} AP(s) "
+        f"({plan.binding_constraint})"
+        for plan in analysis.plans
+    ) or "none"
+    deterministic = (
+        f"Modeled wireless plan covers {len(analysis.plans)} abstract area(s) "
+        f"from {stated_areas} stated design area(s) with "
+        f"{analysis.total_recommended_aps} recommended AP(s) and a total uplink "
+        f"requirement of {_number(analysis.total_uplink_required_mbps)} Mbps. "
+        f"{capacity_bound} area(s) are capacity-bound and {coverage_bound} are "
+        f"coverage-bound under the stated assumptions. Area detail: {plans}. "
+        f"The review recorded {len(analysis.findings)} finding(s). {NO_RF_NOTE} "
+        "This is a design model only: clients are stated assumptions, never "
+        "enumerated."
+    )
+    facts = (
+        f"Abstract areas {len(analysis.plans)}, stated areas {stated_areas}, "
+        f"recommended APs {analysis.total_recommended_aps}, uplink Mbps "
+        f"{_number(analysis.total_uplink_required_mbps)}, capacity-bound "
+        f"{capacity_bound}, coverage-bound {coverage_bound}, area detail "
+        f"{plans}, findings {len(analysis.findings)}, formulas {CAPACITY_FORMULA}; "
+        f"{COVERAGE_FORMULA}; {UPLINK_FORMULA}, {NO_RF_NOTE}"
+    )
+    return ExplanationRequest(
+        target=ExplanationTarget.wireless_design,
+        target_id="wireless",
+        deterministic_text=deterministic,
+        facts=facts,
+    )
+
+
+def qos_design_request(
+    design: QosDesign | None,
+    plan: QosAdmissionPlan,
+    findings: tuple[Finding, ...] = (),
+) -> ExplanationRequest:
+    """Build a hand-checkable QoS admission explanation.
+
+    The rationale is the documented strict-priority order and per-link share
+    caps from the already-computed plan. Ties use descending bandwidth then
+    stable identifiers. This is an admission model only: no queue simulation,
+    drop, scheduler, or device hardware behavior is modeled.
+    """
+    class_order = ", ".join(
+        traffic_class.value
+        for traffic_class in sorted(
+            TRAFFIC_CLASS_PRIORITY,
+            key=lambda item: TRAFFIC_CLASS_PRIORITY[item],
+        )
+    )
+    default_class = design.default_class.value if design is not None else "none"
+    caps = "; ".join(
+        f"{link_id}: "
+        + ",".join(
+            f"{traffic_class.value}={_number(share)}"
+            for traffic_class, share in sorted(
+                by_class.items(), key=lambda item: item[0].value
+            )
+        )
+        for link_id, by_class in sorted(plan.class_caps.items())
+    ) or "none"
+    codes = ", ".join(finding.code for finding in findings)
+    deterministic = (
+        f"Modeled QoS admission plan orders {len(plan.demand_indices)} modeled "
+        f"demand(s) by the documented class order {class_order}; the default "
+        f"class is {default_class}. {len(plan.class_caps)} link(s) carry modeled "
+        f"class share caps: {caps}. The review recorded "
+        f"{len(findings)} finding(s)"
+        + (f": {codes}." if codes else ".")
+        + f" {ADMISSION_NOTE} This is a design model only: no queue simulation, "
+        "drop, scheduler, or device hardware behavior is modeled."
+    )
+    facts = (
+        f"Demand indices "
+        f"{', '.join(str(index) for index in plan.demand_indices) or 'none'}, "
+        f"class order {class_order}, default class {default_class}, caps {caps}, "
+        f"findings {codes or 'none'}, {ADMISSION_NOTE}"
+    )
+    return ExplanationRequest(
+        target=ExplanationTarget.qos_design,
+        target_id="qos",
+        deterministic_text=deterministic,
+        facts=facts,
+    )
+
+
 def audit_ai_explanation(text: str, *, facts: str) -> str:
     """Return a rejection reason for unsafe AI explanation prose."""
     reason = audit_prose(text, allowed_numbers=facts)
@@ -522,8 +736,12 @@ __all__ = [
     "blast_radius_request",
     "explain",
     "finding_request",
+    "l2_design_request",
     "optimization_request",
+    "qos_design_request",
     "route_request",
     "segmentation_score_request",
     "simulation_request",
+    "wan_design_request",
+    "wireless_design_request",
 ]

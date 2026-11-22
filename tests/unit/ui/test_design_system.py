@@ -28,6 +28,24 @@ def test_token_palette_meets_text_contrast() -> None:
     assert set(theme.LIGHT) == set(theme.DARK)
 
 
+L2_THEME_TOKENS = (
+    "l2_accent",
+    "wan_accent",
+    "wireless_accent",
+    "qos_accent",
+    "findings_accent",
+)
+
+
+def test_l2_theme_tokens_exist_in_both_palettes_and_meet_contrast() -> None:
+    for token in L2_THEME_TOKENS:
+        assert token in theme.LIGHT
+        assert token in theme.DARK
+        assert (token, "surface") in theme.TEXT_CONTRAST_PAIRS
+        assert theme.contrast_ratio(theme.LIGHT[token], theme.LIGHT["surface"]) >= 4.5
+        assert theme.contrast_ratio(theme.DARK[token], theme.DARK["surface"]) >= 4.5
+
+
 def test_config_declares_light_and_dark_with_one_typeface() -> None:
     config = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text())
     assert config["theme"]["base"] == "light"
