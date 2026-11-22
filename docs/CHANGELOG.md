@@ -2,6 +2,58 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-23 - V2 share package on feature/v2-share (B1-B6)
+
+### Added
+- B1 (`d117f9e`): in-memory project bundles in `services/bundle/`. One
+  deterministic ZIP carries a manifest, twin, snapshots, retained runs,
+  provenance, decision log, modeled security flows, and secret-free settings.
+  Import uses a fixed member allowlist, path rejection, byte/decompression caps,
+  checksums, guarded JSON, typed errors, and v1-to-v2 manifest migration.
+  `CURRENT_BUNDLE_VERSION = 2`; `MIN_BUNDLE_VERSION = 1`; twin schema stays 2.
+- B2 (`252e74b`): Digital Twin Save/Open bundle UI with preview, confirmation,
+  import-as-new-snapshot, Dashboard unsaved-changes prompt, bounded versioned
+  keys, theme tokens, and ar/en translations.
+- B3 (`9468065`): Arabic-capable PDFs with bounded shaping/bidi helpers and the
+  bundled SIL OFL 1.1 Noto Naskh Arabic font (307,592 bytes). A vector topology
+  figure with legend, bounded size, and label thinning is available as a PDF.
+  Latin/IP/CIDR/numeric runs stay LTR; legacy no-argument PDF behavior remains.
+- B4 (`b674943`): two-page bilingual executive summary in
+  `services/reporting/executive.py`, with sourced values, explicit not-run
+  notes, and Reports-page PDF/Markdown downloads that follow the UI language.
+- B5 (`e4f947e`): pure GraphML, Mermaid, CSV inventory, and draw.io mxfile
+  exporters in `services/export/`, with escaping, CSV formula neutralization,
+  stable ordering, size caps, and hostile-name tests. No vendor templates.
+- B6 (`d4e7e49`, `858f56f`): `python -m netarchitect` CLI with `validate`,
+  `simulate`, `report`, `export`, and `info`; stdlib `argparse` only, no
+  Streamlit import, deterministic output, and exit codes 0/1/2.
+
+### Changed
+- `ui/cache.py` adds a bounded `cached_executive_exports` cache and passes the
+  active language to the shared export cache; the cold-start guard now expects
+  nine bounded `st.cache_data` functions.
+- Fresh-import discovery skips `__main__` modules because they intentionally
+  execute argparse on import; CLI subprocess tests cover them instead.
+- Layering and top-level package maps include `services/bundle`, the new export
+  modules, and `netarchitect`; new modules have fresh-subprocess import tests.
+
+### Evidence
+- Python 3.12.10: `pytest -q` → `1760 passed, 14 deselected in 140.96s
+  (0:02:20)`; `ruff check .` → `All checks passed!`; `pytest -q -m smoke` →
+  `13 passed, 1761 deselected in 8.48s`; `pytest -q -m imports` → `1 passed,
+  1773 deselected in 66.79s (0:01:06)`.
+- Runtime-only Python 3.12.10 venv without pytest: `health: ok; root status:
+  200`, all 17 pages rendered in fresh interpreters, `PASS`.
+- Executive export measurement with a fixed timestamp (Python 3.12.10):
+  English `2 pages / 18,180 PDF bytes / 5,079 Markdown bytes / 0.0231s PDF /
+  0.0001s Markdown`; Arabic `2 pages / 48,648 PDF bytes / 5,846 Markdown bytes
+  / 0.0332s PDF / 0.0001s Markdown`; both register 11 sourced values.
+
+### Not verified
+- Real-browser rendering, Streamlit Community Cloud deployment, live Groq,
+  remote GitHub Actions execution, and owner visual signoff of PDF/topology
+  layout.
+
 ## 2026-11-22 - Hotfix: restore core->network layering on hotfix/core-layering
 
 ### Fixed

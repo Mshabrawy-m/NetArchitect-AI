@@ -105,7 +105,8 @@ def test_all_cache_data_decorators_are_bounded() -> None:
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "cache_data"
     ]
-    assert len(decorators) == 8
+    # B4 adds cached_executive_exports for the two-page executive summary.
+    assert len(decorators) == 9
     for decorator in decorators:
         keywords = {
             keyword.arg: keyword.value

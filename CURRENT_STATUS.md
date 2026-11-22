@@ -1,11 +1,24 @@
 # Current Project Status
 
 ## Overall
-- Current phase: v1.0.0 released; V2 L2 package on `feature/v2-l2`
-- Current task: W1-W5 complete (L2/WAN/Wireless/QoS design package ready for review)
-- Overall status: `main` was synchronized and pushed through `3a4aa53 Merge feature/v2-l3 into main`, including hotfix `6f3cd7a hotfix: failure sweep first-run IndexError`. `feature/v2-l2` was created from that `main` and adds deterministic, offline, design-time L2 switching, WAN, abstract wireless, and QoS admission models plus W5 validation, Critic, Copilot, report, and UI integration. All additions are additive optional fields: legacy twin JSON and the schema-v1 fingerprint remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added. The feature branch is not pushed.
-- Last updated: 2026-11-22
-- Branch: `feature/v2-l2` (created from `main` at `3a4aa53`)
+- Current phase: v1.0.0 released; V2 share package on `feature/v2-share`
+- Current task: B1-B6 complete (bundle save/open, Arabic PDF, executive summary, interchange exports, and CLI)
+- Overall status: `main` was hotfixed through `bf9ef7d` to restore `core -> network` layering and add fresh-import/layering guards. `feature/v2-share` was created from that `main`; B1-B6 are committed per task, followed by final guard and documentation updates. The twin schema remains version 2, the schema-v1 fingerprint remains byte-identical and tested, no new runtime dependency or worker/thread was added, and runtime code still writes no files except the CLI's explicit `--out` path. The feature branch is not pushed.
+- Last updated: 2026-11-23
+- Branch: `feature/v2-share` (created from `main` at `bf9ef7d`)
+
+## V2 share package (feature/v2-share)
+
+- Scope: offline, deterministic sharing and reporting. Nothing contacts a device, starts a worker/thread, calls a language model for content, or writes an application file. All exports and bundles are built in memory; `python -m netarchitect --out` is the only permitted file write. `requirements.txt` stays flat and unchanged.
+- B1 (`d117f9e`): `services/bundle/` builds and reads one deterministic ZIP in memory with a manifest, twin, snapshots, simulation/sweep/mode/optimization/capacity/forecast runs, reports, decision log, modeled security flows, provenance, and a secret-free settings snapshot. `CURRENT_BUNDLE_VERSION = 2`, `MIN_BUNDLE_VERSION = 1`; a real forward migration removes secret settings from v1 manifests. Fixed member allowlist, path rejection, byte/decompression caps, checksums, guarded JSON parsing, and typed errors make import hostile-input-safe. Twin schema and legacy bytes are unchanged.
+- B2 (`252e74b`): the Digital Twin page has Save Bundle/Open Bundle controls with preview, explicit confirmation, import-as-new-snapshot, Dashboard unsaved-changes prompt, bounded versioned session keys, theme-backed styling, and ar/en catalog entries. AppTest covers first click from empty state, zero case, and run-twice behavior.
+- B3 (`9468065`): `services/export/arabic.py` provides bounded shaping/bidi helpers; `pdf.py` embeds the bundled SIL OFL 1.1 `NotoNaskhArabic-Regular.ttf` (307,592 bytes) when `language='ar'`, while Latin/IP/CIDR/number tokens stay LTR; `topology_figure.py` renders a bounded vector topology figure with legend and label thinning. No-argument PDF calls retain the legacy Latin-only behavior and warning.
+- B4 (`b674943`): `services/reporting/executive.py` builds a bounded two-page `ReportDocument` (`EXECUTIVE_SECTION_ID = "executive_summary"`) from computed twin/engine data with per-value step/tool/fingerprint provenance and explicit not-run notes for missing inputs. The Reports page shows ar/en executive PDF and Markdown downloads, consistency status, not-run count, PDF size, and language-follow behavior. Measured with a fixed timestamp on Python 3.12.10: English `2 pages`, `18,180 PDF bytes`, `5,079 Markdown bytes`, `0.0231s PDF`, `0.0001s Markdown`, `11 sourced values`; Arabic `2 pages`, `48,648 PDF bytes`, `5,846 Markdown bytes`, `0.0332s PDF`, `0.0001s Markdown`, `11 sourced values`.
+- B5 (`e4f947e`): `services/export/` adds pure `to_graphml`, `to_mermaid`, `to_inventory_csv`, and `to_drawio` (mxfile) functions with XML/Markdown escaping, CSV formula neutralization, stable ordering, size caps, and hostile-name tests. No vendor templates are used.
+- B6 (`d4e7e49`, import-guard fix `858f56f`): `python -m netarchitect` exposes `validate`, `simulate`, `report`, `export`, and `info` using only stdlib `argparse`. It never imports Streamlit, is deterministic, and emits exit code `0`, `1` for domain errors (typed JSON on stderr), or `2` for usage errors. `__main__` modules are excluded from fresh-import discovery and covered by subprocess tests.
+- Python 3.12.10 verification (`.venv312`): `pytest -q` → `1760 passed, 14 deselected in 140.96s (0:02:20)`; `ruff check .` → `All checks passed!`; `pytest -q -m smoke` → `13 passed, 1761 deselected in 8.48s`; `pytest -q -m imports` → `1 passed, 1773 deselected in 66.79s (0:01:06)`; runtime-only Python 3.12.10 venv without pytest → health `ok`, root status `200`, `AppTest rendered 17 pages in fresh interpreters with no exceptions`.
+- New format additions only: bundle manifest v2 with v1 migration, GraphML/Mermaid/inventory CSV/draw.io mxfile exports, Arabic-capable PDF mode, and the two-page executive report. No domain schema field was added and no stable format was removed.
+- Not verified: real-browser rendering, Streamlit Community Cloud deployment, live Groq, remote GitHub Actions execution, and owner visual signoff of PDF/topology layout.
 
 ## V2 L2 package (feature/v2-l2)
 

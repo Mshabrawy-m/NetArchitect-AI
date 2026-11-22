@@ -35,23 +35,31 @@ For development and CI, install the tools separately (Cloud does **not** install
 python -m pip install -r requirements-dev.txt
 ```
 
-Open the URL printed by Streamlit. The **Dashboard** is the root page and the sidebar lists all 15 pages:
+Open the URL printed by Streamlit. The **Dashboard** is the root page and the sidebar lists all 17 pages:
 
 1. Dashboard
 2. AI Network Designer
 3. Topology Editor
 4. IP Addressing & Subnetting
 5. VLAN & DHCP Planner
-6. Routing Analysis
-7. Network Analytics
-8. Digital Twin
-9. Simulation Lab
-10. Optimization Center
-11. Capacity Planning
-12. Security Analysis
-13. Agent Control Center
-14. Reports & Documentation
-15. Settings
+6. L3 Design
+7. L2 Design
+8. Routing Analysis
+9. Network Analytics
+10. Security Analysis
+11. Digital Twin
+12. Simulation Lab
+13. Optimization Center
+14. Capacity Planning
+15. Reports & Documentation
+16. Agent Control Center
+17. Settings
+
+## Sharing and reports
+
+The `feature/v2-share` package adds in-memory project bundle Save/Open on the Digital Twin page, with a preview, confirmation, and import-as-new-snapshot. Bundles carry the twin, retained runs, snapshots, provenance, decisions, and secret-free settings; import is guarded against hostile ZIP input. No bundle is written by the app.
+
+Reports & Documentation includes a two-page executive summary in English or Arabic, generated only from computed data with per-value provenance and explicit not-run notes. PDFs embed a bundled SIL OFL Arabic font in Arabic mode, and the pure interchange exporters cover GraphML, Mermaid, inventory CSV, draw.io mxfile, and a bounded vector topology figure.
 
 ## Command-line interface
 
@@ -83,18 +91,15 @@ Never commit the key, paste it into reports, or place it in application logs. Se
 
 ## Verification summary
 
-At `v1.0.0-rc1`:
+At `feature/v2-share` B1-B6 on Python 3.12.10:
 
-- `pytest -q`: **975 passed**
-- `pytest -q -m smoke`: **12 passed, 963 deselected**
+- `pytest -q`: **1760 passed, 14 deselected in 140.96s (0:02:20)**
 - `ruff check .`: **All checks passed!**
-- Clean Python 3.11 venv: **975 passed**
-- Clean Python 3.12 venv: **975 passed**
-- `pip-audit -r requirements.txt`: **No known vulnerabilities found**
-- Headless local startup: health `ok`, root title `Dashboard`, `exceptions: 0`
-- Runtime-only fresh venv: `pytest` absent, health `ok`, root status 200, all 15 pages rendered by `scripts/verify_runtime_only.py`
+- `pytest -q -m smoke`: **13 passed, 1761 deselected in 8.48s**
+- `pytest -q -m imports`: **1 passed, 1773 deselected in 66.79s (0:01:06)**
+- Runtime-only fresh venv without `pytest`: health `ok`, root status `200`, all 17 pages rendered by `scripts/verify_runtime_only.py`
 
-These checks were run locally on Windows. A real browser, a deployed Community Cloud instance, live Groq responses, PDF visual layout, and remote GitHub Actions execution were **not** verified. See [docs/TEST_STRATEGY.md](docs/TEST_STRATEGY.md).
+These checks were run locally on Windows. A real browser, a deployed Community Cloud instance, live Groq responses, owner visual signoff of PDF/topology layout, and remote GitHub Actions execution were **not** verified. See [docs/TEST_STRATEGY.md](docs/TEST_STRATEGY.md).
 
 ## Documentation
 
@@ -115,7 +120,7 @@ These checks were run locally on Windows. A real browser, a deployed Community C
 
 Nine pinned runtime packages are declared inline in `requirements.txt`. `pyarrow==23.0.1` is listed directly so Community Cloud installs need no separate constraints file; it is already required by Streamlit, so this is not a new runtime dependency. No `packages.txt` is needed.
 
-Development-only tools (`pytest`, `ruff`, `hypothesis`) live in `requirements-dev.txt`, which starts with `-r requirements.txt`. `scripts/verify_runtime_only.py` checks that a fresh runtime-only install starts Streamlit headless and renders all 15 pages without pytest.
+Development-only tools (`pytest`, `ruff`, `hypothesis`) live in `requirements-dev.txt`, which starts with `-r requirements.txt`. `scripts/verify_runtime_only.py` checks that a fresh runtime-only install starts Streamlit headless and renders all 17 pages without pytest.
 
 ## License
 
