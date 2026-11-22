@@ -28,8 +28,12 @@ __all__ = [
     "pdf_warnings",
     "to_config_bundle",
     "to_csv_bundle",
+    "to_drawio",
+    "to_graphml",
+    "to_inventory_csv",
     "to_json",
     "to_markdown",
+    "to_mermaid",
     "to_pdf",
 ]
 
@@ -47,8 +51,12 @@ _LAZY_EXPORTS = {
     "pdf_warnings": ".pdf",
     "to_config_bundle": ".config_templates",
     "to_csv_bundle": ".csv_export",
+    "to_drawio": ".drawio",
+    "to_graphml": ".graphml",
+    "to_inventory_csv": ".inventory",
     "to_json": ".json_export",
     "to_markdown": ".markdown",
+    "to_mermaid": ".mermaid",
     "to_pdf": ".pdf",
 }
 
