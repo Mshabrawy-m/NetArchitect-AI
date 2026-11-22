@@ -220,6 +220,15 @@ MAX_REPORT_TABLE_ROWS: int = 500
 # Streamlit Community Cloud free tier.
 MAX_REPORT_BYTES: int = 5_000_000
 
+# Maximum serialized bytes for one in-memory project bundle (B1). A bundle is a
+# ZIP of guarded JSON sections; the cap bounds peak upload memory on the free
+# tier and is checked against both the compressed and uncompressed totals.
+MAX_BUNDLE_BYTES: int = 5_000_000
+
+# Maximum number of ZIP members in one project bundle. Sections are small, so a
+# larger member count is always hostile input rather than a legitimate export.
+MAX_BUNDLE_MEMBERS: int = 200
+
 # Minimum observations required in one time series before it can be forecast.
 # A chronological evaluation split needs at least this many points so the
 # training and held-out portions are both non-trivial.
