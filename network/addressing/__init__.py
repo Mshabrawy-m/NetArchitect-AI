@@ -18,6 +18,17 @@ from .dual_stack import (
     requests_from_plan,
     validate_dual_stack,
 )
+from .nat import (
+    DEFAULT_SESSIONS_PER_HOST,
+    DEFAULT_USABLE_PORTS_PER_ADDRESS,
+    NatAnalysis,
+    NatPlan,
+    NatRule,
+    NatSizing,
+    NatType,
+    analyze_nat_plan,
+    derived_host_count,
+)
 from .tables import allocation_rows, cidr_rows, utilization_rows
 from .utilization import (
     SubnetUtilization,
@@ -40,6 +51,8 @@ from .vlsm import (
 )
 
 __all__ = [
+    "DEFAULT_SESSIONS_PER_HOST",
+    "DEFAULT_USABLE_PORTS_PER_ADDRESS",
     "IPV6_VLAN_PREFIX_LENGTH",
     "AddressAssignment",
     "DualStackAssignment",
@@ -47,6 +60,11 @@ __all__ = [
     "DualStackRequest",
     "IPNetwork",
     "Ipv6Scope",
+    "NatAnalysis",
+    "NatPlan",
+    "NatRule",
+    "NatSizing",
+    "NatType",
     "SubnetInfo",
     "SubnetUtilization",
     "UtilizationEntry",
@@ -56,6 +74,7 @@ __all__ = [
     "VlsmResult",
     "allocate_vlsm",
     "allocation_rows",
+    "analyze_nat_plan",
     "available_prefixes",
     "build_utilization_report",
     "calculate_subnet",
@@ -63,6 +82,7 @@ __all__ = [
     "classify_ipv6_scope",
     "coerce_network",
     "default_reserved_addresses",
+    "derived_host_count",
     "detect_duplicate_ips",
     "detect_overlaps",
     "dual_stack_rows",

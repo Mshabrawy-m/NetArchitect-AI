@@ -287,6 +287,10 @@ MAX_INPUT_NUMERIC_MAGNITUDE: float = 1e12
 # host enumeration or loop iterations.
 MAX_V6_PREFIXES: int = 256
 
+# Maximum number of modeled NAT rules in one NAT/PAT plan. Sizing and overlap
+# checks are linear in rule count, so this keeps interactive review bounded.
+MAX_NAT_RULES: int = 64
+
 # Maximum characters accepted in one copilot scenario sentence. This is a UI
 # input bound, not a token budget; deterministic parsing always runs first.
 MAX_COPILOT_TEXT_CHARS: int = 1_000
