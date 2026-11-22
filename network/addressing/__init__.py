@@ -4,6 +4,20 @@ Import from ``network.addressing`` rather than from individual modules.
 """
 
 from .cidr import IPNetwork, SubnetInfo, calculate_subnet, coerce_network
+from .dual_stack import (
+    IPV6_VLAN_PREFIX_LENGTH,
+    DualStackAssignment,
+    DualStackPlan,
+    DualStackRequest,
+    Ipv6Scope,
+    available_prefixes,
+    classify_ipv6_scope,
+    dual_stack_rows,
+    plan_dual_stack,
+    prefix_at,
+    requests_from_plan,
+    validate_dual_stack,
+)
 from .tables import allocation_rows, cidr_rows, utilization_rows
 from .utilization import (
     SubnetUtilization,
@@ -26,8 +40,13 @@ from .vlsm import (
 )
 
 __all__ = [
+    "IPV6_VLAN_PREFIX_LENGTH",
     "AddressAssignment",
+    "DualStackAssignment",
+    "DualStackPlan",
+    "DualStackRequest",
     "IPNetwork",
+    "Ipv6Scope",
     "SubnetInfo",
     "SubnetUtilization",
     "UtilizationEntry",
@@ -37,13 +56,20 @@ __all__ = [
     "VlsmResult",
     "allocate_vlsm",
     "allocation_rows",
+    "available_prefixes",
     "build_utilization_report",
     "calculate_subnet",
     "cidr_rows",
+    "classify_ipv6_scope",
     "coerce_network",
     "default_reserved_addresses",
     "detect_duplicate_ips",
     "detect_overlaps",
+    "dual_stack_rows",
+    "plan_dual_stack",
+    "prefix_at",
+    "requests_from_plan",
     "utilization_rows",
     "validate_addressing",
+    "validate_dual_stack",
 ]

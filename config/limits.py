@@ -282,6 +282,11 @@ MAX_IDENTIFIER_CHARS: int = 128
 # Values beyond this are rejected with a typed finding before model projection.
 MAX_INPUT_NUMERIC_MAGNITUDE: float = 1e12
 
+# Maximum number of IPv6 /64 prefix assignments in one dual-stack plan. The
+# planner uses prefix arithmetic only, so this caps design size rather than
+# host enumeration or loop iterations.
+MAX_V6_PREFIXES: int = 256
+
 # Maximum characters accepted in one copilot scenario sentence. This is a UI
 # input bound, not a token budget; deterministic parsing always runs first.
 MAX_COPILOT_TEXT_CHARS: int = 1_000
