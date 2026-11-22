@@ -518,6 +518,28 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "reports.mode_compare_source": "Mode comparison result",
         "reports.sensitivity_source": "Sensitivity result",
         "reports.rerank_source": "Re-ranked Pareto front",
+        # B4 executive summary
+        "reports.executive.title": "Executive summary (two pages)",
+        "reports.executive.caption": (
+            "A compact summary computed from the selected sources. The report "
+            "language follows the interface language set on Settings."
+        ),
+        "reports.executive.language": "Report language: {language}.",
+        "reports.executive.language_switch": "Switch language on Settings.",
+        "reports.executive.not_run": "Sections not run: {count}.",
+        "reports.executive.consistent": (
+            "Numeric consistency: OK ({count} sourced values checked)."
+        ),
+        "reports.executive.inconsistent": (
+            "Numeric consistency: {count} finding(s); see the full report."
+        ),
+        "reports.executive.pdf_ready": "PDF: {pages} page(s), {bytes} bytes.",
+        "reports.executive.download_pdf": "Download executive PDF",
+        "reports.executive.download_markdown": "Download executive Markdown",
+        "reports.executive.empty_sources": (
+            "No optional sources are selected; missing sections are marked "
+            "not run with the page that produces them."
+        ),
         # B2 project bundles (Save / Open)
         "bundle.title": "Project bundle",
         "bundle.save.title": "Save project bundle",
@@ -1254,6 +1276,28 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "reports.mode_compare_source": "نتيجة مقارنة الأوضاع",
         "reports.sensitivity_source": "نتيجة تحليل الحساسية",
         "reports.rerank_source": "جبهة Pareto المُعاد ترتيبها",
+        # B4 executive summary
+        "reports.executive.title": "الملخص التنفيذي (صفحتان)",
+        "reports.executive.caption": (
+            "ملخص مختصر يُحسب من المصادر المختارة. لغة التقرير تتبع لغة "
+            "الواجهة المضبوطة في صفحة الإعدادات."
+        ),
+        "reports.executive.language": "لغة التقرير: {language}.",
+        "reports.executive.language_switch": "غيّر اللغة من صفحة الإعدادات.",
+        "reports.executive.not_run": "أقسام لم تُشغّل: {count}.",
+        "reports.executive.consistent": (
+            "الاتساق الرقمي: سليم (تم فحص {count} قيمة بمصدر)."
+        ),
+        "reports.executive.inconsistent": (
+            "الاتساق الرقمي: {count} ملاحظة؛ راجع التقرير الكامل."
+        ),
+        "reports.executive.pdf_ready": "PDF: {pages} صفحة، {bytes} بايت.",
+        "reports.executive.download_pdf": "تنزيل الملخص التنفيذي PDF",
+        "reports.executive.download_markdown": "تنزيل الملخص التنفيذي Markdown",
+        "reports.executive.empty_sources": (
+            "لم يتم اختيار مصادر اختيارية؛ الأقسام الناقصة موضحة كـ«لم يُشغّل» "
+            "مع الصفحة التي تنتجها."
+        ),
         # B2 project bundles (Save / Open)
         "bundle.title": "حزمة المشروع",
         "bundle.save.title": "حفظ حزمة المشروع",

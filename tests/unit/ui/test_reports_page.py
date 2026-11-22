@@ -137,7 +137,11 @@ def test_without_a_section_selection_the_page_asks_for_one() -> None:
         "Select at least one section" in warning.value
         for warning in at.warning
     )
-    assert not at.get("download_button")
+    # The executive summary has its own downloads and stays available; only the
+    # full-report downloads must disappear when no section is selected.
+    assert not any(
+        element.key in DOWNLOAD_KEYS for element in at.get("download_button")
+    )
 
 
 def test_a_retained_workflow_fills_the_agent_trace_section() -> None:

@@ -18,6 +18,7 @@ from .consistency import (
     ConsistencySeverity,
     check_consistency,
 )
+from .executive import EXECUTIVE_SECTION_ID, LANGUAGES, build_executive_summary
 from .explain import REPORT_EXPLANATION_SYSTEM_PROMPT, generate_ai_explanation
 from .formatting import format_number, numeric_tokens, parse_display
 from .models import (
@@ -46,6 +47,8 @@ from .templates import LIMITATIONS
 
 __all__ = [
     "DISCLOSURE_TEXT",
+    "EXECUTIVE_SECTION_ID",
+    "LANGUAGES",
     "LIMITATIONS",
     "MODELED_ESTIMATE_LABEL",
     "REPORT_EXPLANATION_SYSTEM_PROMPT",
@@ -73,6 +76,7 @@ __all__ = [
     "SectionStatus",
     "TableBlock",
     "ValueRecord",
+    "build_executive_summary",
     "build_report",
     "check_consistency",
     "filter_sections",

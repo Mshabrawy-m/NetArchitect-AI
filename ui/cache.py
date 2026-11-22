@@ -626,9 +626,44 @@ class ExportBundle:
     warnings: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class ExecutiveExportBundle:
+    """In-memory two-page executive exports for one document and language."""
+
+    pdf: bytes
+    markdown: bytes
+    warnings: tuple[str, ...]
+    pages: int
+
+
 @st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
-def cached_exports(document_payload: str, twin_payload: str) -> ExportBundle:
-    """Build every export once per filtered document and twin revision."""
+def cached_executive_exports(
+    document_payload: str, language: str
+) -> ExecutiveExportBundle:
+    """Build the executive PDF and Markdown once per document and language."""
+    from services.export import (
+        pdf_page_count,
+        pdf_warnings,
+        to_markdown,
+        to_pdf,
+    )
+    from services.reporting import ReportDocument
+
+    document = ReportDocument.model_validate_json(document_payload)
+    pdf = to_pdf(document, language=language)
+    return ExecutiveExportBundle(
+        pdf=pdf,
+        markdown=to_markdown(document),
+        warnings=pdf_warnings(document, language=language),
+        pages=pdf_page_count(pdf),
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
+def cached_exports(
+    document_payload: str, twin_payload: str, language: str = "en"
+) -> ExportBundle:
+    """Build every export once per filtered document, twin, and language."""
     from services.export import (
         pdf_warnings,
         to_config_bundle,
@@ -643,22 +678,24 @@ def cached_exports(document_payload: str, twin_payload: str) -> ExportBundle:
 
     document = ReportDocument.model_validate_json(document_payload)
     return ExportBundle(
-        pdf=to_pdf(document),
+        pdf=to_pdf(document, language=language),
         markdown=to_markdown(document),
         json=document_to_json(document),
         csv=to_csv_bundle(document),
         config=to_config_bundle(DigitalTwin.model_validate_json(twin_payload)),
-        warnings=pdf_warnings(document),
+        warnings=pdf_warnings(document, language=language),
     )
 
 
 __all__ = [
     "L2_REVIEW_SECTIONS",
+    "ExecutiveExportBundle",
     "ExportBundle",
     "L2DesignReview",
     "L3DesignReview",
     "cached_capacity_run",
     "cached_design_health",
+    "cached_executive_exports",
     "cached_exports",
     "cached_forecast_run",
     "cached_l2_design_review",

@@ -25,6 +25,7 @@ from core.exceptions import ReportError
 from digital_twin import DigitalTwin
 from optimization import OptimizationRun, ParetoReranking, SensitivityReport
 from services.reporting import (
+    EXECUTIVE_SECTION_ID,
     KeyValueBlock,
     NoteBlock,
     ParagraphBlock,
@@ -32,6 +33,7 @@ from services.reporting import (
     ReportSection,
     ReportSources,
     TableBlock,
+    build_executive_summary,
     build_report,
     check_consistency,
     filter_sections,
@@ -44,6 +46,7 @@ from simulation import (
 )
 from ui import i18n, state
 from ui.cache import (
+    cached_executive_exports,
     cached_exports,
     cached_report,
     capacity_source_payload,
@@ -63,6 +66,8 @@ MODE_COMPARE_KEY = "reports_mode_compare_source"
 SENSITIVITY_KEY = "reports_sensitivity_source"
 RERANK_KEY = "reports_rerank_source"
 SECTIONS_KEY = "reports_sections"
+EXECUTIVE_PDF_KEY = "reports_executive_pdf"
+EXECUTIVE_MARKDOWN_KEY = "reports_executive_markdown"
 
 NONE_LABEL = "None"
 
@@ -289,6 +294,89 @@ def _render_sources() -> tuple[
     )
 
 
+def _render_executive(sources: ReportSources) -> None:
+    """Render the compact two-page executive summary and its downloads."""
+    language = i18n.current_language()
+    language_label = "العربية" if language == "ar" else "English"
+    st.subheader(i18n.t("reports.executive.title"))
+    st.caption(i18n.t("reports.executive.caption"))
+    st.caption(
+        f"{i18n.t('reports.executive.language', language=language_label)} "
+        f"{i18n.t('reports.executive.language_switch')}"
+    )
+
+    try:
+        document = build_executive_summary(sources, language=language)
+        bundle = cached_executive_exports(document.model_dump_json(), language)
+    except (ReportError, ValueError) as error:
+        st.error(format_error(error), title=i18n.t("reports.executive.title"))
+        return
+
+    section = document.section(EXECUTIVE_SECTION_ID)
+    notes = (
+        tuple(
+            block
+            for block in section.blocks
+            if isinstance(block, NoteBlock) and block.severity == "warning"
+        )
+        if section is not None
+        else ()
+    )
+    consistency = check_consistency(document)
+    if consistency.ok:
+        st.success(
+            i18n.t("reports.executive.consistent", count=len(document.values))
+        )
+    else:
+        st.error(
+            i18n.t(
+                "reports.executive.inconsistent", count=len(consistency.findings)
+            )
+        )
+    st.caption(i18n.t("reports.executive.not_run", count=len(notes)))
+    if (
+        sources.scenario_run is None
+        and sources.capacity_run is None
+        and sources.failure_sweep is None
+    ):
+        st.caption(i18n.t("reports.executive.empty_sources"))
+    for note in notes:
+        st.caption(f"- {note.text}")
+
+    st.caption(
+        i18n.t(
+            "reports.executive.pdf_ready",
+            pages=bundle.pages,
+            bytes=len(bundle.pdf),
+        )
+    )
+    if bundle.warnings:
+        st.warning(" ".join(bundle.warnings), title="PDF font coverage")
+
+    slug = _safe_slug(
+        f"executive-{document.twin.name}-"
+        f"{document.generated_at.date().isoformat()}-{language}"
+    )
+    pdf_column, markdown_column = st.columns(2)
+    with pdf_column:
+        st.download_button(
+            i18n.t("reports.executive.download_pdf"),
+            data=bundle.pdf,
+            file_name=f"{slug}.pdf",
+            mime="application/pdf",
+            key=EXECUTIVE_PDF_KEY,
+        )
+    with markdown_column:
+        st.download_button(
+            i18n.t("reports.executive.download_markdown"),
+            data=bundle.markdown,
+            file_name=f"{slug}.md",
+            mime="text/markdown",
+            key=EXECUTIVE_MARKDOWN_KEY,
+        )
+    st.divider()
+
+
 def _section_label(document: ReportDocument, section_id: str) -> str:
     section = document.section(section_id)
     if section is None:
@@ -500,7 +588,9 @@ def _render_downloads(document: ReportDocument, twin: DigitalTwin) -> None:
         "applied to a device."
     )
     try:
-        bundle = cached_exports(document.model_dump_json(), twin_payload(twin))
+        bundle = cached_exports(
+            document.model_dump_json(), twin_payload(twin), i18n.current_language()
+        )
     except ReportError as error:
         st.error(format_error(error), title="Export failed")
         return
@@ -551,9 +641,10 @@ def _render_downloads(document: ReportDocument, twin: DigitalTwin) -> None:
             key="reports_download_templates",
         )
     st.caption(
-        "The PDF uses a Latin-only built-in font; text outside Latin is replaced "
-        "with a visible notice and the original text remains in the Markdown and "
-        "JSON exports. Configuration templates start with the line "
+        "PDFs use a Latin font in English mode and embed the bundled Arabic font "
+        "when the interface language is Arabic; unsupported scripts are replaced "
+        "with a visible notice, and the original text remains in Markdown and "
+        "JSON. Configuration templates start with the line "
         "'TEMPLATE - not applied to any device'."
     )
 
@@ -587,7 +678,7 @@ def render() -> None:
     )
 
     twin = state.get_twin()
-    if twin is None or not twin.topology.devices:
+    if twin is None:
         _render_empty_state()
         return
 
@@ -613,6 +704,30 @@ def render() -> None:
     rerank_source_fingerprint = (
         state.peek_rerank_source_fingerprint(reranking) if reranking is not None else ""
     )
+    sources = ReportSources(
+        twin=twin,
+        workflow=workflow,
+        scenario_run=scenario_run,
+        optimization_run=optimization_run,
+        capacity_run=capacity_run,
+        failure_sweep=sweep,
+        mode_comparison=mode_comparison,
+        sensitivity_report=sensitivity,
+        reranking=reranking,
+        optimization_source_fingerprint=optimization_source_fingerprint,
+        sensitivity_source_fingerprint=sensitivity_source_fingerprint,
+        rerank_source_fingerprint=rerank_source_fingerprint,
+        decisions=state.peek_copilot_decisions(),
+        generated_at=generated_at,
+    )
+    _render_executive(sources)
+
+    # The executive summary handles the zero case explicitly; the full report
+    # still needs at least one device to have meaningful sections.
+    if not twin.topology.devices:
+        _render_empty_state()
+        return
+
     try:
         if workflow is None:
             document = cached_report(
@@ -633,24 +748,7 @@ def render() -> None:
         else:
             # WorkflowState holds a live accessor and is not serializable, so it
             # cannot be a content-keyed cache argument. Exports are still cached.
-            document = build_report(
-                ReportSources(
-                    twin=twin,
-                    workflow=workflow,
-                    scenario_run=scenario_run,
-                    optimization_run=optimization_run,
-                    capacity_run=capacity_run,
-                    failure_sweep=sweep,
-                    mode_comparison=mode_comparison,
-                    sensitivity_report=sensitivity,
-                    reranking=reranking,
-                    optimization_source_fingerprint=optimization_source_fingerprint,
-                    sensitivity_source_fingerprint=sensitivity_source_fingerprint,
-                    rerank_source_fingerprint=rerank_source_fingerprint,
-                    decisions=state.peek_copilot_decisions(),
-                    generated_at=generated_at,
-                )
-            )
+            document = build_report(sources)
     except (ReportError, ValueError) as error:
         st.error(format_error(error), title="Report could not be built")
         return
