@@ -2,6 +2,29 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-22 - Hotfix: failure sweep first-run IndexError
+
+### Fixed
+- The Failure sweep no longer indexes an empty `pieces` collection when Run is
+  clicked from cursor 0. Stop reasons start as `None` and are only resolved once
+  a slice exists, with pure bootstrap/terminal helpers covering empty, cancelled,
+  zero-case, and completed states.
+- Related empty-state assumptions were hardened: stale cursors with no pieces
+  reset to zero, Cancel before the first slice produces a seeded result, empty
+  loop slices are retained, completed slices are not re-evaluated, and a changed
+  twin fingerprint resets sweep progress.
+
+### Tests
+- AppTest coverage for Run from zero, Cancel before the first slice, Run twice,
+  zero cases, and twin changes mid-sweep, plus exhaustive helper-state coverage.
+- Equivalent run-from-zero coverage for the optimization and capacity progress paths.
+
+### Evidence
+- `pytest -q`: `1278 passed, 6 deselected in 49.65s`.
+- `ruff check .`: `All checks passed!`.
+- `pytest -q -m smoke`: `13 passed, 1271 deselected in 6.19s`.
+- No schema version bump; no new dependency, thread, worker, or app disk write.
+
 ## 2026-11-21 - S6: integrated design-time security workflow on feature/v2-security
 
 ### Added

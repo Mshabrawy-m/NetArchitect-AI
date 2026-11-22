@@ -67,6 +67,34 @@ def test_capacity_planning_shows_four_tabs_and_labels_generated_data() -> None:
     assert at.button(key=capacity_planning.FORECAST_KEY)
 
 
+def test_capacity_analysis_run_from_zero_starts_without_an_empty_state_error() -> None:
+    twin = line_capacity_twin()
+    series = (
+        make_series(
+            [30.0] * 10,
+            series_id="subscribers",
+            unit=SeriesUnit.users,
+        ),
+    )
+    at = _capacity_page(twin, series)
+
+    assert not at.exception
+    assert at.session_state.get(state.CAPACITY_FORECAST_KEY) is None
+    initial_history = at.session_state.get(state.CAPACITY_HISTORY_KEY)
+    assert initial_history is None or not initial_history.runs
+
+    at.button(key=capacity_planning.FORECAST_KEY).click().run()
+    assert not at.exception
+    at.selectbox(key=f"{capacity_planning.MAPPING_KEY_PREFIX}0").select("call").run()
+    at.number_input(key=capacity_planning.PER_USER_KEY).set_value(1.0).run()
+    at.button(key=capacity_planning.EVALUATE_KEY).click().run()
+
+    assert not at.exception
+    history = at.session_state[state.CAPACITY_HISTORY_KEY]
+    assert len(history.runs) == 1
+    assert len(history.runs[0].steps) == 2
+
+
 def test_capacity_planning_builds_forecast_and_evaluates_capacity() -> None:
     twin = line_capacity_twin()
     series = (

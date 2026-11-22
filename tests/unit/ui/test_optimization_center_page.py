@@ -96,6 +96,25 @@ def test_optimization_center_runs_and_shows_results() -> None:
     assert at.download_button(key="optimization_download_csv")
 
 
+def test_optimization_run_from_zero_starts_without_an_empty_state_error() -> None:
+    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
+    at.session_state[state.TWIN_KEY] = _twin_with_demand()
+    open_page(at, "Optimization Center")
+
+    assert not at.exception
+    assert len(at.session_state[state.OPTIMIZATION_HISTORY_KEY].runs) == 0
+    at.session_state["optimization_iterations"] = 3
+    at.session_state["optimization_evaluations"] = 40
+
+    at.button(key="optimization_run").click().run()
+
+    assert not at.exception
+    history = at.session_state[state.OPTIMIZATION_HISTORY_KEY]
+    assert len(history.runs) == 1
+    assert history.runs[0].evaluations >= 1
+    assert any("stopped at" in success.value for success in at.success)
+
+
 def test_optimization_center_parses_a_candidate_pool() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()

@@ -16,6 +16,7 @@ import math
 import re
 import time
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 import networkx as nx
 import pandas as pd
@@ -61,6 +62,7 @@ from simulation import (
     run_scenario,
     run_to_csv,
     run_to_json_bytes,
+    twin_reference,
     unserved_rows,
     validate_scenario,
 )
@@ -80,6 +82,7 @@ SHOW_UNCHANGED_PATHS_KEY = "simulation_show_unchanged_paths"
 SWEEP_CANCEL_KEY = "simulation_sweep_cancel"
 SWEEP_CURSOR_KEY = "simulation_sweep_cursor_value"
 SWEEP_SLICE_KEY = "simulation_sweep_slice_size"
+SWEEP_TWIN_FINGERPRINT_KEY = "simulation_sweep_twin_fingerprint"
 COPILOT_SENTENCE_KEY = "simulation_copilot_sentence"
 COPILOT_RESULT_KEY = "simulation_copilot_result"
 COPILOT_PREVIEW_KEY = "simulation_copilot_preview"
@@ -1058,6 +1061,66 @@ def _sweep_cancelled() -> bool:
     return bool(state.session_get(SWEEP_CANCEL_KEY, False))
 
 
+@dataclass(frozen=True)
+class SweepBootstrap:
+    """Pure UI state derived before any sweep slice is evaluated."""
+
+    cursor: int
+    stop_reason: FailureSweepStopReason | None
+    seed_reason: FailureSweepStopReason | None
+
+
+def _sweep_bootstrap(
+    *,
+    total: int,
+    cursor: int,
+    pieces: Sequence[FailureSweepResult],
+    cancelled: bool,
+) -> SweepBootstrap:
+    """Normalize first-run, empty, cancelled, and completed sweep state.
+
+    ``pieces`` is the authority for how many cases were actually evaluated; a
+    stale cursor with no pieces is reset to zero instead of skipping cases.
+    ``stop_reason`` stays ``None`` until a piece exists, so an empty first run
+    never indexes into ``pieces``.
+    """
+    evaluated = sum(len(piece.cases) for piece in pieces)
+    normalized_cursor = min(evaluated, total) if pieces else 0
+    stop_reason = pieces[-1].stop_reason if pieces else None
+    seed_reason: FailureSweepStopReason | None = None
+    if not pieces:
+        if total == 0:
+            seed_reason = FailureSweepStopReason.no_failures
+        elif cancelled:
+            seed_reason = FailureSweepStopReason.cancelled
+        elif normalized_cursor >= total:
+            seed_reason = FailureSweepStopReason.completed
+    if cancelled:
+        stop_reason = FailureSweepStopReason.cancelled
+    return SweepBootstrap(
+        cursor=normalized_cursor,
+        stop_reason=stop_reason,
+        seed_reason=seed_reason,
+    )
+
+
+def _sweep_terminal_reason(
+    *,
+    cursor: int,
+    total: int,
+    cancelled: bool,
+    stop_reason: FailureSweepStopReason | None,
+) -> FailureSweepStopReason:
+    """Resolve the final reason without assuming any piece exists."""
+    if cancelled:
+        return FailureSweepStopReason.cancelled
+    if stop_reason is not None:
+        return stop_reason
+    if cursor >= total:
+        return FailureSweepStopReason.completed
+    return FailureSweepStopReason.runtime_limit
+
+
 def _merge_sweep_results(
     pieces: Sequence[FailureSweepResult],
     stop_reason: FailureSweepStopReason,
@@ -1103,6 +1166,21 @@ def _run_sweep_fragment(
     slice_size: int,
 ) -> None:
     """Run bounded slices in this fragment; no worker or thread is used."""
+    fingerprint = twin_reference(twin).fingerprint
+    stored_fingerprint = state.session_get(SWEEP_TWIN_FINGERPRINT_KEY, "")
+    if stored_fingerprint and stored_fingerprint != fingerprint:
+        state.session_set("simulation_sweep_pieces", [])
+        state.set_sweep_cursor("simulation_sweep", 0)
+        state.session_set(SWEEP_CANCEL_KEY, False)
+        state.session_set("simulation_sweep_running", False)
+        state.session_set(SWEEP_TWIN_FINGERPRINT_KEY, fingerprint)
+        st.warning(
+            "The twin changed during the sweep; the cursor was reset.",
+            title="Sweep reset",
+        )
+        return
+    state.session_set(SWEEP_TWIN_FINGERPRINT_KEY, fingerprint)
+
     try:
         plan = plan_failure_sweep(
             twin,
@@ -1118,45 +1196,46 @@ def _run_sweep_fragment(
         return
 
     total = plan.total_cases
-    pieces = list(state.session_get("simulation_sweep_pieces", []))
-    cursor = state.get_sweep_cursor("simulation_sweep", 0)
-    if total == 0 and not pieces:
-        pieces = [
-            run_failure_sweep(
-                twin,
-                _current_assumptions(),
-                depth=depth,
-                selected_link_ids=selected_links,
-                selected_device_ids=selected_devices,
-                max_pairs=max_pairs,
-                start=0,
-                limit=1,
-                max_runtime_seconds=MAX_SIMULATION_RUNTIME_SECONDS,
-            )
-        ]
-    if _sweep_cancelled() and not pieces:
-        pieces = [
-            run_failure_sweep(
-                twin,
-                _current_assumptions(),
-                depth=depth,
-                selected_link_ids=selected_links,
-                selected_device_ids=selected_devices,
-                max_pairs=max_pairs,
-                start=cursor,
-                limit=1,
-                max_runtime_seconds=MAX_SIMULATION_RUNTIME_SECONDS,
-                should_cancel=lambda: True,
-            )
-        ]
-        cursor += len(pieces[0].cases)
+    stored_pieces = state.session_get("simulation_sweep_pieces", [])
+    pieces = list(stored_pieces) if isinstance(stored_pieces, (list, tuple)) else []
+    bootstrap = _sweep_bootstrap(
+        total=total,
+        cursor=state.get_sweep_cursor("simulation_sweep", 0),
+        pieces=pieces,
+        cancelled=_sweep_cancelled(),
+    )
+    cursor = bootstrap.cursor
+    stop_reason = bootstrap.stop_reason
+    state.set_sweep_cursor("simulation_sweep", cursor)
+
+    if bootstrap.seed_reason is not None:
+        seed = run_failure_sweep(
+            twin,
+            _current_assumptions(),
+            depth=depth,
+            selected_link_ids=selected_links,
+            selected_device_ids=selected_devices,
+            max_pairs=max_pairs,
+            start=cursor,
+            limit=1,
+            max_runtime_seconds=MAX_SIMULATION_RUNTIME_SECONDS,
+            should_cancel=(
+                lambda: True
+                if bootstrap.seed_reason
+                is not FailureSweepStopReason.no_failures
+                else None
+            ),
+        )
+        pieces = [seed]
+        stop_reason = seed.stop_reason
+        state.session_set("simulation_sweep_pieces", pieces)
+        state.set_sweep_cursor("simulation_sweep", cursor + len(seed.cases))
 
     progress = st.progress(
         min(cursor / total, 1.0) if total else 0.0,
         text=f"Evaluated {cursor} of {total} modeled failure cases...",
     )
     deadline = time.perf_counter() + MAX_SIMULATION_RUNTIME_SECONDS
-    stop_reason = pieces[-1].stop_reason
     while cursor < total and not _sweep_cancelled():
         remaining = deadline - time.perf_counter()
         if remaining <= 0:
@@ -1180,8 +1259,18 @@ def _run_sweep_fragment(
             state.session_set(SWEEP_CANCEL_KEY, False)
             st.error(format_error(error), title="Failure sweep failed")
             return
-        if not piece.cases:
+        if piece.stop_reason is FailureSweepStopReason.completed:
+            pieces.append(piece)
+            cursor += len(piece.cases)
             stop_reason = piece.stop_reason
+            state.session_set("simulation_sweep_pieces", pieces)
+            state.set_sweep_cursor("simulation_sweep", cursor)
+            progress.progress(
+                cursor / total,
+                text=f"Evaluated {cursor} of {total} modeled failure cases...",
+            )
+            break
+        if not piece.cases:
             break
         pieces.append(piece)
         cursor += len(piece.cases)
@@ -1192,26 +1281,28 @@ def _run_sweep_fragment(
             cursor / total,
             text=f"Evaluated {cursor} of {total} modeled failure cases...",
         )
-        if stop_reason is not FailureSweepStopReason.completed:
-            break
 
-    if _sweep_cancelled():
-        stop_reason = FailureSweepStopReason.cancelled
+    cancelled = _sweep_cancelled()
     if not pieces:
-        pieces = [
-            run_failure_sweep(
-                twin,
-                _current_assumptions(),
-                depth=depth,
-                selected_link_ids=selected_links,
-                selected_device_ids=selected_devices,
-                max_pairs=max_pairs,
-                start=0,
-                limit=1,
-                should_cancel=lambda: True,
-            )
-        ]
-    result = _merge_sweep_results(pieces, stop_reason)
+        empty = run_failure_sweep(
+            twin,
+            _current_assumptions(),
+            depth=depth,
+            selected_link_ids=selected_links,
+            selected_device_ids=selected_devices,
+            max_pairs=max_pairs,
+            start=cursor,
+            limit=1,
+            should_cancel=lambda: True,
+        )
+        pieces = [empty]
+    final_reason = _sweep_terminal_reason(
+        cursor=cursor,
+        total=total,
+        cancelled=cancelled,
+        stop_reason=stop_reason,
+    )
+    result = _merge_sweep_results(pieces, final_reason)
     state.add_simulation_sweep(result)
     state.session_set("simulation_sweep_running", False)
     state.session_set(SWEEP_CANCEL_KEY, False)

@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from streamlit.testing.v1 import AppTest
 
 from services.llm.testing import FakeProvider
 from simulation import (
     MODEL_NOTE,
+    FailureSweepDepth,
+    FailureSweepStopReason,
     RoutingMode,
     compare_routing_modes,
     run_failure_sweep,
@@ -314,3 +318,166 @@ def test_simulation_lab_renders_injected_sweep_and_mode_comparison() -> None:
     assert at.download_button(key="simulation_download_sweep_json")
     assert at.download_button(key="simulation_download_sweep_csv")
     assert at.download_button(key="simulation_download_mode_compare")
+
+
+def _sweep_page(twin, **session_values: object):
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120).run()
+    at.session_state[state.TWIN_KEY] = twin
+    for key, value in session_values.items():
+        at.session_state[key] = value
+    open_page(at, "Simulation Lab")
+    return at
+
+
+def _stored_sweeps(at):
+    return at.session_state[state.SIMULATION_SWEEPS_KEY]
+
+
+def test_failure_sweep_run_from_zero_shows_a_result_table() -> None:
+    at = _sweep_page(_twin_with_demand())
+
+    at.button(key="simulation_sweep_run").click().run()
+
+    assert not at.exception
+    sweeps = _stored_sweeps(at)
+    assert len(sweeps) == 1
+    # Hand: the diamond fixture has four links and four devices, so N-1 plans
+    # eight modeled failure cases.
+    assert sweeps[-1].total_cases == 8
+    assert sweeps[-1].evaluated_cases == 8
+    assert sweeps[-1].stop_reason is FailureSweepStopReason.completed
+    assert any(not frame.value.empty for frame in at.dataframe)
+    assert at.session_state[state.SIMULATION_SWEEP_CURSOR_KEY]["simulation_sweep"] == 0
+
+
+def test_failure_sweep_cancel_before_first_slice_is_safe() -> None:
+    at = _sweep_page(
+        _twin_with_demand(),
+        **{
+            "simulation_sweep_running": True,
+            simulation_lab.SWEEP_CANCEL_KEY: True,
+            state.SIMULATION_SWEEP_CURSOR_KEY: {"simulation_sweep": 0},
+            "simulation_sweep_pieces": [],
+        },
+    )
+
+    assert not at.exception
+    sweeps = _stored_sweeps(at)
+    assert len(sweeps) == 1
+    assert sweeps[-1].evaluated_cases == 0
+    assert sweeps[-1].stop_reason is FailureSweepStopReason.cancelled
+    assert at.session_state["simulation_sweep_running"] is False
+
+
+def test_failure_sweep_can_run_twice_after_completion() -> None:
+    at = _sweep_page(_twin_with_demand())
+
+    at.button(key="simulation_sweep_run").click().run()
+    assert not at.exception
+    assert len(_stored_sweeps(at)) == 1
+
+    at.button(key="simulation_sweep_run").click().run()
+
+    assert not at.exception
+    sweeps = _stored_sweeps(at)
+    assert len(sweeps) == 2
+    assert all(
+        sweep.stop_reason is FailureSweepStopReason.completed for sweep in sweeps
+    )
+    assert at.session_state[state.SIMULATION_SWEEP_CURSOR_KEY]["simulation_sweep"] == 0
+
+
+def test_failure_sweep_with_zero_cases_reports_no_failures() -> None:
+    at = _sweep_page(
+        _twin_with_demand(),
+        simulation_sweep_depth=simulation_lab.SWEEP_DEPTH_LABELS[FailureSweepDepth.n2],
+    )
+
+    at.button(key="simulation_sweep_run").click().run()
+
+    assert not at.exception
+    sweeps = _stored_sweeps(at)
+    assert len(sweeps) == 1
+    assert sweeps[-1].total_cases == 0
+    assert sweeps[-1].evaluated_cases == 0
+    assert sweeps[-1].stop_reason is FailureSweepStopReason.no_failures
+    assert any("No failure case was evaluated" in info.value for info in at.info)
+
+
+def test_failure_sweep_twin_change_resets_the_cursor() -> None:
+    at = _sweep_page(
+        _twin_with_demand(),
+        **{
+            "simulation_sweep_running": True,
+            simulation_lab.SWEEP_TWIN_FINGERPRINT_KEY: "stale-twin-fingerprint",
+            state.SIMULATION_SWEEP_CURSOR_KEY: {"simulation_sweep": 3},
+            "simulation_sweep_pieces": [],
+        },
+    )
+
+    assert not at.exception
+    assert at.session_state[state.SIMULATION_SWEEP_CURSOR_KEY]["simulation_sweep"] == 0
+    assert at.session_state["simulation_sweep_pieces"] == []
+    assert at.session_state["simulation_sweep_running"] is False
+    assert any("twin changed" in warning.value for warning in at.warning)
+
+
+def _piece(case_count: int, reason: FailureSweepStopReason):
+    return SimpleNamespace(cases=(None,) * case_count, stop_reason=reason)
+
+
+def test_sweep_bootstrap_and_terminal_reason_are_total_for_empty_states() -> None:
+    reasons = tuple(FailureSweepStopReason)
+    piece_states = (
+        (),
+        (_piece(0, FailureSweepStopReason.cancelled),),
+        (_piece(1, FailureSweepStopReason.completed),),
+        (
+            _piece(1, FailureSweepStopReason.case_limit),
+            _piece(1, FailureSweepStopReason.runtime_limit),
+        ),
+    )
+    for total, cursor, pieces, cancelled in itertools.product(
+        range(3), range(4), piece_states, (False, True)
+    ):
+        bootstrap = simulation_lab._sweep_bootstrap(
+            total=total,
+            cursor=cursor,
+            pieces=pieces,
+            cancelled=cancelled,
+        )
+        assert 0 <= bootstrap.cursor <= total
+        if not pieces:
+            # Hand: with no pieces the cursor is the start of the next slice,
+            # never a skipped position from a stale session value.
+            assert bootstrap.cursor == 0
+            assert bootstrap.stop_reason == (
+                FailureSweepStopReason.cancelled if cancelled else None
+            )
+            expected_seed = (
+                FailureSweepStopReason.no_failures
+                if total == 0
+                else FailureSweepStopReason.cancelled
+                if cancelled
+                else None
+            )
+            assert bootstrap.seed_reason is expected_seed
+        else:
+            assert bootstrap.cursor == min(
+                sum(len(piece.cases) for piece in pieces), total
+            )
+            assert bootstrap.seed_reason is None
+            assert bootstrap.stop_reason == (
+                FailureSweepStopReason.cancelled if cancelled else pieces[-1].stop_reason
+            )
+
+        final = simulation_lab._sweep_terminal_reason(
+            cursor=bootstrap.cursor,
+            total=total,
+            cancelled=cancelled,
+            stop_reason=bootstrap.stop_reason,
+        )
+        assert final in reasons
+        if cancelled:
+            assert final is FailureSweepStopReason.cancelled
+
