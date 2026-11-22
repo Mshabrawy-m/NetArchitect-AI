@@ -302,6 +302,13 @@ DEFAULT_OSPF_AREA_DEVICE_THRESHOLD: int = 50
 # Maximum number of inert summarization suggestions emitted by one OSPF review.
 MAX_OSPF_SUMMARY_SUGGESTIONS: int = 16
 
+# Maximum number of modeled first-hop gateway redundancy groups on one twin.
+MAX_HA_GROUPS: int = 16
+
+# Maximum member devices in one modeled HA group. Two is the common campus
+# case; the cap keeps priority/election and shared-fate checks bounded.
+MAX_HA_MEMBERS: int = 8
+
 # Maximum characters accepted in one copilot scenario sentence. This is a UI
 # input bound, not a token budget; deterministic parsing always runs first.
 MAX_COPILOT_TEXT_CHARS: int = 1_000

@@ -28,6 +28,7 @@ from core.schemas.routing import TrafficDemand
 from digital_twin.adapters import failed_entities
 from digital_twin.models import DigitalTwin
 from digital_twin.serialization import canonical_payload
+from network.routing.ha import active_member
 from network.routing.paths import (
     RoutePath,
     component_summary_from_router,
@@ -39,6 +40,7 @@ from network.routing.sparse import SparseRouter
 from .models import (
     CongestionLevel,
     DemandEvaluation,
+    FirstHopFailover,
     LinkLoad,
     NetworkState,
     PathSplit,
@@ -641,6 +643,87 @@ def _link_loads(
     return tuple(records)
 
 
+def _first_hop_failovers(
+    twin: DigitalTwin,
+    assumptions: SimulationAssumptions,
+    demand_tuple: tuple[DemandEvaluation, ...],
+    *,
+    failed_devices: tuple[str, ...],
+    router_cache: dict[tuple[object, ...], SparseRouter],
+    deadline: float,
+) -> tuple[FirstHopFailover, ...]:
+    """Return additive modeled first-hop re-homes for failed HA active members.
+
+    This view is default-off and never changes the legacy demand paths, link
+    loads, or metrics. For each group whose nominal active member is modeled
+    down, the baseline (no-failure) path is compared with the evaluated path.
+    A record is emitted when the baseline first hop was the failed active and
+    the evaluated first hop is the next-highest-priority live member. Paths come
+    from the routing engine; no packet behavior is simulated.
+    """
+    if not assumptions.enable_first_hop_failover or not twin.ha_groups:
+        return ()
+
+    failed_set = set(failed_devices)
+    candidates: list[tuple[object, object, object]] = []
+    for group in twin.ha_groups:
+        nominal = active_member(group)
+        if nominal is None or nominal.device_id not in failed_set:
+            continue
+        successor = active_member(group, failed_devices=failed_set)
+        if successor is None or successor.device_id == nominal.device_id:
+            continue
+        candidates.append((group, nominal, successor))
+    if not candidates:
+        return ()
+
+    baseline_key = _routing_key(twin.topology, (), ())
+    baseline = router_cache.get(baseline_key)
+    if baseline is None:
+        baseline = SparseRouter.from_topology(twin.topology)
+        router_cache[baseline_key] = baseline
+
+    records: list[FirstHopFailover] = []
+    for group, nominal, successor in candidates:
+        for demand, evaluation in zip(twin.demands, demand_tuple):
+            _check_deadline(deadline, "first-hop failover")
+            before = shortest_path_from_router(
+                baseline, demand.source, demand.destination
+            )
+            if (
+                not before.reachable
+                or len(before.device_ids) < 2
+                or before.device_ids[1] != nominal.device_id
+            ):
+                continue
+            if (
+                not evaluation.served
+                or len(evaluation.path_device_ids) < 2
+                or evaluation.path_device_ids[1] != successor.device_id
+            ):
+                continue
+            records.append(
+                FirstHopFailover(
+                    group_id=group.id,
+                    demand_name=demand.name,
+                    failed_active=nominal.device_id,
+                    next_active=successor.device_id,
+                    before_path_device_ids=tuple(before.device_ids),
+                    after_path_device_ids=evaluation.path_device_ids,
+                    before_link_ids=tuple(hop.link_id for hop in before.hops),
+                    after_link_ids=evaluation.link_ids,
+                    note=(
+                        f"Modeled HA election: {nominal.device_id} (priority "
+                        f"{nominal.priority}) is down; next-highest-priority live "
+                        f"member {successor.device_id} (priority "
+                        f"{successor.priority}) is the new first hop. Paths are "
+                        "routing-engine paths, not simulated packets."
+                    ),
+                )
+            )
+    return tuple(records)
+
+
 def evaluate(
     twin: DigitalTwin,
     assumptions: SimulationAssumptions | None = None,
@@ -806,6 +889,14 @@ def evaluate(
         served_demand_mbps=served_mbps,
         total_path_cost=float(sum(evaluation.total_cost for evaluation in served)),
         warnings=tuple(warnings),
+        first_hop_failovers=_first_hop_failovers(
+            twin,
+            resolved_assumptions,
+            demand_tuple,
+            failed_devices=selection.devices,
+            router_cache=router_cache,
+            deadline=deadline,
+        ),
     )
 
 

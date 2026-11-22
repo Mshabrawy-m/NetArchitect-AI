@@ -40,6 +40,8 @@ def _serialization_exclude(twin: DigitalTwin) -> set[str] | None:
         exclude.add("security")
     if not twin.shared_risk_groups:
         exclude.add("shared_risk_groups")
+    if not twin.ha_groups:
+        exclude.add("ha_groups")
     return exclude or None
 
 
