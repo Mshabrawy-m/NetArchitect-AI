@@ -22,8 +22,10 @@ __all__ = [
     "ConfigTemplate",
     "CsvTable",
     "config_templates",
+    "contains_arabic",
     "csv_tables",
     "from_json",
+    "logical_to_visual",
     "pdf_page_count",
     "pdf_warnings",
     "to_config_bundle",
@@ -35,6 +37,9 @@ __all__ = [
     "to_markdown",
     "to_mermaid",
     "to_pdf",
+    "topology_figure",
+    "topology_figure_pdf",
+    "topology_flowable",
 ]
 
 _LAZY_EXPORTS = {
@@ -47,6 +52,8 @@ _LAZY_EXPORTS = {
     "config_templates": ".config_templates",
     "csv_tables": ".csv_export",
     "from_json": ".json_export",
+    "contains_arabic": ".arabic",
+    "logical_to_visual": ".arabic",
     "pdf_page_count": ".pdf",
     "pdf_warnings": ".pdf",
     "to_config_bundle": ".config_templates",
@@ -58,6 +65,9 @@ _LAZY_EXPORTS = {
     "to_markdown": ".markdown",
     "to_mermaid": ".mermaid",
     "to_pdf": ".pdf",
+    "topology_figure": ".topology_figure",
+    "topology_figure_pdf": ".topology_figure",
+    "topology_flowable": ".topology_figure",
 }
 
 # Import machinery binds a loaded submodule as an attribute of its package.

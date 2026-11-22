@@ -5,10 +5,13 @@ block, a section list, section content, wrapping and paginating tables, page
 numbers, a header and footer stamped from an injected clock, the exact
 disclosure footer, and a bounded source-value appendix.
 
-Built-in fonts are Latin-only. When the document contains text outside Latin,
-every such character is replaced with ``?`` and a visible notice points the
-reader to the Markdown or JSON export for the original text. Arabic shaping and
-right-to-left layout are therefore not attempted.
+Latin reports use the built-in Helvetica fonts. When a document contains text
+outside Latin, every such character is replaced with ``?`` and a visible notice
+points the reader to the Markdown or JSON export for the original text.
+
+When ``language='ar'`` (or Arabic text is detected in the document), the bundled
+Noto Naskh Arabic font is embedded and Arabic text is shaped and bidi-ordered in
+memory. Unsupported scripts are still replaced with ``?`` and reported.
 """
 
 from __future__ import annotations
@@ -21,6 +24,8 @@ from xml.sax.saxutils import escape
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
     PageBreak,
@@ -32,6 +37,7 @@ from reportlab.platypus import (
 )
 
 from config.limits import MAX_REPORT_TABLE_ROWS
+from core.exceptions import ReportExportError
 from services.reporting.models import (
     DISCLOSURE_TEXT,
     KeyValueBlock,
@@ -41,6 +47,14 @@ from services.reporting.models import (
     TableBlock,
 )
 
+from .arabic import (
+    ARABIC_FONT_NAME,
+    ARABIC_FONT_PATH,
+    contains_arabic,
+    is_arabic_char,
+    logical_to_visual,
+    shape_arabic,
+)
 from .common import enforce_size
 
 PDF_MARGIN = 40.0
@@ -54,6 +68,45 @@ NON_LATIN_NOTICE = (
     "original text."
 )
 _PAGE_OBJECT = re.compile(rb"/Type\s*/Page\b(?!s)")
+_LANGUAGE_ALIASES = {
+    "ar": "ar",
+    "ara": "ar",
+    "arb": "ar",
+    "arabic": "ar",
+    "العربية": "ar",
+}
+_ARABIC_FONT_REGISTERED = False
+
+
+def _normalize_language(language: str) -> str:
+    """Normalize supported language names without importing the UI layer."""
+    return _LANGUAGE_ALIASES.get(str(language).strip().lower(), "en")
+
+
+def ensure_arabic_font() -> str:
+    """Register the bundled Arabic font once, lazily."""
+    global _ARABIC_FONT_REGISTERED
+    if _ARABIC_FONT_REGISTERED:
+        return ARABIC_FONT_NAME
+    if not ARABIC_FONT_PATH.is_file():
+        raise ReportExportError(
+            f"Bundled Arabic font is missing: {ARABIC_FONT_PATH}"
+        )
+    try:
+        pdfmetrics.registerFont(TTFont(ARABIC_FONT_NAME, str(ARABIC_FONT_PATH)))
+        pdfmetrics.registerFontFamily(
+            ARABIC_FONT_NAME,
+            normal=ARABIC_FONT_NAME,
+            bold=ARABIC_FONT_NAME,
+            italic=ARABIC_FONT_NAME,
+            boldItalic=ARABIC_FONT_NAME,
+        )
+    except Exception as error:  # pragma: no cover - defensive font load
+        raise ReportExportError(
+            f"Could not load the bundled Arabic font: {error}"
+        ) from error
+    _ARABIC_FONT_REGISTERED = True
+    return ARABIC_FONT_NAME
 
 
 def _pdf_date(moment: datetime) -> str:
@@ -117,15 +170,65 @@ def _safe(text: str) -> str:
     return escape(ascii_text, {'"': "&quot;"})
 
 
+def _safe_arabic(text: str) -> str:
+    """Escape markup, shape Arabic, and order runs for ReportLab drawing."""
+    normalized = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    kept = "".join(
+        character
+        if (
+            character == "\n"
+            or ord(character) >= 32
+            and (ord(character) < 128 or is_arabic_char(character))
+        )
+        else "?"
+        for character in normalized
+    )
+    return logical_to_visual(shape_arabic(escape(kept, {'"': "&quot;"})))
+
+
+def _render_text(text: str, arabic_mode: bool) -> str:
+    """Render one string with the font/coverage rules of the active mode."""
+    if arabic_mode:
+        return _safe_arabic(text)
+    return _safe(text)
+
+
+def _arabic_styles() -> dict[str, ParagraphStyle]:
+    """Derive report styles that all use the single registered Arabic font."""
+    return {
+        name: ParagraphStyle(
+            f"Arabic{style.name}",
+            parent=style,
+            fontName=ARABIC_FONT_NAME,
+        )
+        for name, style in _STYLES.items()
+    }
+
+
 def _cell_text(text: str) -> str:
     if len(text) > MAX_PDF_CELL_CHARS:
         return text[:MAX_PDF_CELL_CHARS] + " [cell truncated for PDF]"
     return text
 
 
-def pdf_warnings(document: ReportDocument) -> tuple[str, ...]:
-    """Return visible font-coverage warnings for ``document``."""
-    count = sum(_non_latin_count(text) for text in _document_strings(document))
+def pdf_warnings(
+    document: ReportDocument, *, language: str = "en"
+) -> tuple[str, ...]:
+    """Return visible font-coverage warnings for ``document``.
+
+    With ``language='ar'`` Arabic characters are covered by the bundled font,
+    so only genuinely unsupported scripts are counted. The no-argument call
+    keeps the legacy Latin-only behaviour.
+    """
+    arabic_mode = _normalize_language(language) == "ar"
+    count = 0
+    for text in _document_strings(document):
+        for character in text:
+            if ord(character) < 128:
+                continue
+            if arabic_mode and is_arabic_char(character):
+                continue
+            count += 1
     if count == 0:
         return ()
     return (NON_LATIN_NOTICE.format(count=count),)
@@ -256,14 +359,21 @@ def _make_table(
     columns: tuple[str, ...],
     rows: tuple[tuple[str, ...], ...],
     styles: dict[str, ParagraphStyle],
+    *,
+    arabic_mode: bool = False,
 ) -> Table:
     data = [
-        [Paragraph(_safe(column), styles["cell_header"]) for column in columns]
+        [
+            Paragraph(_render_text(column, arabic_mode), styles["cell_header"])
+            for column in columns
+        ]
     ]
     for row in rows:
         data.append(
             [
-                Paragraph(_safe(_cell_text(cell)), styles["cell"])
+                Paragraph(
+                    _render_text(_cell_text(cell), arabic_mode), styles["cell"]
+                )
                 for cell in row
             ]
         )
@@ -293,19 +403,22 @@ def _make_table(
     return table
 
 
-def _source_caption(provenance) -> Paragraph:
+def _source_caption(provenance, styles, *, arabic_mode: bool = False) -> Paragraph:
     return Paragraph(
-        _safe(
+        _render_text(
             f"Source: {provenance.step} / {provenance.tool} / "
-            f"twin {provenance.twin_version}"
+            f"twin {provenance.twin_version}",
+            arabic_mode,
         ),
-        _STYLES["caption"],
+        styles["caption"],
     )
 
 
-def _block_flowables(block, styles) -> list:
+def _block_flowables(block, styles, *, arabic_mode: bool = False) -> list:
     if isinstance(block, ParagraphBlock):
-        return [Paragraph(_safe(block.text), styles["body"])]
+        return [
+            Paragraph(_render_text(block.text, arabic_mode), styles["body"])
+        ]
     if isinstance(block, NoteBlock):
         prefix = {
             "info": "Note",
@@ -314,31 +427,44 @@ def _block_flowables(block, styles) -> list:
         }[block.severity]
         return [
             Paragraph(
-                _safe(f"{prefix}: {block.text}"),
+                _render_text(f"{prefix}: {block.text}", arabic_mode),
                 styles["note"],
             )
         ]
     if isinstance(block, KeyValueBlock):
         flowables: list = []
         if block.title:
-            flowables.append(Paragraph(_safe(block.title), styles["subheading"]))
+            flowables.append(
+                Paragraph(_render_text(block.title, arabic_mode), styles["subheading"])
+            )
         rows = tuple(
             (item.key, f"{item.value} {item.unit}".strip(), item.provenance.step)
             for item in block.items
         )
-        flowables.append(_make_table(("Key", "Value", "Step"), rows, styles))
+        flowables.append(
+            _make_table(("Key", "Value", "Step"), rows, styles, arabic_mode=arabic_mode)
+        )
         flowables.append(Spacer(1, 4))
         return flowables
     if isinstance(block, TableBlock):
         flowables = []
         if block.title:
-            flowables.append(Paragraph(_safe(block.title), styles["subheading"]))
-        flowables.append(_make_table(block.columns, block.rows, styles))
+            flowables.append(
+                Paragraph(_render_text(block.title, arabic_mode), styles["subheading"])
+            )
+        flowables.append(
+            _make_table(block.columns, block.rows, styles, arabic_mode=arabic_mode)
+        )
         if block.truncated:
             flowables.append(
-                Paragraph(_safe(block.truncation_note()), styles["caption"])
+                Paragraph(
+                    _render_text(block.truncation_note(), arabic_mode),
+                    styles["caption"],
+                )
             )
-        flowables.append(_source_caption(block.provenance))
+        flowables.append(
+            _source_caption(block.provenance, styles, arabic_mode=arabic_mode)
+        )
         flowables.append(Spacer(1, 4))
         return flowables
     raise TypeError(f"Unsupported report block: {type(block).__name__}")
@@ -347,15 +473,18 @@ def _block_flowables(block, styles) -> list:
 _STYLES = _styles()
 
 
-def _value_appendix(document: ReportDocument, styles) -> list:
+def _value_appendix(
+    document: ReportDocument, styles, *, arabic_mode: bool = False
+) -> list:
     flowables: list = [
         PageBreak(),
         Paragraph("Appendix: source values", styles["heading"]),
         Paragraph(
-            _safe(
+            _render_text(
                 "Every number printed in this report is listed here with the "
                 "step, tool, and twin fingerprint that produced it. The JSON "
-                "export carries the complete registry."
+                "export carries the complete registry.",
+                arabic_mode,
             ),
             styles["body"],
         ),
@@ -369,14 +498,22 @@ def _value_appendix(document: ReportDocument, styles) -> list:
         )
         for record in document.values[:MAX_REPORT_TABLE_ROWS]
     )
-    flowables.append(_make_table(("Key", "Label", "Value", "Source"), rows, styles))
+    flowables.append(
+        _make_table(
+            ("Key", "Label", "Value", "Source"),
+            rows,
+            styles,
+            arabic_mode=arabic_mode,
+        )
+    )
     if len(document.values) > MAX_REPORT_TABLE_ROWS:
         flowables.append(
             Paragraph(
-                _safe(
+                _render_text(
                     f"Showing first {MAX_REPORT_TABLE_ROWS} of "
                     f"{len(document.values)} values. The JSON export contains "
-                    "every record."
+                    "every record.",
+                    arabic_mode,
                 ),
                 styles["caption"],
             )
@@ -384,77 +521,89 @@ def _value_appendix(document: ReportDocument, styles) -> list:
     return flowables
 
 
-def _build_story(document: ReportDocument, styles, *, generated_at: datetime) -> list:
+def _build_story(
+    document: ReportDocument,
+    styles,
+    *,
+    generated_at: datetime,
+    arabic_mode: bool = False,
+    warnings_language: str = "en",
+) -> list:
+    def text(value: str) -> str:
+        return _render_text(value, arabic_mode)
+
     story: list = [
-        Paragraph(_safe(document.title), styles["title"]),
+        Paragraph(text(document.title), styles["title"]),
     ]
     if document.subtitle:
-        story.append(Paragraph(_safe(document.subtitle), styles["subtitle"]))
+        story.append(Paragraph(text(document.subtitle), styles["subtitle"]))
     story.extend(
         [
-            Paragraph(_safe(f"Twin: {document.twin.name}"), styles["meta"]),
+            Paragraph(text(f"Twin: {document.twin.name}"), styles["meta"]),
             Paragraph(
-                _safe(f"Twin fingerprint: {document.twin.fingerprint}"),
+                text(f"Twin fingerprint: {document.twin.fingerprint}"),
                 styles["meta"],
             ),
             Paragraph(
-                _safe(f"Generated at: {generated_at.isoformat()}"),
+                text(f"Generated at: {generated_at.isoformat()}"),
                 styles["meta"],
             ),
             Paragraph(
-                _safe(f"Report schema version: {document.schema_version}"),
+                text(f"Report schema version: {document.schema_version}"),
                 styles["meta"],
             ),
             Spacer(1, 6),
         ]
     )
     for label in document.labels:
-        story.append(Paragraph(_safe(label), styles["label"], bulletText="-"))
+        story.append(Paragraph(text(label), styles["label"], bulletText="-"))
     story.append(Spacer(1, 6))
-    for warning in pdf_warnings(document):
-        story.append(Paragraph(_safe(warning), styles["notice"]))
+    for warning in pdf_warnings(document, language=warnings_language):
+        story.append(Paragraph(text(warning), styles["notice"]))
     story.append(Paragraph("Contents", styles["heading"]))
     for index, section in enumerate(document.sections, start=1):
         state = "available" if section.status.value == "available" else "not run"
         story.append(
             Paragraph(
-                _safe(f"{index}. {section.title} ({state})"),
+                text(f"{index}. {section.title} ({state})"),
                 styles["body"],
             )
         )
     for index, section in enumerate(document.sections, start=1):
-        story.append(Paragraph(_safe(f"{index}. {section.title}"), styles["heading"]))
+        story.append(
+            Paragraph(text(f"{index}. {section.title}"), styles["heading"])
+        )
         if section.status.value == "not_run":
             story.extend(
                 [
                     Paragraph(
-                        _safe(
+                        text(
                             f"This section was not run. Reason: "
                             f"{section.unavailable_reason}"
                         ),
                         styles["body"],
                     ),
                     Paragraph(
-                        _safe(f"Produced on: {section.producer_page}"),
+                        text(f"Produced on: {section.producer_page}"),
                         styles["caption"],
                     ),
                 ]
             )
             continue
         for block in section.blocks:
-            story.extend(_block_flowables(block, styles))
+            story.extend(_block_flowables(block, styles, arabic_mode=arabic_mode))
     if document.ai is not None:
         story.append(Paragraph("AI-generated explanation", styles["heading"]))
-        story.append(Paragraph(_safe(document.ai.label), styles["caption"]))
+        story.append(Paragraph(text(document.ai.label), styles["caption"]))
         if document.ai.text:
-            story.append(Paragraph(_safe(document.ai.text), styles["body"]))
+            story.append(Paragraph(text(document.ai.text), styles["body"]))
         else:
             story.append(
                 Paragraph("No AI-written explanation is included.", styles["body"])
             )
         if document.ai.note:
-            story.append(Paragraph(_safe(document.ai.note), styles["caption"]))
-    story.extend(_value_appendix(document, styles))
+            story.append(Paragraph(text(document.ai.note), styles["caption"]))
+    story.extend(_value_appendix(document, styles, arabic_mode=arabic_mode))
     return story
 
 
@@ -464,7 +613,10 @@ def _numbered_canvas(
     header_title: str,
     footer_text: str,
     pdf_date: str,
+    arabic_mode: bool = False,
 ):
+    font_name = ARABIC_FONT_NAME if arabic_mode else "Helvetica"
+
     class NumberedCanvas(Canvas):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -486,20 +638,28 @@ def _numbered_canvas(
         def _decorate(self, total: int) -> None:
             width, height = A4
             self.saveState()
-            self.setFont("Helvetica", 7.5)
+            self.setFont(font_name, 7.5)
             self.setFillColor(colors.HexColor("#444444"))
-            self.drawString(PDF_MARGIN, height - 30, _safe(header_title))
-            self.drawRightString(width - PDF_MARGIN, height - 30, _safe(header_meta))
+            self.drawString(
+                PDF_MARGIN,
+                height - 30,
+                _render_text(header_title, arabic_mode),
+            )
+            self.drawRightString(
+                width - PDF_MARGIN,
+                height - 30,
+                _render_text(header_meta, arabic_mode),
+            )
             self.setStrokeColor(colors.HexColor("#b8bfc7"))
             self.setLineWidth(0.4)
             self.line(PDF_MARGIN, height - 34, width - PDF_MARGIN, height - 34)
             self.line(PDF_MARGIN, 34, width - PDF_MARGIN, 34)
-            self.setFont("Helvetica", 7)
-            self.drawString(PDF_MARGIN, 24, _safe(footer_text))
+            self.setFont(font_name, 7)
+            self.drawString(PDF_MARGIN, 24, _render_text(footer_text, arabic_mode))
             self.drawRightString(
                 width - PDF_MARGIN,
                 24,
-                _safe(f"Page {self._pageNumber} of {total}"),
+                _render_text(f"Page {self._pageNumber} of {total}", arabic_mode),
             )
             self.restoreState()
 
@@ -515,9 +675,23 @@ def to_pdf(
     document: ReportDocument,
     *,
     generated_at: datetime | None = None,
+    language: str = "en",
 ) -> bytes:
-    """Render ``document`` as deterministic PDF bytes."""
+    """Render ``document`` as deterministic PDF bytes.
+
+    ``language='ar'`` selects the embedded Arabic font. Arabic text is also
+    detected automatically so a translated document renders without a caller
+    having to pass the language again; the legacy warning still appears in that
+    implicit case for backward compatibility.
+    """
     moment = generated_at or document.generated_at
+    normalized = _normalize_language(language)
+    arabic_mode = normalized == "ar" or any(
+        contains_arabic(text) for text in _document_strings(document)
+    )
+    if arabic_mode:
+        ensure_arabic_font()
+    styles = _arabic_styles() if arabic_mode else _STYLES
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -534,7 +708,13 @@ def to_pdf(
         invariant=1,
     )
     doc.build(
-        _build_story(document, _STYLES, generated_at=moment),
+        _build_story(
+            document,
+            styles,
+            generated_at=moment,
+            arabic_mode=arabic_mode,
+            warnings_language="ar" if normalized == "ar" else "en",
+        ),
         canvasmaker=_numbered_canvas(
             header_meta=(
                 f"{PDF_HEADER_META} | Generated {moment.isoformat()}"
@@ -542,6 +722,7 @@ def to_pdf(
             header_title=f"NetArchitect AI - {document.title}",
             footer_text=DISCLOSURE_TEXT,
             pdf_date=_pdf_date(moment),
+            arabic_mode=arabic_mode,
         ),
     )
     return enforce_size(buffer.getvalue(), kind="PDF")
