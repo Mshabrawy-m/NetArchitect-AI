@@ -28,6 +28,15 @@ from core.schemas.routing import TrafficDemand
 from digital_twin.adapters import failed_entities
 from digital_twin.models import DigitalTwin
 from digital_twin.serialization import canonical_payload
+from network.qos.admission import (
+    ADMISSION_NOTE,
+    STARVED_REASON,
+    TRAFFIC_CLASS_PRIORITY,
+    TrafficClass,
+    build_qos_admission_plan,
+    demand_traffic_class,
+    per_class_cap_mbps,
+)
 from network.routing.ha import active_member
 from network.routing.paths import (
     RoutePath,
@@ -381,29 +390,80 @@ def _path_bottleneck(
     return available, bottleneck_id
 
 
+def _qos_path_availability(
+    path: RoutePath,
+    link_index: dict[str, Link],
+    traffic_class: TrafficClass,
+    class_caps: dict[str, dict[TrafficClass, float]],
+    class_loads: dict[str, dict[TrafficClass, float]],
+    shared_residual: float,
+) -> tuple[float, bool]:
+    """Return ``(effective residual Mbps, starved)`` for one admitted-class path.
+
+    The effective residual is the minimum of the normal shared-capacity residual
+    and every hop's remaining modeled class-cap share. ``starved`` is true when
+    a higher-priority class has already consumed capacity on the path or a
+    class cap is exhausted. This is an admission-model label, not a queue state.
+    """
+    available = shared_residual
+    starved = False
+    priority = TRAFFIC_CLASS_PRIORITY[traffic_class]
+    for link_id in (hop.link_id for hop in path.hops):
+        link = link_index[link_id]
+        cap_mbps = per_class_cap_mbps(
+            float(link.capacity_mbps), class_caps.get(link_id, {})
+        ).get(traffic_class, float("inf"))
+        used_by_class = class_loads.get(link_id, {}).get(traffic_class, 0.0)
+        cap_gap = max(0.0, cap_mbps - used_by_class)
+        higher_load = sum(
+            amount
+            for other_class, amount in class_loads.get(link_id, {}).items()
+            if TRAFFIC_CLASS_PRIORITY[other_class] < priority
+        )
+        available = min(available, cap_gap)
+        starved = starved or higher_load > 0.0 or cap_gap <= 0.0
+    return available, starved
+
+
 def _capacity_aware_evaluations(
     twin: DigitalTwin,
     *,
     router: SparseRouter,
     known_devices: set[str],
     deadline: float,
+    qos_enabled: bool = False,
 ) -> tuple[tuple[DemandEvaluation, ...], bool]:
     """Place demands by capacity-aware admission control, in deterministic order.
 
-    Demands are sorted by descending bandwidth, then by demand id. Each demand
-    takes the first lexicographic lowest-cost path with enough residual
-    capacity. Residual accounting follows the modeled direction rules: directed
-    links consume only their permitted direction; undirected links consume one
-    shared pool from both directions. A rejected demand keeps the best blocked
-    path, defined as the equal-cost path with the largest bottleneck residual,
-    with lexicographic path order as the tie-break.
+    By default demands are sorted by descending bandwidth, then by demand name,
+    exactly as in the legacy model. When ``qos_enabled`` is set, a modeled
+    strict-priority order and optional per-link class caps are applied first;
+    this is an admission model, not a queueing simulator. Each demand takes the
+    first lexicographic lowest-cost path with enough residual capacity. Residual
+    accounting follows the modeled direction rules: directed links consume only
+    their permitted direction; undirected links consume one shared pool from
+    both directions. A rejected demand keeps the best blocked path, defined as
+    the equal-cost path with the largest bottleneck residual, with lexicographic
+    path order as the tie-break.
     """
     link_index = {link.id: link for link in twin.topology.links}
     loads: dict[str, list[float]] = {}
-    ordered = sorted(
-        enumerate(twin.demands),
-        key=lambda item: (-float(item[1].bandwidth_mbps), item[1].name),
+    plan = build_qos_admission_plan(twin) if qos_enabled else None
+    ordered_indices = plan.demand_indices if plan is not None else tuple(
+        range(len(twin.demands))
     )
+    if plan is None:
+        ordered_indices = tuple(
+            sorted(
+                ordered_indices,
+                key=lambda index: (
+                    -float(twin.demands[index].bandwidth_mbps),
+                    twin.demands[index].name,
+                ),
+            )
+        )
+    ordered = tuple((index, twin.demands[index]) for index in ordered_indices)
+    class_loads: dict[str, dict[TrafficClass, float]] = {}
     results: list[DemandEvaluation | None] = [None] * len(twin.demands)
     truncated = False
 
@@ -413,6 +473,7 @@ def _capacity_aware_evaluations(
         source = demand.source
         destination = demand.destination
         bandwidth = float(demand.bandwidth_mbps)
+        traffic_class = demand_traffic_class(demand, twin.qos_design) if qos_enabled else None
 
         if source not in known_devices:
             results[index] = DemandEvaluation(
@@ -457,11 +518,21 @@ def _capacity_aware_evaluations(
             )
             continue
 
-        admitted = None
+        admitted: tuple[RoutePath, float, str, bool] | None = None
         for path in paths:
             residual, bottleneck_id = _path_bottleneck(path, link_index, loads)
+            starved = False
+            if qos_enabled and traffic_class is not None and plan is not None:
+                residual, starved = _qos_path_availability(
+                    path,
+                    link_index,
+                    traffic_class,
+                    plan.class_caps,
+                    class_loads,
+                    residual,
+                )
             if bandwidth <= residual:
-                admitted = (path, residual, bottleneck_id)
+                admitted = (path, residual, bottleneck_id, starved)
                 break
 
         if admitted is None:
@@ -469,19 +540,44 @@ def _capacity_aware_evaluations(
             best_residual, best_bottleneck = _path_bottleneck(
                 best_path, link_index, loads
             )
+            best_starved = False
+            if qos_enabled and traffic_class is not None and plan is not None:
+                best_residual, best_starved = _qos_path_availability(
+                    best_path,
+                    link_index,
+                    traffic_class,
+                    plan.class_caps,
+                    class_loads,
+                    best_residual,
+                )
             for path in paths[1:]:
                 residual, bottleneck_id = _path_bottleneck(path, link_index, loads)
+                starved = False
+                if qos_enabled and traffic_class is not None and plan is not None:
+                    residual, starved = _qos_path_availability(
+                        path,
+                        link_index,
+                        traffic_class,
+                        plan.class_caps,
+                        class_loads,
+                        residual,
+                    )
                 if residual > best_residual:
                     best_path = path
                     best_residual = residual
                     best_bottleneck = bottleneck_id
+                    best_starved = starved
             results[index] = DemandEvaluation(
                 name=name,
                 source=source,
                 destination=destination,
                 bandwidth_mbps=bandwidth,
                 served=False,
-                reason=INSUFFICIENT_CAPACITY_REASON,
+                reason=(
+                    STARVED_REASON
+                    if best_starved
+                    else INSUFFICIENT_CAPACITY_REASON
+                ),
                 blocked_path_device_ids=tuple(best_path.device_ids),
                 blocked_link_ids=tuple(hop.link_id for hop in best_path.hops),
                 bottleneck_link_id=best_bottleneck,
@@ -491,7 +587,7 @@ def _capacity_aware_evaluations(
             )
             continue
 
-        path, _, _ = admitted
+        path, _, _, _ = admitted
         for source_id, target_id, link_id in zip(
             path.device_ids,
             path.device_ids[1:],
@@ -504,6 +600,9 @@ def _capacity_aware_evaluations(
                 bandwidth,
                 loads,
             )
+            if qos_enabled and traffic_class is not None:
+                per_link = class_loads.setdefault(link_id, {})
+                per_link[traffic_class] = per_link.get(traffic_class, 0.0) + bandwidth
         results[index] = DemandEvaluation(
             name=name,
             source=source,
@@ -768,6 +867,8 @@ def evaluate(
             f"{len(blocked)} link(s) from the effective topology. This is a "
             "documented design rule, not a protocol simulation."
         )
+    if resolved_assumptions.enable_strict_priority_qos:
+        warnings.append(ADMISSION_NOTE)
 
     router_cache = _router_cache if _router_cache is not None else {}
     routing_key = _routing_key(
@@ -817,6 +918,7 @@ def evaluate(
             router=router,
             known_devices=known_devices,
             deadline=deadline,
+            qos_enabled=resolved_assumptions.enable_strict_priority_qos,
         )
 
     if truncated:
