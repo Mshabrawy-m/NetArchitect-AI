@@ -15,14 +15,20 @@ placeholder number for missing data.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from config.limits import MAX_REPORT_TABLE_ROWS
+from core.schemas.validation import Finding
 from digital_twin import DigitalTwin, failed_entities
+from network.addressing.dual_stack import validate_dual_stack
+from network.addressing.nat import analyze_nat_plan
 from network.analysis import METRIC_DEFINITIONS, AnalysisReport, analyze_topology
 from network.routing import reachability_matrix, routing_table
+from network.routing.ha import analyze_ha_groups
+from network.routing.ospf import analyze_ospf_design
 from security import SECURITY_DISCLAIMER, SecurityAnalysis
 from simulation import MODEL_NOTE, twin_reference
 
@@ -3197,6 +3203,366 @@ class _Builder:
         return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
 
     # ------------------------------------------------------------------
+    # 9c. L1-L4 modeled L3 design rules (optional twin fields)
+    # ------------------------------------------------------------------
+    def _l3_finding_notes(
+        self,
+        key_prefix: str,
+        findings: Sequence[Finding],
+        *,
+        step: str,
+        tool: str,
+    ) -> list[Any]:
+        return [
+            NoteBlock(
+                text=self.numbers.scan(
+                    f"{key_prefix}.finding.{index}",
+                    f"{key_prefix} modeled finding",
+                    finding.explanation,
+                    step=step,
+                    tool=tool,
+                ),
+                severity="warning",
+                provenance=self.prov(step, tool),
+            )
+            for index, finding in enumerate(findings)
+        ]
+
+    def ipv6_dual_stack(self) -> ReportSection:
+        section_id = "ipv6_dual_stack"
+        title = "IPv6 dual-stack plan"
+        plan = self.twin.ipv6_plan
+        if plan is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No IPv6 dual-stack plan is stored in the twin. Model one on the "
+                "L3 Design or IP Addressing page.",
+                "L3 Design",
+            )
+        values = self.numbers
+        step = "design"
+        tool = "network.addressing.plan_dual_stack"
+        block = values.text("ipv6.block", "Modeled IPv6 block", plan.block, step=step, tool=tool)
+        prefix_length = values.number(
+            "ipv6.prefix_length", "Modeled VLAN prefix length", plan.prefix_length,
+            step=step, tool=tool, digits=0,
+        )
+        used = values.number(
+            "ipv6.prefixes_used", "Prefixes used", plan.prefixes_used,
+            step=step, tool=tool, digits=0,
+        )
+        available = values.number(
+            "ipv6.prefixes_available", "Prefixes available", plan.prefixes_available,
+            step=step, tool=tool, digits=0,
+        )
+        utilization = values.number(
+            "ipv6.utilization", "Prefix utilization", plan.utilization_percent,
+            step=step, tool=tool,
+        )
+        summary = values.scan(
+            "ipv6.summary",
+            "Dual-stack summary",
+            (
+                f"Modeled block {block} carves {prefix_length}-bit prefixes: "
+                f"{used} of {available} prefix(es) are used, a prefix utilization "
+                f"of {utilization} percent. IPv6 hosts are never enumerated."
+            ),
+            step=step,
+            tool=tool,
+        )
+        blocks: list[Any] = [
+            ParagraphBlock(text=summary, provenance=self.prov(step, tool)),
+            NoteBlock(
+                text=(
+                    "Design rules only: no IPv6 address assignment, router "
+                    "advertisement, or packet behavior is applied to equipment."
+                ),
+                severity="limitation",
+                provenance=self.prov(step, tool),
+            ),
+        ]
+        rows: list[tuple[str, ...]] = []
+        for index, item in enumerate(plan.assignments):
+            rows.append(
+                (
+                    item.name,
+                    values.number(
+                        f"ipv6.assignment.{index}.vlan",
+                        f"VLAN for {item.name}",
+                        item.vlan_id if item.vlan_id is not None else 0,
+                        step=step, tool=tool, digits=0,
+                    ) if item.vlan_id is not None else "-",
+                    item.ipv4_network or "-",
+                    item.ipv6_network,
+                    item.scope.value,
+                    item.origin,
+                )
+            )
+        blocks.append(
+            self.table("ipv6_assignments", "Modeled prefix pairs",
+                       ("Name", "VLAN", "IPv4", "IPv6", "Scope", "Origin"), rows,
+                       step=step, tool=tool)
+        )
+        if plan.unallocated:
+            blocks.append(
+                NoteBlock(
+                    text=values.scan(
+                        "ipv6.unallocated",
+                        "Unallocated dual-stack items",
+                        "Requests without a modeled prefix: " + ", ".join(plan.unallocated),
+                        step=step, tool=tool,
+                    ),
+                    severity="warning",
+                    provenance=self.prov(step, tool),
+                )
+            )
+        findings = validate_dual_stack(
+            plan.block, plan, addressing=self.twin.addressing
+        )
+        blocks.extend(
+            self._l3_finding_notes("ipv6", findings, step=step, tool=tool)
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def nat_plan(self) -> ReportSection:
+        section_id = "nat_plan"
+        title = "NAT/PAT plan"
+        plan = self.twin.nat_plan
+        if plan is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No NAT/PAT plan is stored in the twin. Model one on the L3 Design "
+                "or IP Addressing page.",
+                "L3 Design",
+            )
+        values = self.numbers
+        step = "design"
+        tool = "network.addressing.analyze_nat_plan"
+        analysis = analyze_nat_plan(plan)
+        rule_count = values.number(
+            "nat.rule_count", "Modeled NAT rules", len(plan.rules),
+            step=step, tool=tool, digits=0,
+        )
+        paragraph = ParagraphBlock(
+            text=(
+                f"The modeled NAT plan contains {rule_count} rule(s). Sizing uses "
+                "prefix arithmetic and documented session assumptions only; no "
+                "translation or packet behavior is simulated."
+            ),
+            provenance=self.prov(step, tool),
+        )
+        blocks: list[Any] = [paragraph]
+        rows: list[tuple[str, ...]] = []
+        for index, item in enumerate(analysis.sizings):
+            rows.append(
+                (
+                    item.rule_id,
+                    item.nat_type,
+                    values.number(f"nat.sizing.{index}.hosts", "Inside hosts",
+                                  item.inside_hosts, step=step, tool=tool, digits=0),
+                    values.number(f"nat.sizing.{index}.addresses", "Pool addresses",
+                                  item.pool_addresses, step=step, tool=tool, digits=0),
+                    values.number(f"nat.sizing.{index}.required", "Required addresses",
+                                  item.required_addresses, step=step, tool=tool, digits=0),
+                    values.number(f"nat.sizing.{index}.sessions", "Required sessions",
+                                  item.required_sessions, step=step, tool=tool, digits=0),
+                    values.number(f"nat.sizing.{index}.capacity", "Session capacity",
+                                  item.session_capacity, step=step, tool=tool, digits=0),
+                    values.number(f"nat.sizing.{index}.ports", "Usable ports per address",
+                                  item.usable_ports_per_address, step=step, tool=tool,
+                                  digits=0),
+                )
+            )
+        blocks.append(
+            self.table(
+                "nat_sizing",
+                "Hand-checkable NAT sizing",
+                ("Rule", "Type", "Hosts", "Pool addresses", "Required addresses",
+                 "Sessions", "Session capacity", "Ports/address"),
+                rows, step=step, tool=tool,
+            )
+        )
+        for index, assumption in enumerate(analysis.assumptions):
+            blocks.append(
+                NoteBlock(
+                    text=values.scan(
+                        f"nat.assumption.{index}", "Modeled NAT assumption",
+                        assumption, step=step, tool=tool,
+                    ),
+                    severity="info",
+                    provenance=self.prov(step, tool),
+                )
+            )
+        blocks.extend(
+            self._l3_finding_notes("nat", analysis.findings, step=step, tool=tool)
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def ospf_area_design(self) -> ReportSection:
+        section_id = "ospf_area_design"
+        title = "OSPF area design"
+        design = self.twin.ospf_design
+        if design is None:
+            return self.not_run(
+                section_id,
+                title,
+                "No OSPF area design is stored in the twin. Model one on the L3 "
+                "Design page.",
+                "L3 Design",
+            )
+        values = self.numbers
+        step = "design"
+        tool = "network.routing.analyze_ospf_design"
+        analysis = analyze_ospf_design(design, self.twin.topology)
+        area_count = values.number(
+            "ospf.areas", "Modeled areas", len(design.areas),
+            step=step, tool=tool, digits=0,
+        )
+        router_count = values.number(
+            "ospf.routers", "Routers with derived roles", len(analysis.routers),
+            step=step, tool=tool, digits=0,
+        )
+        paragraph = ParagraphBlock(
+            text=(
+                f"The modeled OSPF design declares {area_count} area(s) and derives "
+                f"roles for {router_count} router(s). Area membership, ABR/ASBR "
+                "roles, costs, and summaries are design rules; no protocol "
+                "behavior or route installation is simulated."
+            ),
+            provenance=self.prov(step, tool),
+        )
+        blocks: list[Any] = [paragraph]
+        router_rows = [
+            (
+                router.device_id,
+                ", ".join(str(area) for area in router.area_ids),
+                router.role.value,
+            )
+            for router in analysis.routers
+        ]
+        blocks.append(
+            self.table("ospf_routers", "Derived router roles",
+                       ("Device", "Areas", "Role"), router_rows,
+                       step=step, tool=tool)
+        )
+        cost_rows: list[tuple[str, ...]] = []
+        for index, item in enumerate(analysis.link_costs):
+            cost_rows.append(
+                (
+                    item.link_id,
+                    values.number(f"ospf.cost.{index}.capacity", "Capacity (Mbps)",
+                                  item.capacity_mbps, step=step, tool=tool),
+                    values.number(f"ospf.cost.{index}.base", "Base cost",
+                                  item.base_cost, step=step, tool=tool),
+                    values.number(f"ospf.cost.{index}.effective", "Effective cost",
+                                  item.effective_cost, step=step, tool=tool),
+                    values.scan(f"ospf.cost.{index}.formula", "Cost formula",
+                                item.formula, step=step, tool=tool),
+                )
+            )
+        blocks.append(
+            self.table("ospf_link_costs", "Modeled link costs",
+                       ("Link", "Capacity (Mbps)", "Base", "Effective", "Formula"),
+                       cost_rows, step=step, tool=tool)
+        )
+        summary_rows = [
+            (
+                str(item.area_id),
+                values.scan(f"ospf.summary.{index}.cidr", "Inert summary",
+                            item.summary, step=step, tool=tool),
+                ", ".join(item.covered_subnets),
+            )
+            for index, item in enumerate(analysis.summaries)
+        ]
+        if summary_rows:
+            blocks.append(
+                self.table("ospf_summaries", "Inert summary suggestions",
+                           ("Area", "Summary", "Covered subnets"), summary_rows,
+                           step=step, tool=tool)
+            )
+        for index, assumption in enumerate(analysis.assumptions):
+            blocks.append(
+                NoteBlock(
+                    text=values.scan(
+                        f"ospf.assumption.{index}", "Modeled OSPF assumption",
+                        assumption, step=step, tool=tool,
+                    ),
+                    severity="info",
+                    provenance=self.prov(step, tool),
+                )
+            )
+        blocks.extend(
+            self._l3_finding_notes("ospf", analysis.findings, step=step, tool=tool)
+        )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    def gateway_redundancy(self) -> ReportSection:
+        section_id = "gateway_redundancy"
+        title = "Gateway redundancy"
+        if not self.twin.ha_groups:
+            return self.not_run(
+                section_id,
+                title,
+                "No first-hop redundancy groups are stored in the twin. Model "
+                "them on the L3 Design page.",
+                "L3 Design",
+            )
+        values = self.numbers
+        step = "design"
+        tool = "network.routing.analyze_ha_groups"
+        analysis = analyze_ha_groups(
+            self.twin.ha_groups, self.twin.topology, vlan_plan=self.twin.vlan_plan
+        )
+        group_count = values.number(
+            "ha.groups", "Modeled gateway groups", len(self.twin.ha_groups),
+            step=step, tool=tool, digits=0,
+        )
+        paragraph = ParagraphBlock(
+            text=(
+                f"The twin records {group_count} modeled gateway group(s). Active "
+                "members follow the documented priority and tie rules; no VRRP "
+                "or HSRP behavior is simulated."
+            ),
+            provenance=self.prov(step, tool),
+        )
+        blocks: list[Any] = [paragraph]
+        rows: list[tuple[str, ...]] = []
+        for index, group in enumerate(self.twin.ha_groups):
+            rows.append(
+                (
+                    group.id,
+                    str(group.virtual_ip),
+                    str(group.subnet),
+                    values.number(f"ha.group.{index}.members", "Members",
+                                  len(group.members), step=step, tool=tool, digits=0),
+                    analysis.active_members.get(group.id, "none"),
+                    "yes" if group.preempt else "no",
+                )
+            )
+        blocks.append(
+            self.table("ha_groups", "Modeled first-hop groups",
+                       ("Group", "VIP", "Subnet", "Members", "Active", "Preempt"),
+                       rows, step=step, tool=tool)
+        )
+        for finding_index, finding in enumerate(analysis.findings):
+            blocks.append(
+                NoteBlock(
+                    text=values.scan(
+                        f"ha.finding.{finding_index}",
+                        "Gateway redundancy finding",
+                        finding.explanation,
+                        step=step,
+                        tool=tool,
+                    ),
+                    severity="warning",
+                    provenance=self.prov(step, tool),
+                )
+            )
+        return ReportSection(id=section_id, title=title, blocks=tuple(blocks))
+
+    # ------------------------------------------------------------------
     # 10. Assumptions
     # ------------------------------------------------------------------
     def assumptions(self) -> ReportSection:
@@ -4566,6 +4932,10 @@ class _Builder:
             self.addressing(),
             self.vlan_dhcp(),
             self.routing(),
+            self.ipv6_dual_stack(),
+            self.nat_plan(),
+            self.ospf_area_design(),
+            self.gateway_redundancy(),
             self.graph_analysis(),
             self.simulation(),
             self.capacity(),

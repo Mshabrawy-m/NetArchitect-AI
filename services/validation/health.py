@@ -18,8 +18,12 @@ from digital_twin import (
     routing_arguments,
     validate_twin,
 )
+from network.addressing.dual_stack import validate_dual_stack
+from network.addressing.nat import analyze_nat_plan
 from network.analysis import spof_findings, spof_report
 from network.routing import reachability_matrix
+from network.routing.ha import analyze_ha_groups
+from network.routing.ospf import analyze_ospf_design
 from simulation import CongestionLevel, NetworkState, evaluate
 
 from .constraints import constraint_findings
@@ -62,6 +66,14 @@ def categorize_twin_finding(finding: Finding) -> ValidationCategory:
     known = _TWIN_CODE_CATEGORY.get(finding.code)
     if known is not None:
         return known
+    if finding.code.startswith("ipv6_") or finding.code.startswith("ipv4_ipv6_"):
+        return ValidationCategory.dual_stack
+    if finding.code.startswith("nat_"):
+        return ValidationCategory.nat
+    if finding.code.startswith("ospf_"):
+        return ValidationCategory.ospf
+    if finding.code.startswith("ha_"):
+        return ValidationCategory.ha
     if finding.code.startswith(("subnet_", "duplicate_ip")):
         return ValidationCategory.addressing
     if finding.code.startswith("dhcp_"):
@@ -95,6 +107,64 @@ def _check_failure(check: str, error: Exception) -> Finding:
             "remaining checks are still shown."
         ),
     )
+
+
+def _basic_l3_design(
+    twin: DigitalTwin,
+    groups: dict[ValidationCategory, list[Finding]],
+) -> None:
+    """Add findings from optional L3 design models stored on the twin.
+
+    These checks are bounded by the L1-L4 limits and are part of the basic
+    pass. They derive no packet behavior and never touch equipment.
+    """
+    if twin.ipv6_plan is not None:
+        try:
+            findings = validate_dual_stack(
+                twin.ipv6_plan.block,
+                twin.ipv6_plan,
+                addressing=twin.addressing,
+            )
+        except (NetArchitectError, ValueError) as error:
+            groups[ValidationCategory.dual_stack].append(
+                _check_failure("IPv6 dual-stack", error)
+            )
+        else:
+            groups[ValidationCategory.dual_stack].extend(findings)
+
+    if twin.nat_plan is not None:
+        try:
+            findings = list(analyze_nat_plan(twin.nat_plan).findings)
+        except (NetArchitectError, ValueError) as error:
+            groups[ValidationCategory.nat].append(_check_failure("NAT/PAT", error))
+        else:
+            groups[ValidationCategory.nat].extend(findings)
+
+    if twin.ospf_design is not None:
+        try:
+            findings = list(
+                analyze_ospf_design(twin.ospf_design, twin.topology).findings
+            )
+        except (NetArchitectError, ValueError) as error:
+            groups[ValidationCategory.ospf].append(_check_failure("OSPF area design", error))
+        else:
+            groups[ValidationCategory.ospf].extend(findings)
+
+    if twin.ha_groups:
+        try:
+            findings = list(
+                analyze_ha_groups(
+                    twin.ha_groups,
+                    twin.topology,
+                    vlan_plan=twin.vlan_plan,
+                ).findings
+            )
+        except (NetArchitectError, ValueError) as error:
+            groups[ValidationCategory.ha].append(
+                _check_failure("gateway redundancy", error)
+            )
+        else:
+            groups[ValidationCategory.ha].extend(findings)
 
 
 def _capacity_state(
@@ -276,6 +346,8 @@ def build_design_health(
 
     for finding in validate_twin(twin).findings:
         groups[categorize_twin_finding(finding)].append(finding)
+
+    _basic_l3_design(twin, groups)
 
     state = _capacity_state(twin, groups)
     if state is not None:

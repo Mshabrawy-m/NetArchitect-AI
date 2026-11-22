@@ -24,9 +24,10 @@ from network.addressing import (
     validate_addressing,
 )
 from simulation import twin_fingerprint
-from ui import state
+from ui import i18n, state
 from ui.components import (
     csv_bytes,
+    empty_state,
     findings_frame,
     format_error,
     page_header,
@@ -34,6 +35,11 @@ from ui.components import (
 )
 from ui.components.editors import bump_editor_key, editor_key
 from ui.components.notices import queue_notice, render_notices
+from ui.pages.l3_design import (
+    MODEL_NOTE,
+    render_dual_stack_tab,
+    render_nat_tab,
+)
 
 DEFAULT_REQUIREMENTS = pd.DataFrame(
     [
@@ -373,8 +379,14 @@ def render() -> None:
     )
     render_notices()
 
-    cidr_tab, vlsm_tab, check_tab = st.tabs(
-        ["CIDR calculator", "VLSM planner", "Subnet check"]
+    cidr_tab, vlsm_tab, check_tab, dual_tab, nat_tab = st.tabs(
+        [
+            "CIDR calculator",
+            "VLSM planner",
+            "Subnet check",
+            i18n.t("ip.tab.dual_stack"),
+            i18n.t("ip.tab.nat"),
+        ]
     )
     with cidr_tab:
         _render_cidr()
@@ -382,3 +394,21 @@ def render() -> None:
         _render_vlsm()
     with check_tab:
         _render_check()
+
+    twin = state.get_twin()
+    if twin is None:
+        with dual_tab:
+            empty_state(
+                "No digital twin is loaded. Load a twin before modeling L3 plans."
+            )
+        with nat_tab:
+            empty_state(
+                "No digital twin is loaded. Load a twin before modeling L3 plans."
+            )
+        return
+    with dual_tab:
+        st.info(MODEL_NOTE)
+        render_dual_stack_tab(twin)
+    with nat_tab:
+        st.info(MODEL_NOTE)
+        render_nat_tab(twin)

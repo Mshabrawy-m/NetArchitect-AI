@@ -21,11 +21,15 @@ class ValidationCategory(str, Enum):
     schema = "schema"
     topology = "topology"
     addressing = "addressing"
+    dual_stack = "dual_stack"
+    nat = "nat"
     vlan = "vlan"
     dhcp = "dhcp"
     routing = "routing"
+    ospf = "ospf"
     capacity = "capacity"
     redundancy = "redundancy"
+    ha = "ha"
     security = "security"
     constraints = "constraints"
     references = "references"
@@ -36,11 +40,15 @@ CATEGORY_ORDER: tuple[ValidationCategory, ...] = (
     ValidationCategory.schema,
     ValidationCategory.topology,
     ValidationCategory.addressing,
+    ValidationCategory.dual_stack,
+    ValidationCategory.nat,
     ValidationCategory.vlan,
     ValidationCategory.dhcp,
     ValidationCategory.routing,
+    ValidationCategory.ospf,
     ValidationCategory.capacity,
     ValidationCategory.redundancy,
+    ValidationCategory.ha,
     ValidationCategory.security,
     ValidationCategory.constraints,
     ValidationCategory.references,
@@ -50,11 +58,15 @@ CATEGORY_LABELS: dict[ValidationCategory, str] = {
     ValidationCategory.schema: "Schema",
     ValidationCategory.topology: "Topology connectivity",
     ValidationCategory.addressing: "IP addressing",
+    ValidationCategory.dual_stack: "IPv6 dual-stack",
+    ValidationCategory.nat: "NAT/PAT sizing",
     ValidationCategory.vlan: "VLAN consistency",
     ValidationCategory.dhcp: "DHCP pools",
     ValidationCategory.routing: "Routing reachability",
+    ValidationCategory.ospf: "OSPF area design",
     ValidationCategory.capacity: "Capacity and utilization",
     ValidationCategory.redundancy: "Redundancy",
+    ValidationCategory.ha: "Gateway redundancy",
     ValidationCategory.security: "Design-time security",
     ValidationCategory.constraints: "User-defined constraints",
     ValidationCategory.references: "Stale references",
@@ -72,9 +84,10 @@ CATEGORY_INDEX: dict[ValidationCategory, int] = {
 }
 
 BASIC_CHECK_NOTE = (
-    "Basic checks cover schema and references, addressing, VLAN, DHCP, "
-    "per-demand routing, one capacity evaluation, and supplied design-time "
-    "security findings."
+    "Basic checks cover schema and references, addressing, IPv6 dual-stack, "
+    "NAT/PAT sizing, VLAN, DHCP, per-demand routing, OSPF area design, gateway "
+    "redundancy, one capacity evaluation, and supplied design-time security "
+    "findings. Optional L3 design plans are checked only when present in the twin."
 )
 EXPENSIVE_CHECK_NOTE = (
     "Expensive checks add all-pairs reachability (one Dijkstra search per "

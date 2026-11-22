@@ -18,8 +18,8 @@ APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 _PLACEHOLDER_WORDS = ("coming soon", "later phase", "will be implemented")
 
 
-def test_navigation_has_fifteen_declared_pages() -> None:
-    assert len(PAGES) == 15
+def test_navigation_has_sixteen_declared_pages() -> None:
+    assert len(PAGES) == 16
     assert PAGES[0] == "Dashboard"
     assert "Security Analysis" in PAGES
     assert "Settings" == PAGES[-1]
@@ -33,6 +33,7 @@ def test_navigation_groups_match_the_product_spec() -> None:
         "Topology",
         "IP",
         "VLAN/DHCP",
+        "L3 Design",
     ]
     assert [spec.label for spec in NAVIGATION_GROUPS["Analyze"]] == [
         "Routing",

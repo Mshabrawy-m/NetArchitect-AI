@@ -18,10 +18,14 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 from config.limits import MAX_CRITIC_SUMMARY_CHARS
-from core.exceptions import LLMError
+from core.exceptions import LLMError, NetArchitectError
 from core.schemas.requirements import NetworkRequirements
 from core.schemas.validation import Finding, Severity
 from digital_twin import DigitalTwin, addressing_subnets
+from network.addressing.dual_stack import validate_dual_stack
+from network.addressing.nat import analyze_nat_plan
+from network.routing.ha import analyze_ha_groups
+from network.routing.ospf import analyze_ospf_design
 from security import RiskLevel, SecurityAnalysis
 from services.llm.models import LLMMessage, MessageRole
 from services.llm.provider import LLMProvider
@@ -56,6 +60,24 @@ RESPONSIBLE_STEPS: dict[str, str] = {
     "link_overloaded": "optimization",
     "link_critical_utilization": "optimization",
     "no_working_twin": "topology",
+    # L3 modeled design rules. These are corrected on the design pages, not by
+    # changing live equipment or by accepting model prose.
+    "ipv6_block_not_ipv6": "ip_vlan",
+    "ipv6_prefix_length_rule": "ip_vlan",
+    "ipv6_block_too_small": "ip_vlan",
+    "ipv6_block_exhausted": "ip_vlan",
+    "ipv6_missing_for_vlan": "ip_vlan",
+    "nat_pool_too_small": "ip_vlan",
+    "nat_pat_port_capacity_exceeded": "ip_vlan",
+    "nat_private_space_outside": "ip_vlan",
+    "ospf_no_backbone": "routing",
+    "ospf_backbone_discontiguous": "routing",
+    "ospf_unknown_device": "routing",
+    "ospf_unknown_link": "routing",
+    "ha_vip_subnet_mismatch": "topology",
+    "ha_vip_outside_subnet": "topology",
+    "ha_vip_collision": "topology",
+    "ha_member_not_on_vlan": "topology",
 }
 
 
@@ -68,6 +90,12 @@ def responsible_step_for(code: str) -> str:
         return "security"
     if code == "security_high_risk":
         return "security"
+    if code.startswith(("ipv6_", "ipv4_ipv6_", "nat_")):
+        return "ip_vlan"
+    if code.startswith("ospf_"):
+        return "routing"
+    if code.startswith("ha_"):
+        return "topology"
     return "revalidation"
 
 
@@ -195,6 +223,7 @@ class CriticAgent(BaseAgent):
             self._check_topology(twin, context, add_finding)
             self._check_addressing(context, twin, add_finding, add_engine_finding)
             self._check_twin(twin, context, add_engine_finding)
+            self._check_l3_design(twin, add_engine_finding)
             self._check_routing(twin, context, add_finding)
             self._check_load(twin, context, add_finding)
             self._check_redundancy(payload, twin, context, add_finding)
@@ -288,6 +317,36 @@ class CriticAgent(BaseAgent):
             if finding.code == "twin_topology_disconnected":
                 continue
             add_engine_finding(finding)
+
+    @staticmethod
+    def _check_l3_design(twin: DigitalTwin, add_engine_finding) -> None:
+        """Re-derive optional L3 design findings so the critic is independent."""
+        try:
+            if twin.ipv6_plan is not None:
+                findings = validate_dual_stack(
+                    twin.ipv6_plan.block,
+                    twin.ipv6_plan,
+                    addressing=twin.addressing,
+                )
+                for finding in findings:
+                    add_engine_finding(finding)
+            if twin.nat_plan is not None:
+                for finding in analyze_nat_plan(twin.nat_plan).findings:
+                    add_engine_finding(finding)
+            if twin.ospf_design is not None:
+                for finding in analyze_ospf_design(
+                    twin.ospf_design, twin.topology
+                ).findings:
+                    add_engine_finding(finding)
+            if twin.ha_groups:
+                for finding in analyze_ha_groups(
+                    twin.ha_groups, twin.topology, vlan_plan=twin.vlan_plan
+                ).findings:
+                    add_engine_finding(finding)
+        except (NetArchitectError, ValueError):
+            # A malformed optional model cannot invalidate the whole design;
+            # the design-health panel reports the check failure separately.
+            return
 
     @staticmethod
     def _check_routing(twin: DigitalTwin, context: AgentContext, add_finding) -> None:

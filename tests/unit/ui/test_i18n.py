@@ -154,6 +154,31 @@ def test_s6_catalog_keys_are_present_and_parity_is_preserved() -> None:
     assert set(i18n.EN) == set(i18n.AR)
 
 
+L5_KEYS = (
+    "nav.label.l3_design",
+    "nav.help.l3_design",
+    "page.l3_design",
+    "page.l3_design.description",
+    "l3.scope",
+    "l3.tab.ipv6",
+    "l3.tab.nat",
+    "l3.tab.ospf",
+    "l3.tab.ha",
+    "l3.tab.findings",
+    "ip.tab.dual_stack",
+    "ip.tab.nat",
+)
+
+
+def test_l5_catalog_keys_are_present_and_parity_is_preserved() -> None:
+    for key in L5_KEYS:
+        assert key in i18n.EN
+        assert key in i18n.AR
+    assert i18n.catalog_parity()
+    assert i18n.missing_translation_keys() == ()
+    assert set(i18n.EN) == set(i18n.AR)
+
+
 def test_translate_falls_back_to_english_for_a_missing_arabic_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

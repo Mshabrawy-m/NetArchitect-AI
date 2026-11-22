@@ -13,6 +13,7 @@ well lets the cached function rebuild the model without touching session state.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -20,6 +21,7 @@ from typing import TYPE_CHECKING
 import streamlit as st
 
 from capacity import CapacityRun, DemandMapping, evaluate_capacity
+from core.schemas.validation import Finding
 from digital_twin import DigitalTwin, to_json
 from forecasting import (
     ForecastRun,
@@ -27,6 +29,10 @@ from forecasting import (
     TimeSeries,
     forecast_series,
 )
+from network.addressing.dual_stack import validate_dual_stack
+from network.addressing.nat import analyze_nat_plan
+from network.routing.ha import analyze_ha_groups
+from network.routing.ospf import analyze_ospf_design
 from optimization import (
     CostModel,
     OptimizationRun,
@@ -48,6 +54,21 @@ if TYPE_CHECKING:
     from services.reporting import ReportDocument
 
 CACHE_ENTRIES = 8
+
+
+@dataclass(frozen=True)
+class L3DesignReview:
+    """Small, serializable summary of the four optional L3 design models."""
+
+    twin_version: str
+    dual_stack_findings: tuple[tuple[str, str], ...] = ()
+    nat_sizings: tuple[tuple[str, str, int, int, int, int, int, int], ...] = ()
+    nat_findings: tuple[tuple[str, str], ...] = ()
+    ospf_routers: tuple[tuple[str, tuple[int, ...], str], ...] = ()
+    ospf_link_costs: tuple[tuple[str, float, float, float, str], ...] = ()
+    ospf_findings: tuple[tuple[str, str], ...] = ()
+    ha_active: tuple[tuple[str, str], ...] = ()
+    ha_findings: tuple[tuple[str, str], ...] = ()
 
 
 def twin_payload(twin: DigitalTwin) -> str:
@@ -109,6 +130,88 @@ def security_flows_payload(flows: tuple[FlowRequest, ...] | list[FlowRequest]) -
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=CACHE_ENTRIES)
+def cached_l3_design_review(
+    twin_payload: str,
+    fingerprint: str = "",
+) -> L3DesignReview:
+    """Review optional L3 design fields once per twin revision.
+
+    The cache is bounded and keyed by the canonical twin JSON plus its
+    fingerprint. It returns only derived design-rule summaries; no packet or
+    device behavior is represented.
+    """
+    twin = DigitalTwin.model_validate_json(twin_payload)
+
+    def findings(items: Sequence[Finding]) -> tuple[tuple[str, str], ...]:
+        return tuple((item.code, item.explanation) for item in items)
+
+    dual_stack = ()
+    if twin.ipv6_plan is not None:
+        dual_stack = validate_dual_stack(
+            twin.ipv6_plan.block,
+            twin.ipv6_plan,
+            addressing=twin.addressing,
+        )
+
+    nat_analysis = analyze_nat_plan(twin.nat_plan) if twin.nat_plan else None
+    ospf_analysis = (
+        analyze_ospf_design(twin.ospf_design, twin.topology)
+        if twin.ospf_design is not None
+        else None
+    )
+    ha_analysis = (
+        analyze_ha_groups(
+            twin.ha_groups,
+            twin.topology,
+            vlan_plan=twin.vlan_plan,
+        )
+        if twin.ha_groups
+        else None
+    )
+
+    return L3DesignReview(
+        twin_version=fingerprint,
+        dual_stack_findings=findings(dual_stack),
+        nat_sizings=tuple(
+            (
+                item.rule_id,
+                item.nat_type,
+                item.inside_hosts,
+                item.pool_addresses,
+                item.required_addresses,
+                item.required_sessions,
+                item.session_capacity,
+                item.usable_ports_per_address,
+            )
+            for item in (nat_analysis.sizings if nat_analysis else ())
+        ),
+        nat_findings=findings(nat_analysis.findings if nat_analysis else ()),
+        ospf_routers=tuple(
+            (item.device_id, item.area_ids, item.role.value)
+            for item in (ospf_analysis.routers if ospf_analysis else ())
+        ),
+        ospf_link_costs=tuple(
+            (
+                item.link_id,
+                item.capacity_mbps,
+                item.base_cost,
+                item.effective_cost,
+                item.formula,
+            )
+            for item in (ospf_analysis.link_costs if ospf_analysis else ())
+        ),
+        ospf_findings=findings(ospf_analysis.findings if ospf_analysis else ()),
+        ha_active=tuple(
+            (group.id, ha_analysis.active_members.get(group.id, "none"))
+            for group in twin.ha_groups
+        )
+        if ha_analysis
+        else (),
+        ha_findings=findings(ha_analysis.findings if ha_analysis else ()),
     )
 
 
@@ -309,10 +412,12 @@ def cached_exports(document_payload: str, twin_payload: str) -> ExportBundle:
 
 __all__ = [
     "ExportBundle",
+    "L3DesignReview",
     "cached_capacity_run",
     "cached_design_health",
     "cached_exports",
     "cached_forecast_run",
+    "cached_l3_design_review",
     "cached_report",
     "cached_security_analysis",
     "capacity_series_payload",

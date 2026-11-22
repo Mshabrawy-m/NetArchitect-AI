@@ -51,6 +51,7 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "nav.label.topology_editor": "Topology",
         "nav.label.ip_addressing_subnetting": "IP",
         "nav.label.vlan_dhcp_planner": "VLAN/DHCP",
+        "nav.label.l3_design": "L3 Design",
         "nav.label.routing_analysis": "Routing",
         "nav.label.network_analytics": "Analytics",
         "nav.label.security_analysis": "Security",
@@ -75,6 +76,9 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         ),
         "nav.help.vlan_dhcp_planner": (
             "Allocate VLANs and DHCP scopes from department requirements."
+        ),
+        "nav.help.l3_design": (
+            "Model dual-stack, NAT/PAT, OSPF areas, and gateway redundancy rules."
         ),
         "nav.help.routing_analysis": (
             "Inspect reachability, shortest paths, and failure paths."
@@ -112,6 +116,21 @@ EN: MappingProxyType[str, str] = MappingProxyType(
             "Current state of the digital twin and the engineering runs retained in "
             "this session."
         ),
+        "page.l3_design": "L3 Design",
+        "page.l3_design.description": (
+            "Deterministic dual-stack, NAT/PAT, OSPF area, and gateway redundancy "
+            "models derived from the current twin."
+        ),
+        "l3.scope": (
+            "Modeled design rules only; no device access or packet behavior."
+        ),
+        "l3.tab.ipv6": "IPv6 dual-stack",
+        "l3.tab.nat": "NAT/PAT",
+        "l3.tab.ospf": "OSPF areas",
+        "l3.tab.ha": "Gateway redundancy",
+        "l3.tab.findings": "Findings",
+        "ip.tab.dual_stack": "Dual-stack planner",
+        "ip.tab.nat": "NAT/PAT planner",
         "page.settings": "Settings",
         "page.settings.description": (
             "Optional AI configuration, read-only safety limits, and a deterministic "
@@ -630,6 +649,7 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "nav.label.topology_editor": "الطوبولوجيا",
         "nav.label.ip_addressing_subnetting": "عناوين IP",
         "nav.label.vlan_dhcp_planner": "VLAN/DHCP",
+        "nav.label.l3_design": "تصميم الطبقة الثالثة",
         "nav.label.routing_analysis": "التوجيه",
         "nav.label.network_analytics": "التحليلات",
         "nav.label.security_analysis": "الأمان",
@@ -645,6 +665,7 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "nav.help.topology_editor": "إنشاء الطوبولوجيا الحالية وتعديلها وفحصها.",
         "nav.help.ip_addressing_subnetting": "تخطيط CIDR ومجموعات VLSM من التصميم الحالي.",
         "nav.help.vlan_dhcp_planner": "تخصيص VLAN ونطاقات DHCP من متطلبات الأقسام.",
+        "nav.help.l3_design": "نمذجة قواعد IPv6 وNAT/PAT وOSPF وتكرار البوابة.",
         "nav.help.routing_analysis": "فحص الوصول وأقصر المسارات ومسارات الأعطال.",
         "nav.help.network_analytics": "حساب مقاييس الرسم وتحديد المخاطر الهيكلية.",
         "nav.help.security_analysis": "نمذجة المناطق والسياسات وفحوص التدفق وقت التصميم.",
@@ -660,6 +681,19 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "page.dashboard.description": (
             "الحالة الحالية للتوأم الرقمي والتشغيلات الهندسية المحفوظة في هذه الجلسة."
         ),
+        "page.l3_design": "تصميم الطبقة الثالثة",
+        "page.l3_design.description": (
+            "نماذج حتمية لـ IPv6 وNAT/PAT ومناطق OSPF وتكرار البوابة مستمدة من "
+            "التوأم الرقمي الحالي."
+        ),
+        "l3.scope": "قواعد تصميم ممذجة فقط؛ لا وصول إلى الأجهزة ولا سلوك حزم.",
+        "l3.tab.ipv6": "IPv6 مزدوج",
+        "l3.tab.nat": "NAT/PAT",
+        "l3.tab.ospf": "مناطق OSPF",
+        "l3.tab.ha": "تكرار البوابة",
+        "l3.tab.findings": "النتائج",
+        "ip.tab.dual_stack": "مخطط IPv6 مزدوج",
+        "ip.tab.nat": "مخطط NAT/PAT",
         "page.settings": "الإعدادات",
         "page.settings.description": (
             "ضبط الذكاء الاصطناعي الاختياري وحدود الأمان للقراءة فقط ومشغل تصميم "

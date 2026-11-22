@@ -2,6 +2,58 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-22 - L5: integrated modeled L3 design workflow on feature/v2-l3
+
+### Added
+- L1 (`16438e2`): deterministic IPv6 dual-stack planning with `/64` VLAN
+  assignment, prefix arithmetic, scope/overlap/outside-block/exhaustion
+  findings, prefix-based utilization, and `MAX_V6_PREFIXES=256`.
+- L2 (`27c37fa`): deterministic NAT/PAT sizing for static, dynamic-pool, and
+  overload rules, the documented `64512` usable-port budget, IPv4-only host
+  derivation, overlap/private-space findings, and `MAX_NAT_RULES=64`.
+- L3 (`5ee5c07`): modeled OSPF area design with ASBR/ABR/internal derivation,
+  backbone checks, virtual-link-needed flags, inert summaries, documented
+  cost rules, heuristic-only area sizing, and `MAX_OSPF_AREAS=32`.
+- L4 (`ce32395`): modeled first-hop redundancy groups with priority election,
+  VIP/VLAN/shared-fate findings, default-off failover state, and bounds
+  `MAX_HA_GROUPS=16`, `MAX_HA_MEMBERS=8`.
+- L5: four bounded design-health categories, two Copilot explanation targets,
+  Critic code mapping and deterministic re-derivation, four provenance-tagged
+  report sections with `not_run` producer pages, a five-tab L3 Design page,
+  dual-stack/NAT tabs on the IP page, 16-page navigation, EN/AR keys, versioned
+  editors, queued notices, and a bounded `L3DesignReview` cache.
+- Additive twin fields: `DigitalTwin.ipv6_plan`, `DigitalTwin.nat_plan`,
+  `DigitalTwin.ospf_design`, `DigitalTwin.ha_groups`,
+  `SimulationAssumptions.enable_first_hop_failover`,
+  `NetworkState.first_hop_failovers`, and `FirstHopFailover`.
+- Additive non-twin APIs: validation categories `dual_stack`, `nat`, `ospf`,
+  `ha`; `ExplanationTarget.ospf_design`, `ExplanationTarget.ha_group`; report
+  IDs `ipv6_dual_stack`, `nat_plan`, `ospf_area_design`,
+  `gateway_redundancy`; and `L3DesignReview`.
+
+### Changed
+- No schema version bump: `TWIN_SCHEMA_VERSION` stays `2`; defaults are omitted
+  from twin JSON and the schema-v1 fingerprint remains
+  `4212909d2624a026229027d4266267906ae6a040df00678bf200d0430c2d802c`.
+  Legacy twin JSON/fingerprints stay byte-identical and tested.
+- Every new output is labeled as modeled design rules only; no packet behavior,
+  device access, or generated configuration is represented. No new runtime
+  dependency, worker, thread, or app disk write was added. The L3 Design page
+  raises the navigation count from 15 to 16 pages.
+
+### Evidence
+- Focused L3 tests: twin fields `3 passed`, L3 design health `5 passed`,
+  Copilot `14 passed`, Critic `1 passed`, reporting `39 passed`, UI page
+  `5 passed`, navigation/i18n `45 passed`, cache `1 passed`; focused
+  cross-module regression `416 passed in 34.83s`.
+- Max-size L-check timing (`pytest -q -m perf -o addopts= tests/unit/test_l3_design_perf.py -s`):
+  `L1 max-v6-prefixes (256): 0.0550s`, `L2 max-nat-rules (64): 0.0010s`,
+  `L3 max-ospf-areas (32): 0.0346s`, `L4 max-ha-groups (16 x 8): 0.0003s`.
+- `pytest -q`: `1332 passed, 10 deselected in 52.67s`.
+- `ruff check .`: `All checks passed!`.
+- `pytest -q -m smoke`: `13 passed, 1329 deselected in 6.19s`.
+- Not verified: real-browser rendering, Streamlit Cloud deployment, Linux CI.
+
 ## 2026-11-21 - S6: integrated design-time security workflow on feature/v2-security
 
 ### Added

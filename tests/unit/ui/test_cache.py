@@ -9,6 +9,7 @@ import pytest
 from capacity import DemandMapping, evaluate_capacity
 from digital_twin import DigitalTwin
 from forecasting import GapPolicy
+from network.addressing.nat import NatPlan, NatRule, NatType
 from optimization import (
     Algorithm,
     CostModel,
@@ -40,6 +41,7 @@ from ui.cache import (
     cached_capacity_run,
     cached_design_health,
     cached_forecast_run,
+    cached_l3_design_review,
     cached_report,
     cached_security_analysis,
     capacity_series_payload,
@@ -343,6 +345,47 @@ def test_cached_report_includes_each_e5_source_only_when_supplied(
         if record.key == "failure_sweep.evaluated_cases"
     ) == changed_sweep.evaluated_cases
     assert changed != full
+
+
+def test_l3_design_review_cache_is_keyed_by_twin_content() -> None:
+    cached_l3_design_review.clear()
+    twin = make_twin()
+
+    empty = cached_l3_design_review(
+        twin_payload(twin),
+        twin_cache_key(twin),
+    )
+    assert empty.twin_version == twin_cache_key(twin)
+    assert empty.dual_stack_findings == ()
+    assert empty.nat_sizings == ()
+    assert empty.ospf_routers == ()
+    assert empty.ha_active == ()
+
+    nat_plan = NatPlan(
+        rules=(
+            NatRule(
+                id="nat-1",
+                name="Users",
+                nat_type=NatType.pat_overload,
+                inside_zone="users",
+                inside_subnets=("10.0.0.0/24",),
+                outside_pools=("203.0.113.10/32",),
+            ),
+        )
+    )
+    changed = twin.model_copy(update={"nat_plan": nat_plan})
+    review = cached_l3_design_review(
+        twin_payload(changed),
+        twin_cache_key(changed),
+    )
+
+    # Hand: /24 gives 254 modeled inside hosts and one outside address. PAT
+    # needs zero dedicated outside addresses and capacity is 64512 ports.
+    assert review.nat_sizings == (
+        ("nat-1", "pat_overload", 254, 1, 0, 254, 64512, 64512),
+    )
+    assert review.twin_version == twin_cache_key(changed)
+    assert review.twin_version != empty.twin_version
 
 
 def test_security_analysis_cache_is_keyed_by_twin_model_and_flows(

@@ -185,6 +185,8 @@ class ExplanationTarget(str, Enum):
     optimization = "optimization"
     blast_radius = "blast_radius"
     segmentation_score = "segmentation_score"
+    ospf_design = "ospf_design"
+    ha_group = "ha_group"
 
 
 class ExplanationResult(BaseModel):

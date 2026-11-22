@@ -76,6 +76,10 @@ SECTION_IDS = (
     "addressing",
     "vlan_dhcp",
     "routing",
+    "ipv6_dual_stack",
+    "nat_plan",
+    "ospf_area_design",
+    "gateway_redundancy",
     "graph_analysis",
     "simulation",
     "capacity",
@@ -220,6 +224,10 @@ def test_sections_without_inputs_are_marked_not_run_with_a_pointer(
         ("sensitivity", "Optimization Center"),
         ("reranking", "Optimization Center"),
         ("security", "Security Analysis"),
+        ("ipv6_dual_stack", "L3 Design"),
+        ("nat_plan", "L3 Design"),
+        ("ospf_area_design", "L3 Design"),
+        ("gateway_redundancy", "L3 Design"),
         ("agent_trace", "AI Network Designer"),
     ):
         section = base_report.section(section_id)
