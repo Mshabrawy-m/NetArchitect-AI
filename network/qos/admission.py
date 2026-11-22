@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from core.schemas.routing import TrafficDemand
-from digital_twin.models import DigitalTwin
 
 from .models import TRAFFIC_CLASS_PRIORITY, QosDesign, TrafficClass
+
+if TYPE_CHECKING:
+    from digital_twin.models import DigitalTwin
 
 STARVED_REASON = "unserved: class starved"
 ADMISSION_NOTE = (

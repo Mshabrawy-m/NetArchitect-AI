@@ -7,7 +7,7 @@ in :mod:`core.schemas.addressing`. All numeric fields are non-negative.
 from pydantic import BaseModel, Field, model_serializer
 
 from core.schemas.addressing import AddressType, NetworkType
-from network.qos.models import TrafficClass
+from core.schemas.enums import TrafficClass
 
 
 class RouteEntry(BaseModel):

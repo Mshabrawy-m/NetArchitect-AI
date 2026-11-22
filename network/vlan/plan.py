@@ -18,12 +18,11 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, Field, model_validator
 
+from core.constants import VLAN_ID_MAX, VLAN_ID_MIN
 from core.exceptions import DuplicateIdError, InvalidVlanIdError, OverlappingSubnetError
 from core.schemas.addressing import NetworkType, Subnet
 from network.addressing.validation import detect_overlaps
 
-VLAN_ID_MIN = 1
-VLAN_ID_MAX = 4094
 DEFAULT_VLAN_START = 10
 RESERVED_VLAN_IDS: frozenset[int] = frozenset({1, 1002, 1003, 1004, 1005})
 RESERVED_VLAN_RANGES: tuple[tuple[int, int], ...] = ((1, 1), (1002, 1005))

@@ -6,29 +6,10 @@ carrier circuit, an active measurement, or a vendor quote.
 
 from __future__ import annotations
 
-from enum import Enum
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.limits import MAX_WAN_DESIGN_SITES
-
-
-class SiteType(str, Enum):
-    """Modeled role of a site in the WAN design."""
-
-    hq = "hq"
-    branch = "branch"
-    dc = "dc"
-    cloud = "cloud"
-
-
-class WanLinkType(str, Enum):
-    """Modeled WAN circuit category attached to an existing topology link."""
-
-    leased = "leased"
-    mpls = "mpls"
-    internet_vpn = "internet_vpn"
-    cloud_interconnect = "cloud_interconnect"
+from core.schemas.enums import SiteType, WanLinkType
 
 
 class WanDesign(BaseModel):

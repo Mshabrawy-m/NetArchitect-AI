@@ -14,12 +14,16 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from core.schemas.enums import OperationalState
 from core.schemas.network import Device, DeviceRole, Link
 from core.schemas.validation import Finding, Severity
-from digital_twin.models import DigitalTwin, OperationalState
 
 from .models import SiteType, WanDesign, WanLinkType
+
+if TYPE_CHECKING:
+    from digital_twin.models import DigitalTwin
 
 MONTHLY_COST_NOTE = (
     "Modeled monthly cost proxy; not a vendor quote or measured charge."

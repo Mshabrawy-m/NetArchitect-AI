@@ -37,6 +37,9 @@ jobs:
       - name: Full test suite
         run: python -m pytest -q
 
+      - name: Fresh-interpreter imports (required)
+        run: python -m pytest -q -m imports
+
       - name: Release smoke tests
         run: python -m pytest -q -m smoke
 
@@ -64,7 +67,7 @@ jobs:
           python -m pip install -r requirements.txt
           python -c "import importlib.util, sys; sys.exit('pytest must not be installed' if importlib.util.find_spec('pytest') else 0)"
 
-      - name: Headless startup and all 15 pages
+      - name: Headless startup and all 17 pages in fresh interpreters
         run: python scripts/verify_runtime_only.py --port 8599 --timeout 90
 
       - name: Linux RSS budget

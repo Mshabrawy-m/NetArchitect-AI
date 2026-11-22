@@ -2,6 +2,55 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-22 - Hotfix: restore core->network layering on hotfix/core-layering
+
+### Fixed
+- Removed all eight illegal `core -> network` imports that poisoned
+  `sys.modules` on Streamlit Cloud (Python 3.12): three in `core/schemas/network.py`,
+  three in `core/schemas/__init__.py`, one in `core/schemas/organization.py`, and
+  one in `core/schemas/routing.py`. This also fixes the fresh-import failures in
+  `network.addressing.*` caused by `core.schemas` re-entering `network.vlan.dhcp`.
+- Moved shared definitions down into core: `VLAN_ID_MIN`/`VLAN_ID_MAX` to
+  `core/constants.py`; `LinkL2Mode`, `WanLinkType`, `SiteType`, `TrafficClass`,
+  and `OperationalState` to `core/schemas/enums.py`; and the security input
+  models (`Zone`, `Service`, `FirewallRule`, `SecurityModel`, their enums) to
+  `core/schemas/security.py`. `network.l2`, `network.qos`, `network.wan`,
+  `network.vlan`, `digital_twin`, and `security.models` re-export the exact same
+  objects. Enum values, field names, and serialization are unchanged.
+- Fixed the remaining module-level layer violations: annotation-only
+  `digital_twin` imports in QoS/WAN now sit under `TYPE_CHECKING`; WAN reads
+  `OperationalState` from core; and the OSPF/analysis cycle is broken by a
+  deferred `spof_report` import. No higher-layer module-level imports remain.
+
+### Added / changed
+- `tests/unit/test_import_layering.py`: AST scan of every production `.py`, one
+  layer map, deferred imports documented as excluded, failures report `file:line`.
+- `tests/unit/test_fresh_imports.py`: 231 clean-interpreter `python -c "import ..."`
+  checks (all modules, all 17 `ui.pages.*` page targets, and `app`) with four
+  worker threads. It takes about 63 s, under the 90 s budget, so the `imports`
+  marker stays in the default run; CI also selects it explicitly.
+- `tests/unit/test_core_definitions.py`: identity and value checks for the
+  moved/re-exported objects.
+- `scripts/verify_runtime_only.py` now renders all 17 navigation pages in
+  separate interpreters and rejects unlisted `app_pages` files; CI's runtime-only
+  job and the `verify` job were updated accordingly.
+
+### Evidence
+- `pytest -q` (3.11): `1665 passed, 14 deselected in 124.26s (0:02:04)`.
+- `pytest -q` (3.12): `1665 passed, 14 deselected in 122.80s (0:02:02)`.
+- `pytest -q -m smoke`: `13 passed, 1666 deselected in 6.75s` (3.11) and
+  `13 passed, 1666 deselected in 7.60s` (3.12).
+- `pytest -q -m imports`: `1 passed in 63.48s` (3.11) and `1 passed in 64.97s`
+  (3.12); `ruff check .`: `All checks passed!` on both.
+- Runtime-only (Python 3.12, no pytest): health/root OK and `AppTest rendered 17
+  pages in fresh interpreters with no exceptions`.
+- Legacy schema-v1 fingerprint tests: `17 passed in 2.21s`; fingerprint remains
+  `4212909d2624a026229027d4266267906ae6a040df00678bf200d0430c2d802c`.
+- No new runtime dependency, worker/thread, or app disk write. Not verified:
+  real Streamlit Cloud deployment. The pinned Hypothesis 6.170.17 wheel is
+  blocked on this Windows host by Application Control, so the local 3.12 dev
+  venv used pure-Python Hypothesis 6.135.0; CI uses the pinned version.
+
 ## 2026-11-22 - W1-W5: modeled L2/WAN/wireless/QoS design package on feature/v2-l2
 
 ### Added

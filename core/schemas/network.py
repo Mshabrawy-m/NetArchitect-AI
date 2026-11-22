@@ -15,9 +15,8 @@ from pydantic import (
     model_validator,
 )
 
-from network.l2.models import LinkL2Mode
-from network.vlan.plan import VLAN_ID_MAX, VLAN_ID_MIN
-from network.wan.models import WanLinkType
+from core.constants import VLAN_ID_MAX, VLAN_ID_MIN
+from core.schemas.enums import LinkL2Mode, WanLinkType
 
 
 class DeviceType(str, Enum):

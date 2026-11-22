@@ -7,8 +7,6 @@ hand-checkable design rules.
 
 from __future__ import annotations
 
-from enum import Enum
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from config.limits import (
@@ -16,18 +14,8 @@ from config.limits import (
     MAX_ETHERCHANNEL_BUNDLES,
     MAX_ETHERCHANNEL_MEMBERS,
 )
-
-# Keep these literals local so importing this schema module never triggers the
-# addressing/VLAN package import chain. They match ``network.vlan.plan``.
-VLAN_ID_MIN = 1
-VLAN_ID_MAX = 4094
-
-
-class LinkL2Mode(str, Enum):
-    """Modeled switch-port style for one topology link."""
-
-    access = "access"  # A single untagged VLAN faces endpoints.
-    trunk = "trunk"  # An allowed VLAN list crosses the link.
+from core.constants import VLAN_ID_MAX, VLAN_ID_MIN
+from core.schemas.enums import LinkL2Mode
 
 
 class EtherChannelBundle(BaseModel):

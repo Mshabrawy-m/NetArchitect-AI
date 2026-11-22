@@ -10,12 +10,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.schemas.validation import Finding, Severity
-from digital_twin.models import DigitalTwin
 
 from .admission import STARVED_REASON
 from .models import QosDesign
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from digital_twin.models import DigitalTwin
     from simulation.models import NetworkState
 
 UNKNOWN_CAP_LINK_CODE = "qos_unknown_cap_link"

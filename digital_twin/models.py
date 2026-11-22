@@ -22,14 +22,15 @@ records a modeled failure.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from core.schemas.addressing import AddressingPlan, DhcpScope
+from core.schemas.enums import OperationalState
 from core.schemas.network import Topology
 from core.schemas.requirements import Assumption
 from core.schemas.routing import TrafficDemand
+from core.schemas.security import SecurityModel
 from network.addressing.dual_stack import DualStackPlan
 from network.addressing.nat import NatPlan
 from network.l2.models import L2Design
@@ -39,17 +40,9 @@ from network.routing.ospf import OspfDesign
 from network.vlan.plan import VlanPlanResult
 from network.wan.models import WanDesign
 from network.wireless.models import WirelessDesign
-from security.models import SecurityModel
 
 TWIN_SCHEMA_VERSION = 2
 SUPPORTED_TWIN_SCHEMA_VERSIONS: tuple[int, ...] = (1, 2)
-
-
-class OperationalState(str, Enum):
-    """Modeled operational state of one device or link."""
-
-    up = "up"  # The entity participates in the modeled network.
-    down = "down"  # The entity is modeled as failed and must be excluded.
 
 
 class TwinMetadata(BaseModel):

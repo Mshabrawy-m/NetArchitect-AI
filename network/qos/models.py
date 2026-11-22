@@ -7,21 +7,10 @@ share caps; it does not model queues, drops, schedulers, or device hardware.
 
 from __future__ import annotations
 
-from enum import Enum
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.limits import MAX_QOS_CLASS_CAPS
-
-
-class TrafficClass(str, Enum):
-    """Modeled strict-priority order; lower priority numbers are served first."""
-
-    voice = "voice"
-    video = "video"
-    critical = "critical"
-    best_effort = "best_effort"
-
+from core.schemas.enums import TrafficClass
 
 TRAFFIC_CLASS_PRIORITY: dict[TrafficClass, int] = {
     TrafficClass.voice: 0,

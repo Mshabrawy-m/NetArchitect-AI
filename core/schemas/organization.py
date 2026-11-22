@@ -7,7 +7,7 @@ each of which contains :class:`Department` instances with a user count.
 
 from pydantic import BaseModel, Field, model_serializer, model_validator
 
-from network.wan.models import SiteType
+from core.schemas.enums import SiteType
 
 
 class Department(BaseModel):

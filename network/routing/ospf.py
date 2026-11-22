@@ -46,7 +46,6 @@ from core.exceptions import LimitsExceededError
 from core.schemas.addressing import NetworkType
 from core.schemas.network import DeviceRole, Topology
 from core.schemas.validation import Finding, Severity
-from network.analysis import spof_report
 from network.routing.paths import component_summary
 
 BACKBONE_AREA_ID = 0
@@ -213,6 +212,10 @@ def analyze_ospf_design(
     topology: Topology,
 ) -> OspfAnalysis:
     """Derive roles, costs, rule findings, and inert summaries for ``design``."""
+    # Deferred import: network.analysis imports network.routing, so a module-level
+    # import must not run while the routing package is still initializing.
+    from network.analysis.spof import spof_report
+
     if len(design.areas) > MAX_OSPF_AREAS:
         raise LimitsExceededError(
             f"OSPF design has {len(design.areas)} areas; the limit is {MAX_OSPF_AREAS}"
