@@ -30,6 +30,10 @@ from core.schemas.addressing import AddressingPlan, DhcpScope
 from core.schemas.network import Topology
 from core.schemas.requirements import Assumption
 from core.schemas.routing import TrafficDemand
+from network.addressing.dual_stack import DualStackPlan
+from network.addressing.nat import NatPlan
+from network.routing.ha import HaGroup
+from network.routing.ospf import OspfDesign
 from network.vlan.plan import VlanPlanResult
 from security.models import SecurityModel
 
@@ -200,6 +204,35 @@ class DigitalTwin(BaseModel):
         default_factory=tuple,
         description=(
             "Optional modeled failure domains. Empty groups are omitted from "
+            "JSON and fingerprints so legacy twin bytes stay compatible."
+        ),
+    )
+    ha_groups: tuple[HaGroup, ...] = Field(
+        default_factory=tuple,
+        description=(
+            "Optional modeled first-hop redundancy groups. Empty groups are "
+            "omitted from JSON and fingerprints so legacy twin bytes stay "
+            "compatible."
+        ),
+    )
+    ipv6_plan: DualStackPlan | None = Field(
+        default=None,
+        description=(
+            "Optional modeled IPv6 dual-stack plan. Absent plans are omitted "
+            "from JSON and fingerprints so legacy twin bytes stay compatible."
+        ),
+    )
+    nat_plan: NatPlan | None = Field(
+        default=None,
+        description=(
+            "Optional modeled NAT/PAT plan. Absent plans are omitted from JSON "
+            "and fingerprints so legacy twin bytes stay compatible."
+        ),
+    )
+    ospf_design: OspfDesign | None = Field(
+        default=None,
+        description=(
+            "Optional modeled OSPF area design. Absent designs are omitted from "
             "JSON and fingerprints so legacy twin bytes stay compatible."
         ),
     )

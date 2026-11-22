@@ -33,6 +33,8 @@ from core.exceptions import LLMProviderError
 from core.schemas.addressing import Subnet
 from core.schemas.requirements import NetworkRequirements, UserFacts
 from digital_twin import DigitalTwin
+from network.addressing.nat import NatPlan, NatRule, NatType
+from network.routing.ospf import OspfArea, OspfDesign
 from services.llm.testing import FakeProvider
 from tests.unit.agents.helpers import sample_requirements
 from tests.unit.simulation.helpers import (
@@ -289,6 +291,48 @@ def test_unknown_codes_are_mapped_to_revalidation() -> None:
     assert responsible_step_for("link_overloaded") == "optimization"
     assert responsible_step_for("spof_link") == "topology"
     assert responsible_step_for("something_new") == "revalidation"
+
+
+def test_l3_design_codes_map_to_their_responsible_design_steps() -> None:
+    assert responsible_step_for("ipv6_block_exhausted") == "ip_vlan"
+    assert responsible_step_for("nat_pat_port_capacity_exceeded") == "ip_vlan"
+    assert responsible_step_for("ospf_no_backbone") == "routing"
+    assert responsible_step_for("ha_vip_collision") == "topology"
+    assert responsible_step_for("ospf_future_code") == "routing"
+    assert responsible_step_for("nat_future_code") == "ip_vlan"
+    assert responsible_step_for("ha_future_code") == "topology"
+
+
+def test_critic_rederives_optional_l3_design_findings() -> None:
+    twin = line_twin()
+    nat = NatPlan(
+        rules=(
+            NatRule(
+                id="r1",
+                name="Too small",
+                nat_type=NatType.static,
+                inside_zone="users",
+                inside_subnets=("10.0.0.0/24",),
+                outside_pools=("203.0.113.1/32",),
+                inside_hosts=2,
+            ),
+        )
+    )
+    ospf = OspfDesign(
+        areas=(OspfArea(area_id=10, name="Users", device_ids=("a",)),)
+    )
+
+    output, _ = run_critic(twin.model_copy(update={"nat_plan": nat, "ospf_design": ospf}))
+
+    assert output.verdict is CriticVerdict.rejected
+    codes = {finding.code for finding in output.findings}
+    assert "nat_pool_too_small" in codes
+    assert "ospf_no_backbone" in codes
+    steps = {
+        finding.code: finding.responsible_step for finding in output.findings
+    }
+    assert steps["nat_pool_too_small"] == "ip_vlan"
+    assert steps["ospf_no_backbone"] == "routing"
 
 
 def test_critic_does_not_import_execution_or_streamlit_modules() -> None:

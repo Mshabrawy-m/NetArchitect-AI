@@ -158,13 +158,23 @@ class SimulationAssumptions(BaseModel):
             "routing; ECMP and capacity-aware modes are modeled estimates."
         ),
     )
+    enable_first_hop_failover: bool = Field(
+        default=False,
+        description=(
+            "Additive, default-off view of modeled HA group failover. When the "
+            "active member is failed, report before/after first-hop paths. The "
+            "default is omitted from JSON so legacy run bytes stay identical."
+        ),
+    )
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: object) -> dict[str, object]:
-        """Omit the default mode so old assumptions/run bytes stay stable."""
+        """Omit default-only additive fields so old run bytes stay stable."""
         payload = dict(handler(self))  # type: ignore[operator]
         if self.routing_mode is RoutingMode.single_path:
             payload.pop("routing_mode", None)
+        if not self.enable_first_hop_failover:
+            payload.pop("enable_first_hop_failover", None)
         return payload
 
     @field_validator("link_delay_ms")
@@ -382,6 +392,30 @@ class LinkLoad(BaseModel):
     )
 
 
+class FirstHopFailover(BaseModel):
+    """One additive, modeled first-hop re-home after an active member fails.
+
+    ``before`` is the shortest path in the topology with no modeled failures;
+    ``after`` is the path in the evaluated state. Both are routing-engine paths,
+    not simulated packets.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    group_id: str = Field(description="Modeled HA group id.")
+    demand_name: str = Field(description="Demand whose first hop is re-homed.")
+    failed_active: str = Field(description="Nominal active member modeled as down.")
+    next_active: str = Field(description="Next-highest-priority live member.")
+    before_path_device_ids: tuple[str, ...] = Field(default_factory=tuple)
+    after_path_device_ids: tuple[str, ...] = Field(default_factory=tuple)
+    before_link_ids: tuple[str, ...] = Field(default_factory=tuple)
+    after_link_ids: tuple[str, ...] = Field(default_factory=tuple)
+    note: str = Field(
+        default="",
+        description="Modeled explanation of the re-home, including election rule.",
+    )
+
+
 class NetworkState(BaseModel):
     """The complete modeled state produced by one :func:`evaluate` call."""
 
@@ -467,3 +501,18 @@ class NetworkState(BaseModel):
         description="Non-fatal modeling warnings, such as stale twin state.",
     )
     model_note: str = Field(default=MODEL_NOTE, description="Model scope reminder.")
+    first_hop_failovers: tuple[FirstHopFailover, ...] = Field(
+        default_factory=tuple,
+        description=(
+            "Additive, default-off modeled HA re-homes. Empty for every legacy "
+            "evaluation and omitted from JSON."
+        ),
+    )
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: object) -> dict[str, object]:
+        """Omit additive failover results when the view was not requested."""
+        payload = dict(handler(self))  # type: ignore[operator]
+        if not self.first_hop_failovers:
+            payload.pop("first_hop_failovers", None)
+        return payload

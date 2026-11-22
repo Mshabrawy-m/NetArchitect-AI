@@ -7,6 +7,18 @@ is never modified.
 """
 
 from .graph import build_routing_graph, excluded_ids
+from .ha import HaAnalysis, HaGroup, HaMember, active_member, analyze_ha_groups
+from .ospf import (
+    BACKBONE_AREA_ID,
+    OspfAnalysis,
+    OspfArea,
+    OspfDesign,
+    OspfLinkCost,
+    OspfRouter,
+    OspfRouterRole,
+    OspfSummary,
+    analyze_ospf_design,
+)
 from .paths import (
     AlternativePaths,
     ComponentSummary,
@@ -33,16 +45,30 @@ from .tables import (
 )
 
 __all__ = [
+    "BACKBONE_AREA_ID",
     "AlternativePaths",
     "ComponentSummary",
+    "HaAnalysis",
+    "HaGroup",
+    "HaMember",
+    "OspfAnalysis",
+    "OspfArea",
+    "OspfDesign",
+    "OspfLinkCost",
+    "OspfRouter",
+    "OspfRouterRole",
+    "OspfSummary",
     "ReachabilityMatrix",
     "RouteHop",
     "RoutePath",
     "RoutingTable",
     "RoutingTableEntry",
     "SparseRouter",
+    "active_member",
     "alternative_paths",
     "alternative_rows",
+    "analyze_ha_groups",
+    "analyze_ospf_design",
     "build_routing_graph",
     "component_summary",
     "component_summary_from_router",

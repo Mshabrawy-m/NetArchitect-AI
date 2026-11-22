@@ -1,11 +1,73 @@
 # Current Project Status
 
 ## Overall
-- Current phase: v1.0.0 released; V2 security package on `feature/v2-security`
-- Current task: S1-S6 complete (security package ready for review)
-- Overall status: `feature/v2-tech` (`ed3312f`), `feature/v2-design` (`52ef456`), `feature/v2-engine`, and `feature/v2-copilot` were merged and pushed to `main` (latest `54ba6a2`). `feature/v2-security` adds deterministic, offline design-time security modeling: S1 zone policy reachability/bounded blast radius, S2 segmentation scoring, S3 policy optimization, S4 microsegmentation suggestions, S5 the fixed design checklist, and S6 UI/report/Critic/C3-C4 integration are complete. All additions are additive optional fields: legacy twin/run JSON and fingerprints remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added.
-- Last updated: 2026-11-21
-- Branch: `feature/v2-security` (created from updated `main`)
+- Current phase: v1.0.0 released; V2 L3 package on `feature/v2-l3`
+- Current task: L1-L5 complete (L3 design package ready for review)
+- Overall status: `feature/v2-security` was merged and pushed to `main` (`ddd02cc S6: integrate design-time security workflow`). `feature/v2-l3` was created from that `main` and adds deterministic, offline design-time L3 planning: L1 modeled IPv6 dual-stack, L2 modeled NAT/PAT sizing, L3 modeled OSPF area design, L4 modeled gateway redundancy/HA, and L5 design-health, Copilot, Critic, report, and UI integration. All additions are additive optional fields: legacy twin JSON and the schema-v1 fingerprint remain byte-identical and tested. No new runtime dependency, worker, thread, or app disk write was added. The feature branch is not pushed.
+- Last updated: 2026-11-22
+- Branch: `feature/v2-l3` (created from `main` at `ddd02cc`)
+
+## V2 L3 package (feature/v2-l3)
+
+- Scope: DESIGN MODELS only. Every output is labeled as modeled design rules;
+  no packet behavior, protocol exchange, device access, live measurement, or
+  generated configuration is involved. `TWIN_SCHEMA_VERSION` stays `2` and
+  supported versions remain `(1, 2)`. No new runtime dependency, worker,
+  thread, or app disk write was added, and `requirements.txt` stays flat.
+- L1 (`16438e2`): `network/addressing/dual_stack.py` adds documented IPv6
+  prefix arithmetic, deterministic `/64` VLAN assignments, scope/overlap/
+  outside-block/exhaustion findings, prefix-based utilization, and the
+  `MAX_V6_PREFIXES=256` bound. IPv6 hosts are never enumerated. Tests cover
+  hand-computed `/48` boundaries, index 65535, auto-allocation order, `/64`
+  rule violations, scope classification, and legacy JSON.
+- L2 (`27c37fa`): `network/addressing/nat.py` adds static, dynamic-pool, and
+  PAT-overload sizing with the documented `65535 - 1024 + 1 = 64512` usable
+  ports per address, derivation of inside hosts from IPv4 prefixes only,
+  overlap/private-space findings, and the `MAX_NAT_RULES=64` bound. Tests use
+  hand-computed host counts, pool shortfalls, and PAT capacities.
+- L3 (`5ee5c07`): `network/routing/ospf.py` derives router roles (ASBR >
+  ABR > internal), area membership, backbone contiguity, virtual-link-needed
+  flags, inert summarization suggestions, and cost from `Link.cost` unless
+  `reference_bandwidth_mbps` is set. The area size threshold is explicitly a
+  heuristic, NOT a protocol limit; `MAX_OSPF_AREAS=32`. Tests cover hand-
+  computed roles, costs, SPOF reuse, and the documented disclaimer.
+- L4 (`ce32395`): `network/routing/ha.py` adds modeled first-hop redundancy
+  groups with priority election (ties by lexicographically lowest device id),
+  VIP/subnet/collision/VLAN/shared-fate findings, VLAN-plan checks, and bounds
+  `MAX_HA_GROUPS=16`, `MAX_HA_MEMBERS=8`. `SimulationAssumptions.enable_first_hop_failover`
+  and `NetworkState.first_hop_failovers` are additive and default off, so the
+  legacy state bytes stay unchanged. `preempt` is metadata only.
+- L5: all L1-L4 fields are stored additively on the twin with defaults omitted
+  from JSON. `services/validation/health.py` adds bounded `dual_stack`, `nat`,
+  `ospf`, and `ha` categories; `services/copilot` adds `ospf_design`/
+  `ha_group` explanation targets; `agents/critic.py` maps the new finding codes
+  and re-derives them deterministically; `services/reporting/builder.py` adds
+  four provenance-tagged report sections that show `not_run` with producer page
+  `L3 Design` when no plan exists. `ui/pages/l3_design.py` is a five-tab page,
+  `app_pages/l3_design.py` is its thin navigation entry, and the IP page reuses
+  the dual-stack/NAT tab helpers. Navigation now has 16 pages. EN/AR catalog
+  parity, versioned editor keys, queued notices, and a bounded `L3DesignReview`
+  cache keyed by canonical twin JSON plus fingerprint are covered by tests.
+- Additive twin fields: `DigitalTwin.ipv6_plan`, `DigitalTwin.nat_plan`,
+  `DigitalTwin.ospf_design`, `DigitalTwin.ha_groups`,
+  `SimulationAssumptions.enable_first_hop_failover`,
+  `NetworkState.first_hop_failovers`, and the `FirstHopFailover` model.
+  Additive non-twin APIs: validation categories `dual_stack`, `nat`, `ospf`,
+  `ha`; `ExplanationTarget.ospf_design`, `ExplanationTarget.ha_group`; report
+  section IDs `ipv6_dual_stack`, `nat_plan`, `ospf_area_design`,
+  `gateway_redundancy`; and `L3DesignReview`. The schema-v1 fingerprint
+  `4212909d2624a026229027d4266267906ae6a040df00678bf200d0430c2d802c` is
+  unchanged and tested.
+- Focused evidence: reporting 39 passed, UI page 5 passed, cache 1 passed,
+  i18n/navigation 45 passed, design health 5 passed, twin fields 3 passed,
+  Copilot 14 passed, Critic 1 passed, and the focused cross-module regression
+  `416 passed in 34.83s`. Max-size L-check timing from the opt-in perf test:
+  L1 256 prefixes `0.0550s`, L2 64 rules `0.0010s`, L3 32 areas `0.0346s`,
+  L4 16 x 8 groups `0.0003s`.
+- Final verification: `pytest -q` -> `1332 passed, 10 deselected in 52.67s`;
+  `ruff check .` -> `All checks passed!`; `pytest -q -m smoke` ->
+  `13 passed, 1329 deselected in 6.19s`. Not verified: real-browser rendering,
+  Streamlit Cloud deployment, and Linux CI.
 
 ## V2 security package (feature/v2-security)
 

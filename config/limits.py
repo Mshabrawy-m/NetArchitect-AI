@@ -282,6 +282,33 @@ MAX_IDENTIFIER_CHARS: int = 128
 # Values beyond this are rejected with a typed finding before model projection.
 MAX_INPUT_NUMERIC_MAGNITUDE: float = 1e12
 
+# Maximum number of IPv6 /64 prefix assignments in one dual-stack plan. The
+# planner uses prefix arithmetic only, so this caps design size rather than
+# host enumeration or loop iterations.
+MAX_V6_PREFIXES: int = 256
+
+# Maximum number of modeled NAT rules in one NAT/PAT plan. Sizing and overlap
+# checks are linear in rule count, so this keeps interactive review bounded.
+MAX_NAT_RULES: int = 64
+
+# Maximum number of OSPF areas in one modeled design. Area ids and membership
+# are design annotations; this bound keeps the derivation checks interactive.
+MAX_OSPF_AREAS: int = 32
+
+# Configurable *heuristic* device count per OSPF area. Exceeding it produces a
+# warning only: this is a planning guideline, NOT an OSPF protocol limit.
+DEFAULT_OSPF_AREA_DEVICE_THRESHOLD: int = 50
+
+# Maximum number of inert summarization suggestions emitted by one OSPF review.
+MAX_OSPF_SUMMARY_SUGGESTIONS: int = 16
+
+# Maximum number of modeled first-hop gateway redundancy groups on one twin.
+MAX_HA_GROUPS: int = 16
+
+# Maximum member devices in one modeled HA group. Two is the common campus
+# case; the cap keeps priority/election and shared-fate checks bounded.
+MAX_HA_MEMBERS: int = 8
+
 # Maximum characters accepted in one copilot scenario sentence. This is a UI
 # input bound, not a token budget; deterministic parsing always runs first.
 MAX_COPILOT_TEXT_CHARS: int = 1_000

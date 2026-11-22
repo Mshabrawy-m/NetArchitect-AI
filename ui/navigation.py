@@ -62,6 +62,13 @@ PAGE_SPECS: tuple[PageSpec, ...] = (
         "Allocate VLANs and DHCP scopes from department requirements.",
     ),
     PageSpec(
+        "L3 Design",
+        "L3 Design",
+        "app_pages/l3_design.py",
+        ":material/layers:",
+        "Model dual-stack, NAT/PAT, OSPF areas, and gateway redundancy rules.",
+    ),
+    PageSpec(
         "Routing Analysis",
         "Routing",
         "app_pages/routing.py",
@@ -145,6 +152,7 @@ NAVIGATION_GROUPS: MappingProxyType[str, tuple[PageSpec, ...]] = MappingProxyTyp
                 "Topology Editor",
                 "IP Addressing & Subnetting",
                 "VLAN & DHCP Planner",
+                "L3 Design",
             }
         ),
         "Analyze": tuple(

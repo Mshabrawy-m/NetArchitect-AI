@@ -9,6 +9,8 @@ content, and any attempt to state a verdict, level, rank, or decision.
 
 from __future__ import annotations
 
+from collections import Counter
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from config.limits import (
@@ -18,6 +20,8 @@ from config.limits import (
 from core.exceptions import LLMError, LLMMissingKeyError, OversizedInputError
 from core.inputs import reject_unsafe_text
 from digital_twin import DigitalTwin
+from network.routing.ha import HaAnalysis, HaGroup
+from network.routing.ospf import OspfAnalysis, OspfDesign
 from optimization import (
     CandidateEvaluation,
     CandidateRecord,
@@ -300,6 +304,73 @@ def optimization_request(
     return ExplanationRequest(
         target=ExplanationTarget.optimization,
         target_id=evaluation.candidate_hash[:16],
+        deterministic_text=deterministic,
+        facts=facts,
+    )
+
+
+def ospf_design_request(
+    design: OspfDesign,
+    analysis: OspfAnalysis,
+) -> ExplanationRequest:
+    """Build a deterministic OSPF-area explanation from derived design data."""
+    roles = Counter(router.role.value for router in analysis.routers)
+    counts = ", ".join(
+        f"{role} {roles[role]}"
+        for role in ("internal", "abr", "asbr")
+        if roles[role]
+    ) or "none"
+    costs = ", ".join(
+        f"{item.link_id} {_number(item.effective_cost)}"
+        for item in analysis.link_costs
+    ) or "none"
+    deterministic = (
+        "Modeled OSPF area design has "
+        f"{len(design.areas)} area(s), {len(analysis.routers)} router(s): {counts}. "
+        f"Derived effective link costs are {costs} using {analysis.link_costs[0].formula if analysis.link_costs else 'no links'}. "
+        f"The model recorded {len(analysis.findings)} finding(s) and "
+        f"{len(analysis.summaries)} inert summary suggestion(s). "
+        "No OSPF packets, adjacencies, or route installation are simulated."
+    )
+    facts = (
+        f"Areas {len(design.areas)}, routers {len(analysis.routers)}, roles {counts}, "
+        f"costs {costs}, findings {len(analysis.findings)}, summaries "
+        f"{len(analysis.summaries)}"
+    )
+    return ExplanationRequest(
+        target=ExplanationTarget.ospf_design,
+        target_id="ospf",
+        deterministic_text=deterministic,
+        facts=facts,
+    )
+
+
+def ha_group_request(group: HaGroup, analysis: HaAnalysis) -> ExplanationRequest:
+    """Build a deterministic gateway-group explanation from a design review."""
+    active = analysis.active_members.get(group.id, "none")
+    priorities = ", ".join(
+        f"{member.device_id} {member.priority}" for member in group.members
+    ) or "none"
+    related = [
+        finding.code
+        for finding in analysis.findings
+        if group.id in finding.affected_entities
+    ]
+    deterministic = (
+        f"Gateway group {group.id} has {len(group.members)} modeled member(s) "
+        f"with priorities {priorities}. The nominal active member is {active}. "
+        f"Ties are broken by the lexicographically lowest device id; preempt is "
+        f"metadata only. The review recorded {len(related)} group finding(s)"
+        + (f": {', '.join(related)}." if related else ".")
+        + " No VRRP or HSRP advertisement or packet behavior is simulated."
+    )
+    facts = (
+        f"Group {group.id}, members {len(group.members)}, priorities {priorities}, "
+        f"active {active}, findings {len(related)}"
+    )
+    return ExplanationRequest(
+        target=ExplanationTarget.ha_group,
+        target_id=group.id,
         deterministic_text=deterministic,
         facts=facts,
     )

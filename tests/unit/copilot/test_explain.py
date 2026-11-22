@@ -9,6 +9,8 @@ import pytest
 from config.limits import MAX_COPILOT_EXPLANATION_CHARS
 from core.exceptions import OversizedInputError
 from core.schemas.scenario import Scenario, ScenarioType
+from network.routing.ha import HaGroup, HaMember, analyze_ha_groups
+from network.routing.ospf import OspfArea, OspfDesign, analyze_ospf_design
 from optimization import Algorithm, run_optimization
 from security import analyze_design
 from services.copilot import (
@@ -20,7 +22,9 @@ from services.copilot import (
     blast_radius_request,
     explain,
     finding_request,
+    ha_group_request,
     optimization_request,
+    ospf_design_request,
     route_request,
     segmentation_score_request,
     simulation_request,
@@ -29,6 +33,7 @@ from services.llm import EXPLAIN_RESULT, LLMProvider, PromptSpec
 from services.llm.budget import RequestBudget
 from services.llm.testing import FakeProvider
 from simulation import run_scenario
+from tests.unit.digital_twin.helpers import make_twin
 from tests.unit.optimization.helpers import settings, tiny_twin
 from tests.unit.security.design_helpers import case_design
 from tests.unit.security.test_reachability import _chain_twin, _four_zone_model
@@ -240,3 +245,39 @@ def test_security_builders_are_deterministic_first_and_bounded() -> None:
     )
     assert score.formula in segmentation.deterministic_text
     assert f"Score {score.score}" in segmentation.facts
+
+
+def test_l3_design_builders_are_deterministic_first() -> None:
+    twin = make_twin()
+    design = OspfDesign(
+        areas=(
+            OspfArea(area_id=0, name="Backbone", device_ids=("r1", "r2")),
+            OspfArea(area_id=10, name="Users", device_ids=("r2", "sw1")),
+        )
+    )
+    analysis = analyze_ospf_design(design, twin.topology)
+    group = HaGroup(
+        id="gw",
+        name="Gateway",
+        virtual_ip="10.0.10.1",
+        subnet="10.0.10.0/24",
+        members=(
+            HaMember(device_id="r1", priority=150),
+            HaMember(device_id="r2", priority=100),
+        ),
+    )
+    ha = analyze_ha_groups((group,), twin.topology)
+
+    ospf = ospf_design_request(design, analysis)
+    assert ospf.target is ExplanationTarget.ospf_design
+    assert f"{len(design.areas)} area(s)" in ospf.deterministic_text
+    assert "No OSPF packets" in ospf.deterministic_text
+    assert f"Areas {len(design.areas)}" in ospf.facts
+
+    gateway = ha_group_request(group, ha)
+    assert gateway.target is ExplanationTarget.ha_group
+    assert gateway.target_id == "gw"
+    assert "nominal active member is r1" in gateway.deterministic_text
+    assert "No VRRP or HSRP" in gateway.deterministic_text
+    assert "active r1" in gateway.facts
+    assert explain(gateway).deterministic_text == gateway.deterministic_text
