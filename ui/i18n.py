@@ -627,9 +627,9 @@ EN: MappingProxyType[str, str] = MappingProxyType(
             "button above to refresh this snapshot."
         ),
         "settings.not_reported": "not reported",
-        "settings.provider_remaining_requests": "Provider remaining requests",
+        "settings.provider_remaining_requests": "Provider remaining Requests",
         "settings.provider_remaining_tokens": "Provider remaining tokens",
-        "settings.provider_reset_requests": "Provider reset (requests)",
+        "settings.provider_reset_requests": "Provider reset (Requests)",
         "settings.provider_reset_tokens": "Provider reset (tokens)",
         "settings.provider_retry_after": "Provider Retry-After",
         "settings.real_tokens_used": "Real tokens used this session",

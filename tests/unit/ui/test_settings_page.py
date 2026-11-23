@@ -299,9 +299,9 @@ def test_settings_page_shows_provider_limits_after_a_call(
     assert "App safeguard" in rendered
     assert "Provider rate limits (from last response)" in rendered
     assert "not account billing or monthly usage" in rendered
-    assert _metric(at, "Provider remaining requests") == "42"
+    assert _metric(at, "Provider remaining Requests") == "42"
     assert _metric(at, "Provider remaining tokens") == "7000"
-    assert _metric(at, "Provider reset (requests)") == "1800.0"
+    assert _metric(at, "Provider reset (Requests)") == "1800.0"
     assert _metric(at, "Provider reset (tokens)") == "3600.0"
     assert _metric(at, "Provider Retry-After") == "2.0"
     assert _metric(at, "Real tokens used this session") == "15"
