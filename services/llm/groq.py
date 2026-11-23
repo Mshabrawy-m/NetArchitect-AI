@@ -39,7 +39,13 @@ from core.exceptions import (
 )
 
 from .budget import RequestBudget
-from .models import LLMMessage, LLMResponse, LLMUsage, MessageRole
+from .models import (
+    LLMMessage,
+    LLMResponse,
+    LLMUsage,
+    MessageRole,
+    ProviderLimits,
+)
 from .provider import LLMProvider
 from .structured import (
     repair_instruction,
@@ -49,6 +55,7 @@ from .structured import (
 
 Transport = Callable[[urllib.request.Request, float], "HTTPResult"]
 Sleep = Callable[[float], None]
+Clock = Callable[[], float]
 
 
 @dataclass(frozen=True)
@@ -78,24 +85,8 @@ def default_transport(request: urllib.request.Request, timeout: float) -> HTTPRe
 
 
 def _retry_after_seconds(headers: Mapping[str, str]) -> float | None:
-    """Return a bounded ``Retry-After`` value when the header is numeric."""
-    value = next(
-        (
-            header_value
-            for key, header_value in headers.items()
-            if key.lower() == "retry-after"
-        ),
-        None,
-    )
-    if not value:
-        return None
-    try:
-        seconds = float(value)
-    except (TypeError, ValueError):
-        return None
-    if seconds < 0:
-        return None
-    return min(seconds, float(MAX_LLM_RETRY_AFTER_SECONDS))
+    """Return a valid ``Retry-After`` value when the header is numeric."""
+    return ProviderLimits.from_headers(headers).retry_after
 
 
 class GroqProvider(LLMProvider):
@@ -113,6 +104,7 @@ class GroqProvider(LLMProvider):
         budget: RequestBudget | None = None,
         transport: Transport | None = None,
         sleep: Sleep = time.sleep,
+        clock: Clock = time.time,
         max_rate_limit_retries: int = MAX_LLM_RATE_LIMIT_RETRIES,
         max_repair_retries: int = MAX_LLM_REPAIR_RETRIES,
         max_response_tokens: int = MAX_LLM_RESPONSE_TOKENS,
@@ -133,6 +125,7 @@ class GroqProvider(LLMProvider):
         self.budget = budget
         self._transport = transport or default_transport
         self._sleep = sleep
+        self._clock = clock
         self.max_rate_limit_retries = max_rate_limit_retries
         self.max_repair_retries = max_repair_retries
         self.max_response_tokens = max_response_tokens
@@ -243,7 +236,7 @@ class GroqProvider(LLMProvider):
         if schema is not None:
             payload["response_format"] = {"type": "json_object"}
         result = self._post_with_rate_limit(payload, timeout)
-        return self._parse_envelope(result.body)
+        return self._parse_envelope(result.body, conversation)
 
     def _max_tokens(self) -> int:
         if self.budget is None:
@@ -270,7 +263,7 @@ class GroqProvider(LLMProvider):
     def _backoff_seconds(self, headers: Mapping[str, str], attempt: int) -> float:
         retry_after = _retry_after_seconds(headers)
         if retry_after is not None:
-            return retry_after
+            return min(retry_after, float(MAX_LLM_RETRY_AFTER_SECONDS))
         return min(
             LLM_RETRY_BASE_SECONDS * (2**attempt),
             float(MAX_LLM_RETRY_AFTER_SECONDS),
@@ -309,6 +302,9 @@ class GroqProvider(LLMProvider):
                 "The LLM provider could not be reached."
             ) from error
 
+        if self.budget is not None:
+            self.budget.observe_response(result.headers, timestamp=self._clock())
+
         if result.status_code in {401, 403}:
             raise LLMAuthenticationError(
                 "The LLM provider rejected the API key. Check the configured key."
@@ -325,7 +321,11 @@ class GroqProvider(LLMProvider):
             )
         return result
 
-    def _parse_envelope(self, body: bytes) -> LLMResponse:
+    def _parse_envelope(
+        self,
+        body: bytes,
+        conversation: Sequence[LLMMessage],
+    ) -> LLMResponse:
         try:
             payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -348,12 +348,12 @@ class GroqProvider(LLMProvider):
             raise LLMMalformedResponseError(
                 "The LLM provider response contained no assistant message."
             )
-        usage_payload = payload.get("usage")
-        usage = (
-            LLMUsage.model_validate(usage_payload)
-            if isinstance(usage_payload, dict)
-            else LLMUsage()
-        )
+        reported = LLMUsage.from_payload(payload.get("usage"))
+        if reported is not None:
+            usage = reported
+        else:
+            prompt_chars = sum(len(message.content) for message in conversation)
+            usage = LLMUsage.estimate(prompt_chars, len(content))
         if self.budget is not None:
             self.budget.record(usage)
         model = payload.get("model")

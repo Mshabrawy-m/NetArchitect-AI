@@ -36,7 +36,7 @@ This file is the consolidated limitation list for `v1.0.0-rc1`. It is intentiona
 ## AI and provider behavior
 
 - The optional Groq integration requires a key and a currently available model name. Providers retire models; configure `GROQ_MODEL` rather than relying on a hardcoded guarantee.
-- No live provider request was made during release verification. Tests use a fake provider with injected transport and sleep.
+- No live provider request was made during release verification. Tests use a fake provider with injected transport, clock, and response headers. Real Groq rate-limit header names, units, and reset semantics remain unverified.
 - LLM prose is explanatory only. It cannot change computed values or call tools outside the active agent's allowlist, but it must still be read with the attached disclosure labels.
 - The configured key is held only in process memory for request headers; it is never displayed, logged, serialized into exports, traced, or written to disk.
 - Prompt-injection text is constrained by schema validation and tool allowlists, but adversarial model behavior cannot be exhaustively proven.

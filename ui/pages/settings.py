@@ -9,6 +9,8 @@ environment variables through ``config.settings``.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import streamlit as st
 
 from config.limits import (
@@ -86,10 +88,31 @@ def _render_key_status(settings_key: str, key_source: str) -> str:
     return settings_key
 
 
+def _reported(value: object) -> str:
+    """Render one provider field without inventing a missing value."""
+    return i18n.t("settings.not_reported") if value is None else i18n.ltr(str(value))
+
+
+def _last_call_time(value: object) -> str:
+    """Render an injected response timestamp as UTC, if available."""
+    if value is None:
+        return i18n.t("settings.not_reported")
+    try:
+        moment = datetime.fromtimestamp(float(value), tz=UTC)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return i18n.t("settings.not_reported")
+    return i18n.ltr(moment.strftime("%Y-%m-%d %H:%M:%S UTC"))
+
+
 def _render_budget() -> None:
     budget = state.get_llm_budget()
     snapshot = budget.snapshot()
-    st.markdown(f"**{i18n.t('settings.budget')}**")
+    limits = snapshot["provider_limits"]
+    if not isinstance(limits, dict):
+        limits = {}
+
+    st.markdown(f"**{i18n.t('settings.app_safeguard')}**")
+    st.caption(i18n.t("settings.app_safeguard_caption"))
     columns = st.columns(4)
     columns[0].metric(
         i18n.t("settings.requests_used"),
@@ -118,6 +141,52 @@ def _render_budget() -> None:
         key="llm_budget_reset",
         on_click=state.reset_llm_budget,
     )
+
+    st.markdown(f"**{i18n.t('settings.provider_limits_title')}**")
+    st.caption(i18n.t("settings.provider_limits_caption"))
+    if snapshot["last_call_at"] is None:
+        st.info(i18n.t("settings.provider_limits_empty"))
+    provider_columns = st.columns(5)
+    provider_columns[0].metric(
+        i18n.t("settings.provider_remaining_requests"),
+        _reported(limits.get("remaining_requests")),
+    )
+    provider_columns[1].metric(
+        i18n.t("settings.provider_remaining_tokens"),
+        _reported(limits.get("remaining_tokens")),
+    )
+    provider_columns[2].metric(
+        i18n.t("settings.provider_reset_requests"),
+        _reported(limits.get("reset_requests")),
+    )
+    provider_columns[3].metric(
+        i18n.t("settings.provider_reset_tokens"),
+        _reported(limits.get("reset_tokens")),
+    )
+    provider_columns[4].metric(
+        i18n.t("settings.provider_retry_after"),
+        _reported(limits.get("retry_after")),
+    )
+
+    source = snapshot["last_usage_source"]
+    source_label = (
+        i18n.t("settings.usage_reported")
+        if source == "reported"
+        else i18n.t("settings.usage_estimated")
+        if source == "estimated"
+        else i18n.t("settings.not_reported")
+    )
+    total_columns = st.columns(4)
+    total_columns[0].metric(
+        i18n.t("settings.real_tokens_used"), snapshot["real_tokens"]
+    )
+    total_columns[1].metric(
+        i18n.t("settings.estimated_tokens_used"), snapshot["estimated_tokens"]
+    )
+    total_columns[2].metric(
+        i18n.t("settings.last_call_time"), _last_call_time(snapshot["last_call_at"])
+    )
+    total_columns[3].metric(i18n.t("settings.last_usage_source"), source_label)
 
 
 def _render_cache_and_trace() -> None:
@@ -171,11 +240,17 @@ def _render_test_connection(active_key: str) -> None:
         except ValueError as error:
             st.error(format_error(error))
         else:
+            usage_source = (
+                i18n.t("settings.usage_estimated")
+                if response.usage.source == "estimated"
+                else i18n.t("settings.usage_reported")
+            )
             st.success(
                 i18n.t(
                     "settings.connection_success",
                     model=i18n.ltr(response.model),
                     tokens=response.usage.total_tokens,
+                    usage_source=usage_source,
                 )
             )
 
@@ -237,9 +312,9 @@ def render() -> None:
 
     st.header(i18n.t("settings.provider"))
     active_key = _render_key_status(settings_key, settings.GROQ_KEY_SOURCE)
+    _render_test_connection(active_key)
     _render_budget()
     _render_cache_and_trace()
-    _render_test_connection(active_key)
 
     st.subheader(i18n.t("settings.needs_key"))
     st.markdown(i18n.t("settings.needs_key_list"))

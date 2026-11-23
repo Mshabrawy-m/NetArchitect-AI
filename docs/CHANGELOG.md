@@ -2,6 +2,36 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-23 - G2: capture real provider usage and limits
+
+### Added
+- `services/llm/models.py` adds `ProviderLimits` and a defensive header parser
+  for request/token limit, remaining, reset, and retry-after headers. Unknown,
+  missing, or malformed values become `None` ("not reported"); no raw header is
+  retained. `LLMUsage` carries a `reported`/`estimated` source label.
+- `RequestBudget` records the last response's rate-limit snapshot, response
+  timestamp from an injected clock, response count, and cumulative reported vs
+  estimated tokens. App caps are unchanged.
+- Settings shows App safeguard caps separately from provider rate limits from
+  the last response, cumulative real tokens, last call time, the billing
+  disclaimer, and a no-call hint pointing to the Connection test.
+
+### Changed
+- `GroqProvider` observes every HTTP response (including 429) and records
+  provider-reported usage when present; otherwise it records a labeled local
+  estimate. The connection test refreshes the same in-session snapshot.
+- `FakeProvider` accepts scripted response headers and a clock so AppTest can
+  exercise the Settings display without a network call.
+
+### Tests
+- Provider tests cover all headers, partial headers, no headers, malformed
+  values, missing/malformed usage, every-response refresh, cache-hit isolation,
+  and key secrecy in logs/traces/session dumps. Settings AppTest verifies the
+  "not reported" empty state and provider values after a fake call.
+
+### Not verified
+- Live Groq header exposure, reset units, and exact model usage fields.
+
 ## 2026-11-23 - G1: remove the session API key input
 
 ### Changed

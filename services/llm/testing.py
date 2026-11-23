@@ -7,7 +7,8 @@ never contacts a network or reads an API key.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel
@@ -35,6 +36,8 @@ class FakeProvider(LLMProvider):
     model: str = "fake-model"
     budget: RequestBudget | None = None
     usage: LLMUsage = field(default_factory=LLMUsage)
+    headers: Mapping[str, str] = field(default_factory=dict)
+    clock: Callable[[], float] = time.time
     name: str = "fake"
     calls: list[FakeCall] = field(default_factory=list)
 
@@ -63,6 +66,7 @@ class FakeProvider(LLMProvider):
         )
         if self.budget is not None:
             self.budget.begin_call()
+            self.budget.observe_response(self.headers, timestamp=self.clock())
         if not self._script:
             raise LLMProviderError("The scripted FakeProvider has no replies left.")
         item = self._script.pop(0)

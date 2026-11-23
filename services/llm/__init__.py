@@ -12,6 +12,7 @@ from .models import (
     LLMResponse,
     LLMUsage,
     MessageRole,
+    ProviderLimits,
     ProviderStatus,
 )
 from .prompts import (
@@ -36,6 +37,7 @@ __all__ = [
     "LLMUsage",
     "MessageRole",
     "PromptSpec",
+    "ProviderLimits",
     "ProviderStatus",
     "RequestBudget",
     "default_transport",

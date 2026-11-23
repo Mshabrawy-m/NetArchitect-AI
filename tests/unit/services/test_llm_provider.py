@@ -10,6 +10,7 @@ import pytest
 from pydantic import BaseModel
 
 from config.limits import MAX_LLM_REPAIR_RETRIES
+from config.settings import get_settings
 from core.exceptions import (
     LLMAuthenticationError,
     LLMBudgetExceededError,
@@ -25,12 +26,23 @@ from services.llm import (
     HTTPResult,
     LLMMessage,
     MessageRole,
+    ProviderLimits,
     RequestBudget,
     provider_status,
 )
 from services.llm.testing import FakeProvider
 
 KEY = "gsk-test-secret-key-that-must-never-appear"
+FIXED_NOW = 1_700_000_123.0
+FULL_LIMIT_HEADERS = {
+    "x-ratelimit-limit-requests": "100",
+    "x-ratelimit-limit-tokens": "10000",
+    "x-ratelimit-remaining-requests": "42",
+    "x-ratelimit-remaining-tokens": "7000",
+    "x-ratelimit-reset-requests": "1800",
+    "x-ratelimit-reset-tokens": "3600",
+    "retry-after": "2",
+}
 
 
 class Payload(BaseModel):
@@ -43,23 +55,24 @@ def _envelope(
     model: str = "test-model",
     prompt_tokens: int = 10,
     completion_tokens: int = 5,
+    include_usage: bool = True,
 ) -> bytes:
-    return json.dumps(
-        {
-            "model": model,
-            "choices": [
-                {
-                    "message": {"role": "assistant", "content": content},
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens,
-            },
+    payload: dict[str, object] = {
+        "model": model,
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    if include_usage:
+        payload["usage"] = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
         }
-    ).encode("utf-8")
+    return json.dumps(payload).encode("utf-8")
 
 
 class ScriptedTransport:
@@ -88,6 +101,7 @@ def _provider(transport, **kwargs) -> GroqProvider:
         base_url="https://groq.example.invalid/openai/v1",
         transport=transport,
         sleep=kwargs.pop("sleep", lambda _seconds: None),
+        clock=kwargs.pop("clock", lambda: 1_700_000_000.0),
         **kwargs,
     )
 
@@ -118,6 +132,108 @@ def test_success_returns_typed_response_and_usage() -> None:
     headers = {key.lower(): value for key, value in request.header_items()}
     assert headers["authorization"] == f"Bearer {KEY}"
     assert headers["content-type"] == "application/json"
+
+
+def test_all_rate_limit_headers_and_reported_usage_are_captured() -> None:
+    transport = ScriptedTransport(
+        [HTTPResult(200, FULL_LIMIT_HEADERS, _envelope("Hello"))]
+    )
+    budget = RequestBudget(max_calls=5, max_tokens=1_000)
+    provider = _provider(transport, budget=budget, clock=lambda: FIXED_NOW)
+
+    response = provider.complete(_messages())
+
+    assert response.usage.source == "reported"
+    assert response.usage.total_tokens == 15
+    snapshot = budget.snapshot()
+    assert snapshot["used_calls"] == 1
+    assert snapshot["responses_observed"] == 1
+    assert snapshot["real_tokens"] == 15
+    assert snapshot["estimated_tokens"] == 0
+    assert snapshot["last_usage_source"] == "reported"
+    assert snapshot["last_call_at"] == FIXED_NOW
+    assert snapshot["provider_limits"] == ProviderLimits(
+        limit_requests=100,
+        limit_tokens=10_000,
+        remaining_requests=42,
+        remaining_tokens=7_000,
+        reset_requests=1_800.0,
+        reset_tokens=3_600.0,
+        retry_after=2.0,
+    ).model_dump()
+
+
+def test_partial_and_malformed_headers_are_never_guessed() -> None:
+    headers = {
+        "X-RateLimit-Remaining-Requests": "7",
+        "x-ratelimit-reset_tokens": "900",
+        "x-ratelimit-remaining-tokens": "oops",
+        "x-ratelimit-reset-requests": "",
+        "Retry-After": "-1",
+        "Authorization": "Bearer should-not-be-captured",
+    }
+    parsed = ProviderLimits.from_headers(headers)
+
+    assert parsed.remaining_requests == 7
+    assert parsed.reset_tokens == 900.0
+    assert parsed.remaining_tokens is None
+    assert parsed.reset_requests is None
+    assert parsed.retry_after is None
+    assert parsed.limit_requests is None
+    assert parsed.limit_tokens is None
+    assert "should-not-be-captured" not in json.dumps(parsed.model_dump())
+
+
+def test_missing_and_malformed_usage_falls_back_to_labeled_estimate() -> None:
+    missing = ScriptedTransport(
+        [HTTPResult(200, {}, _envelope("Hi", include_usage=False))]
+    )
+    malformed_body = _envelope("Hi", include_usage=False).replace(
+        b'"choices"',
+        b'"usage": {"total_tokens": "oops"}, "choices"',
+        1,
+    )
+    malformed = ScriptedTransport([HTTPResult(200, {}, malformed_body)])
+    for transport in (missing, malformed):
+        budget = RequestBudget(max_calls=5, max_tokens=1_000)
+        provider = _provider(transport, budget=budget)
+
+        response = provider.complete(_messages())
+
+        assert response.usage.source == "estimated"
+        assert response.usage.total_tokens == 3
+        assert response.usage.prompt_tokens == 2
+        assert response.usage.completion_tokens == 1
+        snapshot = budget.snapshot()
+        assert snapshot["real_tokens"] == 0
+        assert snapshot["estimated_tokens"] == 3
+        assert snapshot["last_usage_source"] == "estimated"
+        assert snapshot["used_tokens"] == 3
+        assert snapshot["provider_limits"] == ProviderLimits().model_dump()
+
+
+def test_every_http_response_refreshes_the_last_snapshot() -> None:
+    transport = ScriptedTransport(
+        [
+            HTTPResult(429, {"x-ratelimit-remaining-requests": "1"}, b"{}"),
+            HTTPResult(200, {"x-ratelimit-remaining-requests": "9"}, _envelope("ok")),
+        ]
+    )
+    budget = RequestBudget(max_calls=5, max_tokens=1_000)
+    provider = _provider(
+        transport,
+        budget=budget,
+        clock=lambda: FIXED_NOW,
+        max_rate_limit_retries=1,
+    )
+
+    provider.complete(_messages())
+
+    snapshot = budget.snapshot()
+    assert snapshot["used_calls"] == 2
+    assert snapshot["responses_observed"] == 2
+    assert snapshot["last_call_at"] == FIXED_NOW
+    assert snapshot["provider_limits"]["remaining_requests"] == 9
 
 
 def test_missing_key_raises_before_any_request() -> None:
@@ -318,6 +434,36 @@ def test_secret_never_appears_in_errors_logs_or_status(caplog) -> None:
     status = provider_status(provider, key_configured=True)
     assert KEY not in json.dumps(status)
     assert KEY not in caplog.text
+
+
+def test_configured_key_never_appears_in_telemetry(monkeypatch, caplog) -> None:
+    caplog.set_level(logging.DEBUG)
+    monkeypatch.setenv("GROQ_API_KEY", KEY)
+    get_settings.cache_clear()
+    try:
+        budget = RequestBudget(max_calls=5, max_tokens=1_000)
+        provider = _provider(
+            ScriptedTransport([HTTPResult(200, FULL_LIMIT_HEADERS, _envelope("ok"))]),
+            budget=budget,
+        )
+        provider.complete(_messages())
+        status = provider_status(
+            provider,
+            key_configured=True,
+            key_source=get_settings().GROQ_KEY_SOURCE,
+        )
+        dump = json.dumps(
+            {
+                "key_source": get_settings().GROQ_KEY_SOURCE,
+                "budget": budget.snapshot(),
+                "status": status,
+            }
+        )
+        assert get_settings().GROQ_KEY_SOURCE == "environment"
+        assert KEY not in dump
+        assert KEY not in caplog.text
+    finally:
+        get_settings.cache_clear()
 
 
 def test_per_request_timeout_is_bounded() -> None:

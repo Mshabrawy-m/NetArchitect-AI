@@ -605,6 +605,11 @@ EN: MappingProxyType[str, str] = MappingProxyType(
             "It is read only from Streamlit secrets or environment variables."
         ),
         "settings.budget": "Session request budget",
+        "settings.app_safeguard": "App safeguard",
+        "settings.app_safeguard_caption": (
+            "Local per-session caps only. These caps are unchanged and are not "
+            "provider rate limits."
+        ),
         "settings.requests_used": "Requests used",
         "settings.tokens_used": "Tokens used",
         "settings.requests_remaining": "Requests remaining",
@@ -612,6 +617,27 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "settings.request_budget_used": "Request budget used",
         "settings.token_budget_used": "Token budget used",
         "settings.budget_reset": "Reset session budget",
+        "settings.provider_limits_title": "Provider rate limits (from last response)",
+        "settings.provider_limits_caption": (
+            "These are rate-limit values reported by the provider for the last "
+            "request, not account billing or monthly usage."
+        ),
+        "settings.provider_limits_empty": (
+            "No provider response has been recorded yet. Use the Connection test "
+            "button above to refresh this snapshot."
+        ),
+        "settings.not_reported": "not reported",
+        "settings.provider_remaining_requests": "Provider remaining requests",
+        "settings.provider_remaining_tokens": "Provider remaining tokens",
+        "settings.provider_reset_requests": "Provider reset (requests)",
+        "settings.provider_reset_tokens": "Provider reset (tokens)",
+        "settings.provider_retry_after": "Provider Retry-After",
+        "settings.real_tokens_used": "Real tokens used this session",
+        "settings.estimated_tokens_used": "Estimated tokens used this session",
+        "settings.last_call_time": "Last call time",
+        "settings.last_usage_source": "Last usage source",
+        "settings.usage_reported": "provider-reported",
+        "settings.usage_estimated": "estimated",
         "settings.cache_title": "Copilot response cache",
         "settings.cache_caption": (
             "Bounded in-session cache keyed by model, prompt version, schema, and "
@@ -632,14 +658,16 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "settings.connection_caption": (
             "Bounded test: one request, a {seconds}-second timeout, no rate-limit retries, and "
             "no structured-output repairs. The request counts against the session "
-            "budget above."
+            "budget below."
         ),
         "settings.connection_add_key": (
-            "Add a key for this session or configure one to enable the test."
+            "Configure a key in Streamlit secrets or environment variables to "
+            "enable the test."
         ),
         "settings.connection_button": "Test connection",
         "settings.connection_success": (
-            "Connected. Provider reported model {model}; {tokens} token(s) used."
+            "Connected. Provider reported model {model}; {tokens} token(s) used "
+            "({usage_source})."
         ),
         "settings.needs_key": "What needs an API key",
         "settings.needs_key_list": (
@@ -1354,6 +1382,10 @@ AR: MappingProxyType[str, str] = MappingProxyType(
             "يُقرأ فقط من أسرار Streamlit أو متغيرات البيئة."
         ),
         "settings.budget": "ميزانية طلبات الجلسة",
+        "settings.app_safeguard": "حماية التطبيق",
+        "settings.app_safeguard_caption": (
+            "حدود محلية للجلسة فقط. هذه الحدود لم تتغير وليست حدود معدل المزود."
+        ),
         "settings.requests_used": "الطلبات المستخدمة",
         "settings.tokens_used": "الرموز المستخدمة",
         "settings.requests_remaining": "الطلبات المتبقية",
@@ -1361,6 +1393,27 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "settings.request_budget_used": "ميزانية الطلبات المستخدمة",
         "settings.token_budget_used": "ميزانية الرموز المستخدمة",
         "settings.budget_reset": "إعادة ضبط ميزانية الجلسة",
+        "settings.provider_limits_title": "حدود معدل المزود (من آخر استجابة)",
+        "settings.provider_limits_caption": (
+            "هذه قيم حدود معدل أبلغ عنها المزود لأخر طلب، وليست فوترة الحساب "
+            "أو الاستخدام الشهري."
+        ),
+        "settings.provider_limits_empty": (
+            "لم يتم تسجيل أي استجابة من المزود بعد. استخدم زر اختبار الاتصال "
+            "أعلاه لتحديث هذه اللقطة."
+        ),
+        "settings.not_reported": "غير مُبلَّغ عنه",
+        "settings.provider_remaining_requests": "الطلبات المتبقية لدى المزود",
+        "settings.provider_remaining_tokens": "الرموز المتبقية لدى المزود",
+        "settings.provider_reset_requests": "إعادة تعيين المزود (الطلبات)",
+        "settings.provider_reset_tokens": "إعادة تعيين المزود (الرموز)",
+        "settings.provider_retry_after": "إعادة المحاولة بعد (المزود)",
+        "settings.real_tokens_used": "الرموز الحقيقية المستخدمة هذه الجلسة",
+        "settings.estimated_tokens_used": "الرموز المقدّرة المستخدمة هذه الجلسة",
+        "settings.last_call_time": "وقت آخر اتصال",
+        "settings.last_usage_source": "مصدر الاستخدام الأخير",
+        "settings.usage_reported": "مُبلَّغ من المزود",
+        "settings.usage_estimated": "تقديري",
         "settings.cache_title": "ذاكرة استجابات المساعد",
         "settings.cache_caption": (
             "ذاكرة محدودة في الجلسة مفتاحها الطراز وإصدار المخطط وإصدار التوجيه "
@@ -1382,10 +1435,13 @@ AR: MappingProxyType[str, str] = MappingProxyType(
             "اختبار محدود: طلب واحد ومهلة {seconds} ثانية دون إعادة محاولة لتحديد "
             "المعدل ودون إصلاح المخرجات المنظمة. الطلب محسوب على ميزانية الجلسة."
         ),
-        "settings.connection_add_key": "أضف مفتاحاً لهذه الجلسة أو اضبط مفتاحاً لتمكين الاختبار.",
+        "settings.connection_add_key": (
+            "اضبط مفتاحاً في أسرار Streamlit أو متغيرات البيئة لتمكين الاختبار."
+        ),
         "settings.connection_button": "اختبار الاتصال",
         "settings.connection_success": (
-            "تم الاتصال. أبلغ المزود عن الطراز {model}؛ استخدم {tokens} رمزاً."
+            "تم الاتصال. أبلغ المزود عن الطراز {model}؛ استخدم {tokens} رمزاً "
+            "({usage_source})."
         ),
         "settings.needs_key": "ما الذي يحتاج إلى مفتاح API",
         "settings.needs_key_list": (
