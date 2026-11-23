@@ -12,6 +12,7 @@
 - G1: the Settings page no longer has a session API-key input. `config.settings` is the sole key source (Streamlit secrets, then environment variables); `Settings.GROQ_KEY_SOURCE` exposes only `"secrets"`, `"environment"`, or `"none"` for the status display. The session-state constant and accessors were removed, callers read the configured key directly, and tests configure `GROQ_API_KEY` through the environment.
 - G2: `GroqProvider` records a bounded, secret-free `RequestBudget` telemetry snapshot from every HTTP response. `LLMUsage` distinguishes `reported` from a clearly `estimated` fallback; `ProviderLimits` parses known rate-limit headers case-insensitively and leaves missing/malformed fields as `None`. The clock is injected. Settings separates App safeguard caps from provider rate limits, shows cumulative real tokens and last call time, and labels the values as last-request rate limits rather than billing. Cache hits do not touch the budget.
 - Not verified for G2: no live Groq call was made. Fixture headers exercise all/partial/absent/malformed cases; live header names, units, and reset semantics remain unverified.
+- G3: `.streamlit/config.toml` sets `server.fileWatcherType = "none"` to avoid module-eviction races when the Cloud app updates. A stdlib `tomllib` test reads the deployed config and asserts the value.
 
 ## V2 share package (feature/v2-share)
 

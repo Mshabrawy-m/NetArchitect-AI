@@ -3,6 +3,8 @@
 
 [server]
 headless = true
+# Avoid module-eviction races when the Cloud app updates.
+fileWatcherType = "none"
 # Application-level caps are 2,000,000 bytes for JSON and 1,000,000 for CSV.
 # The widget is an outer guard; the in-app guarded parsers still enforce the
 # smaller per-format caps and return typed errors before engine work begins.

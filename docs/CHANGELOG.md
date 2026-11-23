@@ -2,6 +2,14 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-23 - G3: disable the Streamlit file watcher
+
+### Changed
+- `.streamlit/config.toml` sets `server.fileWatcherType = "none"` for production-safe Cloud updates.
+
+### Tests
+- A stdlib `tomllib` test reads the actual config file and asserts the value.
+
 ## 2026-11-23 - G2: capture real provider usage and limits
 
 ### Added

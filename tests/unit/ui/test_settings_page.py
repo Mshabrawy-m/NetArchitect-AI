@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,13 @@ def configured_key(monkeypatch, request):
 
     request.addfinalizer(get_settings.cache_clear)
     return _set
+
+
+def test_streamlit_config_disables_the_file_watcher() -> None:
+    config_path = APP_PATH.parent / ".streamlit" / "config.toml"
+    config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+
+    assert config["server"]["fileWatcherType"] == "none"
 
 
 def _settings_page() -> AppTest:
