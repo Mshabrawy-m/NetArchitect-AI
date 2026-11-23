@@ -1,11 +1,15 @@
 # Current Project Status
 
 ## Overall
-- Current phase: v1.0.0 released; V2 share package on `feature/v2-share`
-- Current task: B1-B6 complete (bundle save/open, Arabic PDF, executive summary, interchange exports, and CLI)
-- Overall status: `main` was hotfixed through `bf9ef7d` to restore `core -> network` layering and add fresh-import/layering guards. `feature/v2-share` was created from that `main`; B1-B6 are committed per task, followed by final guard and documentation updates. The twin schema remains version 2, the schema-v1 fingerprint remains byte-identical and tested, no new runtime dependency or worker/thread was added, and runtime code still writes no files except the CLI's explicit `--out` path. The feature branch is not pushed.
+- Current phase: v2.0.0 released from `main` (`3156c9a`, tag `v2.0.0`)
+- Current task: G1-G3 LLM key/usage hardening on `main`
+- Overall status: v2.0.0 was released after the B1-B6 share package was merged and tagged. The current work keeps the same layering and free-tier rules, adds no dependency, and hardens key provenance, provider-usage telemetry, and the Streamlit file watcher. The twin schema and stable exports are unchanged.
 - Last updated: 2026-11-23
-- Branch: `feature/v2-share` (created from `main` at `bf9ef7d`)
+- Branch: `main`
+
+## LLM hardening on main
+
+- G1: the Settings page no longer has a session API-key input. `config.settings` is the sole key source (Streamlit secrets, then environment variables); `Settings.GROQ_KEY_SOURCE` exposes only `"secrets"`, `"environment"`, or `"none"` for the status display. The session-state constant and accessors were removed, callers read the configured key directly, and tests configure `GROQ_API_KEY` through the environment.
 
 ## V2 share package (feature/v2-share)
 
@@ -1175,7 +1179,7 @@ structured-form workflow works with no API key.
   at most one request with a 15-second timeout, no rate-limit retries, and no
   repair retries; the builder is a module-level function so tests inject a fake
   provider and never contact the network. Includes secrets/environment
-  documentation and session-only key entry with save/clear actions.
+  documentation; key entry is no longer offered in the UI.
 - `ui/components/requirements_form.py`: small structured form (organization,
   site, bounded department list, design goals, constraints) that builds a typed
   `NetworkRequirements`, runs `Orchestrator.run_structured` with no LLM, stores
@@ -1185,16 +1189,15 @@ structured-form workflow works with no API key.
   working twin is reported separately.
 - `ui/components.py` became the `ui/components/` package; existing
   `from ui.components import ...` imports are unchanged.
-- `ui/state.py`: session accessors for the optional LLM session key and the
-  per-session `RequestBudget`.
+- `ui/state.py`: the per-session `RequestBudget` accessor.
 - `app.py`: the Settings page is now ready and routed; only that placeholder
   changed. Dashboard and sidebar copy updated to Phase 9 and the new page.
-- `tests/unit/ui/test_settings_page.py` (8 AppTest tests): no-key and
-  key-present states, the key never appearing in rendered output or other
-  session values, saving/clearing a session key, budget display/reset, a
-  provider-unavailable connection test that raises no exception, a successful
-  fake connection test, an end-to-end deterministic form run with an untouched
-  baseline twin, and a form validation error.
+- `tests/unit/ui/test_settings_page.py`: no-key and configured-key states, the
+  key never appearing in rendered output or other session values, no session
+  key input widget, budget display/reset, a provider-unavailable connection
+  test that raises no exception, a successful fake connection test, an
+  end-to-end deterministic form run with an untouched baseline twin, and a form
+  validation error.
 
 ## Test evidence (Phase 9c)
 - Commands and results:
@@ -1828,10 +1831,8 @@ Digital Twin, Dashboard, and Topology Editor.
 - No live Groq request has been made. The connection test is covered only with
   injected fake providers, so real endpoint reachability, model availability,
   and provider-reported token usage remain unverified against the live service.
-- A session-entered API key lives in Streamlit session state for the browser
-  tab. It is never persisted by the application, but it is visible to the
-  running Streamlit process and to browser session state; configure
-  environment variables or Streamlit secrets for shared deployments.
+- The API key is read only from Streamlit secrets or environment variables. It
+  is never displayed, logged, traced, serialized, or stored in session state.
 - The structured form models one organization with one site and a bounded
   department list. Multi-site entry, device/link requirements, and explicitly
   requested topologies are not exposed by the form yet; the deterministic

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from agents import (
@@ -13,14 +14,26 @@ from agents import (
     run_structured_design,
 )
 from agents.network_agents import TopologyInput, TopologyOutput, default_agents
+from config.settings import get_settings
 from core.exceptions import AgentValidationError
 from core.schemas.requirements import NetworkRequirements, UserFacts
 from tests.unit.agents.helpers import sample_requirements
 from tests.unit.ui.nav_helpers import open_page
-from ui import state
 from ui.pages import agent_control_center
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
+
+
+@pytest.fixture
+def configured_key(monkeypatch, request):
+    """Set the sole supported key source and clear the cached settings."""
+
+    def _set(secret: str) -> None:
+        monkeypatch.setenv("GROQ_API_KEY", secret)
+        get_settings.cache_clear()
+
+    request.addfinalizer(get_settings.cache_clear)
+    return _set
 
 
 class ExplodingTopologyAgent(BaseAgent):
@@ -126,11 +139,11 @@ def test_two_workflows_can_be_selected_by_source() -> None:
     assert metric(at, "Steps") == "11"
 
 
-def test_trace_json_never_contains_the_session_key() -> None:
+def test_trace_json_never_contains_the_configured_key(configured_key) -> None:
     secret = "gsk-control-center-secret"
+    configured_key(secret)
     plan_state = run_structured_design(sample_requirements())
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
-    at.session_state[state.LLM_SESSION_KEY] = secret
     at.session_state[agent_control_center.PLAN_SOURCES[0][1]] = plan_state
     at.run()
     open_page(at, "Agent Control Center")
@@ -138,6 +151,4 @@ def test_trace_json_never_contains_the_session_key() -> None:
     assert not at.exception
     assert secret not in plan_state.trace.to_json()
     for name, value in at.session_state.to_dict().items():
-        if name == state.LLM_SESSION_KEY:
-            continue
-        assert secret not in str(value), f"session key {name!r} leaked the secret"
+        assert secret not in str(value), f"session value {name!r} leaked the key"

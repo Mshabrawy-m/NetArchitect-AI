@@ -597,21 +597,13 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "settings.key_configured": "API key configured",
         "settings.key_source": "Key source",
         "settings.model": "Model",
-        "settings.key_source_session": "session (this browser tab only)",
-        "settings.key_source_environment": "environment or Streamlit secrets",
+        "settings.key_source_secrets": "Streamlit secrets",
+        "settings.key_source_environment": "environment variable",
         "settings.key_source_none": "not configured",
         "settings.key_privacy": (
             "The key itself is never displayed, logged, traced, or stored on disk. "
-            "A session key is held only in this browser tab and disappears when the "
-            "session ends."
+            "It is read only from Streamlit secrets or environment variables."
         ),
-        "settings.key_entry": "Session API key (optional)",
-        "settings.key_entry_help": (
-            "Used only for this browser session. Prefer environment variables or "
-            "Streamlit secrets for deployments."
-        ),
-        "settings.key_save": "Use key for this session",
-        "settings.key_clear": "Clear session key",
         "settings.budget": "Session request budget",
         "settings.requests_used": "Requests used",
         "settings.tokens_used": "Tokens used",
@@ -1354,20 +1346,13 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "settings.key_configured": "مفتاح API مضبط",
         "settings.key_source": "مصدر المفتاح",
         "settings.model": "الطراز",
-        "settings.key_source_session": "الجلسة (هذا التبويب فقط)",
-        "settings.key_source_environment": "متغيرات البيئة أو أسرار Streamlit",
+        "settings.key_source_secrets": "أسرار Streamlit",
+        "settings.key_source_environment": "متغير البيئة",
         "settings.key_source_none": "غير مضبط",
         "settings.key_privacy": (
             "لا يتم عرض المفتاح أو تسجيله أو تتبعه أو حفظه على القرص. "
-            "مفتاح الجلسة موجود في هذا التبويب فقط ويزول بانتهاء الجلسة."
+            "يُقرأ فقط من أسرار Streamlit أو متغيرات البيئة."
         ),
-        "settings.key_entry": "مفتاح الجلسة (اختياري)",
-        "settings.key_entry_help": (
-            "يستخدم لهذه الجلسة فقط. يفضل متغيرات البيئة أو أسرار Streamlit "
-            "في النشر."
-        ),
-        "settings.key_save": "استخدام المفتاح لهذه الجلسة",
-        "settings.key_clear": "مسح مفتاح الجلسة",
         "settings.budget": "ميزانية طلبات الجلسة",
         "settings.requests_used": "الطلبات المستخدمة",
         "settings.tokens_used": "الرموز المستخدمة",

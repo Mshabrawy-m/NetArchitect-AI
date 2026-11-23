@@ -7,8 +7,10 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
+from config.settings import get_settings
 from services.llm.testing import FakeProvider
 from simulation import (
     MODEL_NOTE,
@@ -26,6 +28,18 @@ from ui.components import editors
 from ui.pages import simulation_lab
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
+
+
+@pytest.fixture
+def configured_key(monkeypatch, request):
+    """Set the sole supported key source and clear the cached settings."""
+
+    def _set(secret: str) -> None:
+        monkeypatch.setenv("GROQ_API_KEY", secret)
+        get_settings.cache_clear()
+
+    request.addfinalizer(get_settings.cache_clear)
+    return _set
 
 
 def _twin_with_demand():
@@ -164,7 +178,7 @@ def test_copilot_interprets_without_key_and_only_fills_the_form() -> None:
     assert len(at.session_state[state.SIMULATION_HISTORY_KEY].runs) == 0
 
 
-def test_copilot_with_key_uses_audited_ai_draft(monkeypatch) -> None:
+def test_copilot_with_key_uses_audited_ai_draft(monkeypatch, configured_key) -> None:
     reply = json.dumps(
         {
             "intent": "fail_link",
@@ -180,9 +194,9 @@ def test_copilot_with_key_uses_audited_ai_draft(monkeypatch) -> None:
         "_copilot_provider",
         lambda: FakeProvider([reply]),
     )
+    configured_key("environment-test-key")
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.session_state[state.LLM_SESSION_KEY] = "session-only-test-key"
     open_page(at, "Simulation Lab")
 
     at.text_input(key="simulation_copilot_sentence").set_value(
@@ -198,7 +212,7 @@ def test_copilot_with_key_uses_audited_ai_draft(monkeypatch) -> None:
         [caption.value for caption in at.caption]
         + [element.value for element in at.markdown]
     )
-    assert "session-only-test-key" not in rendered
+    assert "environment-test-key" not in rendered
 
 
 def _run_scenario_in_app(at: AppTest) -> None:
@@ -232,7 +246,10 @@ def test_c3_explanations_work_without_a_key() -> None:
     assert not any("AI-generated" in caption for caption in captions)
 
 
-def test_c3_explanations_use_audited_ai_with_a_key(monkeypatch) -> None:
+def test_c3_explanations_use_audited_ai_with_a_key(
+    monkeypatch,
+    configured_key,
+) -> None:
     replies = [
         json.dumps({"text": "The modeled path follows the cheaper branch."}),
         json.dumps({"text": "The demand can still use the alternate branch."}),
@@ -243,9 +260,9 @@ def test_c3_explanations_use_audited_ai_with_a_key(monkeypatch) -> None:
         "_provider",
         lambda: FakeProvider([next(pending)]),
     )
+    configured_key("environment-test-key")
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     at.session_state[state.TWIN_KEY] = _twin_with_demand()
-    at.session_state[state.LLM_SESSION_KEY] = "session-only-test-key"
     open_page(at, "Simulation Lab")
     _run_scenario_in_app(at)
 
@@ -260,7 +277,7 @@ def test_c3_explanations_use_audited_ai_with_a_key(monkeypatch) -> None:
         + [element.value for element in at.markdown]
     )
     assert "AI-generated" in rendered
-    assert "session-only-test-key" not in rendered
+    assert "environment-test-key" not in rendered
 
 
 def test_simulation_lab_renders_e5_controls() -> None:

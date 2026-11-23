@@ -106,7 +106,6 @@ SECURITY_FLOWS_KEY = "security_flow_requests"
 LEGACY_TOPOLOGY_KEY = "topology"
 FLASH_KEY = "topology_editor_flash"
 
-LLM_SESSION_KEY = "llm_session_api_key"
 LLM_BUDGET_KEY = "llm_request_budget"
 COPILOT_CACHE_KEY = "copilot_response_cache"
 COPILOT_TRACE_KEY = "copilot_prompt_trace"
@@ -940,30 +939,6 @@ def report_generated_at(fingerprint: str) -> datetime:
         del timestamps[next(iter(timestamps))]
     st.session_state[REPORT_TIME_KEY] = timestamps
     return moment
-
-
-def get_llm_session_key() -> str:
-    """Return the session-only API key, or an empty string.
-
-    The key is held in Streamlit session state for this browser tab only. It is
-    never written to disk, logs, traces, URLs, or any rendered output.
-    """
-    value = st.session_state.get(LLM_SESSION_KEY, "")
-    return value.strip() if isinstance(value, str) else ""
-
-
-def set_llm_session_key(value: str) -> None:
-    """Set the session-only API key (trimmed); an empty value clears it."""
-    key = value.strip()
-    if key:
-        st.session_state[LLM_SESSION_KEY] = key
-    else:
-        session_delete(LLM_SESSION_KEY)
-
-
-def clear_llm_session_key() -> None:
-    """Remove the session-only API key."""
-    session_delete(LLM_SESSION_KEY)
 
 
 def get_llm_budget() -> RequestBudget:

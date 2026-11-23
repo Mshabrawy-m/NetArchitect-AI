@@ -69,7 +69,7 @@ class ProviderStatus(BaseModel):
     model: str
     base_url: str
     key_configured: bool
-    key_source: Literal["session", "environment", "secrets", "none"] = "none"
+    key_source: Literal["environment", "secrets", "none"] = "none"
 
 
 __all__ = [

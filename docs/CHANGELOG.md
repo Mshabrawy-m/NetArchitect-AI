@@ -2,6 +2,25 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-23 - G1: remove the session API key input
+
+### Changed
+- `config/settings.py` is the sole key source and now reports a non-secret
+  `GROQ_KEY_SOURCE` of `secrets`, `environment`, or `none`.
+- `ui/pages/settings.py`, `ui/components/copilot.py`, `ui/pages/ai_designer.py`,
+  and `ui/pages/simulation_lab.py` read the configured key directly. The
+  password input, save/clear buttons, session-state key, and its accessors were
+  removed.
+- `ui/i18n.py` keeps ar/en parity with source labels for secrets, environment,
+  and none; provider status and documentation no longer describe a session key.
+
+### Tests
+- Settings AppTest asserts no key input widget, source/status without the key,
+  no key in rendered output or session dumps, and a first-click connection test
+  from an empty session using an environment-configured key.
+- UI tests that previously injected a key into session state now set
+  `GROQ_API_KEY` and clear the cached settings; no deleted-feature test remains.
+
 ## 2026-11-23 - V2 share package on feature/v2-share (B1-B6)
 
 ### Added

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import functools
 import os
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -40,6 +41,8 @@ class Settings(BaseModel):
     DEPLOYMENT_TARGET: str = "Streamlit Community Cloud Free"
     # Optional. Core deterministic features work without any API key.
     GROQ_API_KEY: str = ""
+    # Non-secret provenance for the status display; never user-supplied.
+    GROQ_KEY_SOURCE: Literal["secrets", "environment", "none"] = "none"
     # OpenAI-compatible Groq endpoint. Kept configurable so a deployment can
     # point at a compatible gateway without code changes.
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
@@ -79,14 +82,21 @@ def get_settings() -> Settings:
     override the model defaults. Instantiates successfully with no secrets
     and no Streamlit context.
     """
-    overrides: dict[str, str] = {}
-
+    env_overrides: dict[str, str] = {}
     for key in _SETTING_KEYS:
         value = os.environ.get(key)
         if value is not None:
-            overrides[key] = value
+            env_overrides[key] = value
 
     # Streamlit secrets take precedence over environment variables.
-    overrides.update(_read_streamlit_secrets())
+    secret_overrides = _read_streamlit_secrets()
+    overrides = {**env_overrides, **secret_overrides}
 
-    return Settings(**overrides)
+    if str(secret_overrides.get("GROQ_API_KEY", "")).strip():
+        key_source: Literal["secrets", "environment", "none"] = "secrets"
+    elif str(env_overrides.get("GROQ_API_KEY", "")).strip():
+        key_source = "environment"
+    else:
+        key_source = "none"
+
+    return Settings(**overrides, GROQ_KEY_SOURCE=key_source)

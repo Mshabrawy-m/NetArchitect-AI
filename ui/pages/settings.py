@@ -3,8 +3,8 @@
 The API key is optional. Core deterministic engineering and the structured
 requirements form work without it. This page shows only whether a key is
 configured and where it came from; it never displays, logs, serializes, or
-echoes the key itself. A session-entered key lives in Streamlit session state
-for this browser tab and is never persisted.
+echoes the key itself. The key is read only from Streamlit secrets or
+environment variables through ``config.settings``.
 """
 
 from __future__ import annotations
@@ -32,9 +32,6 @@ from ui.components import format_error, page_header
 from ui.components.feedback import working
 from ui.components.requirements_form import render_requirements_form
 
-KEY_ENTRY_KEY = "llm_key_entry"
-SAVE_KEY_BUTTON = "llm_key_save"
-CLEAR_KEY_BUTTON = "llm_key_clear"
 TEST_BUTTON = "llm_test_connection"
 
 TEST_PROMPT = "Reply with the single word: OK"
@@ -70,52 +67,23 @@ def _build_provider(api_key: str, budget: RequestBudget) -> GroqProvider:
     )
 
 
-def _save_session_key() -> None:
-    state.set_llm_session_key(str(st.session_state.get(KEY_ENTRY_KEY, "")))
-
-
-def _clear_session_key() -> None:
-    state.clear_llm_session_key()
-    st.session_state[KEY_ENTRY_KEY] = ""
-
-
-def _render_key_status(settings_key: str, session_key: str) -> tuple[str, str]:
-    """Render the yes/no key status and return the active key and its source."""
-    if session_key:
-        active, source = session_key, i18n.t("settings.key_source_session")
-    elif settings_key:
-        active, source = settings_key, i18n.t("settings.key_source_environment")
-    else:
-        active, source = "", i18n.t("settings.key_source_none")
+def _render_key_status(settings_key: str, key_source: str) -> str:
+    """Render the non-secret key status and return the configured key."""
+    source_labels = {
+        "secrets": i18n.t("settings.key_source_secrets"),
+        "environment": i18n.t("settings.key_source_environment"),
+        "none": i18n.t("settings.key_source_none"),
+    }
+    source = source_labels.get(key_source, source_labels["none"])
     columns = st.columns(3)
     columns[0].metric(
         i18n.t("settings.key_configured"),
-        i18n.t("common.yes") if active else i18n.t("common.no"),
+        i18n.t("common.yes") if settings_key else i18n.t("common.no"),
     )
     columns[1].metric(i18n.t("settings.model"), i18n.ltr(get_settings().GROQ_MODEL))
     columns[2].metric(i18n.t("settings.key_source"), source)
     st.caption(i18n.t("settings.key_privacy"))
-    return active, source
-
-
-def _render_key_entry() -> None:
-    st.text_input(
-        i18n.t("settings.key_entry"),
-        type="password",
-        key=KEY_ENTRY_KEY,
-        help=i18n.t("settings.key_entry_help"),
-    )
-    save_column, clear_column = st.columns(2)
-    save_column.button(
-        i18n.t("settings.key_save"),
-        key=SAVE_KEY_BUTTON,
-        on_click=_save_session_key,
-    )
-    clear_column.button(
-        i18n.t("settings.key_clear"),
-        key=CLEAR_KEY_BUTTON,
-        on_click=_clear_session_key,
-    )
+    return settings_key
 
 
 def _render_budget() -> None:
@@ -266,11 +234,9 @@ def render() -> None:
 
     settings = get_settings()
     settings_key = settings.GROQ_API_KEY.strip()
-    session_key = state.get_llm_session_key()
 
     st.header(i18n.t("settings.provider"))
-    active_key, _ = _render_key_status(settings_key, session_key)
-    _render_key_entry()
+    active_key = _render_key_status(settings_key, settings.GROQ_KEY_SOURCE)
     _render_budget()
     _render_cache_and_trace()
     _render_test_connection(active_key)
@@ -288,9 +254,6 @@ def render() -> None:
 
 
 __all__ = [
-    "CLEAR_KEY_BUTTON",
-    "KEY_ENTRY_KEY",
-    "SAVE_KEY_BUTTON",
     "TEST_BUTTON",
     "TEST_PROMPT",
     "TEST_TIMEOUT_SECONDS",

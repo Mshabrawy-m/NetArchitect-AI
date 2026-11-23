@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
+from config.settings import get_settings
 from optimization import (
     SEARCH_NOTE,
     Algorithm,
@@ -29,6 +31,18 @@ from ui.pages.optimization_center import (
 )
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
+
+
+@pytest.fixture
+def configured_key(monkeypatch, request):
+    """Set the sole supported key source and clear the cached settings."""
+
+    def _set(secret: str) -> None:
+        monkeypatch.setenv("GROQ_API_KEY", secret)
+        get_settings.cache_clear()
+
+    request.addfinalizer(get_settings.cache_clear)
+    return _set
 
 
 def _twin_with_demand():
@@ -233,7 +247,7 @@ def test_copilot_suggestions_work_without_key_and_require_confirmation() -> None
 
     assert not at.exception
     assert at.button(key="copilot_suggest")
-    assert at.session_state.get(state.LLM_SESSION_KEY, "") == ""
+    assert get_settings().GROQ_API_KEY == ""
 
     at.button(key="copilot_suggest").click().run()
 
@@ -307,16 +321,18 @@ def test_c3_candidate_explanation_without_key() -> None:
     assert any("Deterministic explanation" in item.value for item in at.caption)
 
 
-def test_c3_candidate_explanation_with_key_is_audited(monkeypatch) -> None:
+def test_c3_candidate_explanation_with_key_is_audited(
+    monkeypatch,
+    configured_key,
+) -> None:
     reply = json.dumps({"text": "The modeled candidate keeps the same link count."})
     monkeypatch.setattr(
         copilot_component,
         "_provider",
         lambda: FakeProvider([reply]),
     )
+    configured_key("environment-test-key")
     at = _app_with_run()
-    at.session_state[state.LLM_SESSION_KEY] = "session-only-test-key"
-    at.run()
 
     at.button(key="copilot_why_optimization").click().run()
 
@@ -330,4 +346,4 @@ def test_c3_candidate_explanation_with_key_is_audited(monkeypatch) -> None:
         + [element.value for element in at.markdown]
     )
     assert "AI-generated" in rendered
-    assert "session-only-test-key" not in rendered
+    assert "environment-test-key" not in rendered

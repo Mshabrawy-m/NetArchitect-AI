@@ -20,7 +20,7 @@ EXPLANATION_STATE_KEY = "copilot_explanation_results"
 
 def _provider():
     """Build a bounded provider only when a session or configured key exists."""
-    key = state.get_llm_session_key() or get_settings().GROQ_API_KEY.strip()
+    key = get_settings().GROQ_API_KEY.strip()
     if not key:
         return None
     return GroqProvider.from_settings(

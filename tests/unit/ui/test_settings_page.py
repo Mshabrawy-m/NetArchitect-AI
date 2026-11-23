@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from agents import WorkflowState, WorkflowStopReason
+from config.settings import get_settings
 from core.exceptions import LLMProviderError
 from services.copilot import AIExplanationDraft, CopilotCache, PromptTrace, build_key
 from services.llm import LLMResponse, LLMUsage, RequestBudget
@@ -17,6 +19,18 @@ from ui.components.requirements_form import PLAN_STATE_KEY, RUN_BUTTON_KEY
 from ui.pages import settings as settings_page
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
+
+
+@pytest.fixture
+def configured_key(monkeypatch, request):
+    """Set the sole supported key source and clear the cached settings."""
+
+    def _set(secret: str) -> None:
+        monkeypatch.setenv("GROQ_API_KEY", secret)
+        get_settings.cache_clear()
+
+    request.addfinalizer(get_settings.cache_clear)
+    return _set
 
 
 def _settings_page() -> AppTest:
@@ -75,41 +89,38 @@ def test_settings_page_without_a_key_explains_what_is_optional() -> None:
     assert at.button(key=RUN_BUTTON_KEY)
 
 
-def test_settings_page_shows_key_presence_but_never_the_key() -> None:
-    secret = "gsk-test-session-secret-do-not-render"
-    at = AppTest.from_file(str(APP_PATH), default_timeout=60)
-    at.session_state[state.LLM_SESSION_KEY] = secret
-    at.run()
-    open_page(at, "Settings")
-
-    assert not at.exception
-    assert _metric(at, "API key configured") == "Yes"
-    assert "session" in _metric(at, "Key source")
-    assert not at.button(key=settings_page.TEST_BUTTON).disabled
-    assert secret not in _rendered_text(at)
-    assert at.session_state[state.LLM_SESSION_KEY] == secret
-    for name, value in at.session_state.to_dict().items():
-        if name == state.LLM_SESSION_KEY:
-            continue
-        assert secret not in str(value), f"session key {name!r} leaked the secret"
-
-
-def test_settings_page_saves_and_clears_a_session_key() -> None:
-    secret = "gsk-second-test-secret"
+def test_settings_page_shows_key_presence_but_never_the_key(configured_key) -> None:
+    secret = "gsk-test-environment-secret-do-not-render"
+    configured_key(secret)
     at = _settings_page()
 
-    at.text_input(key=settings_page.KEY_ENTRY_KEY).set_value(secret)
-    at.button(key=settings_page.SAVE_KEY_BUTTON).click().run()
-
-    assert not at.exception
-    assert at.session_state[state.LLM_SESSION_KEY] == secret
     assert _metric(at, "API key configured") == "Yes"
+    assert _metric(at, "Key source") == "environment variable"
+    assert not at.button(key=settings_page.TEST_BUTTON).disabled
     assert secret not in _rendered_text(at)
+    for name, value in at.session_state.to_dict().items():
+        assert secret not in str(value), f"session value {name!r} leaked the key"
 
-    at.button(key=settings_page.CLEAR_KEY_BUTTON).click().run()
-    assert not at.exception
-    assert state.LLM_SESSION_KEY not in at.session_state.to_dict()
-    assert _metric(at, "API key configured") == "No"
+
+def test_settings_page_has_no_session_key_input_widget() -> None:
+    at = _settings_page()
+
+    key_widgets = [
+        widget
+        for widget in at.text_input
+        if "key" in f"{widget.label} {widget.key or ''}".lower()
+    ]
+
+    assert key_widgets == []
+    assert not hasattr(settings_page, "KEY_ENTRY_KEY")
+
+
+def test_configured_key_is_never_written_to_session_state(configured_key) -> None:
+    secret = "gsk-not-in-session"
+    configured_key(secret)
+    at = _settings_page()
+
+    assert secret not in str(at.session_state.to_dict())
 
 
 def test_settings_page_shows_and_resets_the_session_budget() -> None:
@@ -180,6 +191,7 @@ def test_settings_page_shows_and_clears_cache_hits_and_prompt_trace() -> None:
 
 def test_settings_page_test_connection_reports_provider_failure(
     monkeypatch,
+    configured_key,
 ) -> None:
     class UnavailableProvider:
         def complete(self, messages, schema=None, *, timeout=None):
@@ -190,9 +202,9 @@ def test_settings_page_test_connection_reports_provider_failure(
         return UnavailableProvider()
 
     monkeypatch.setattr(settings_page, "_build_provider", fake_builder)
+    configured_key("gsk-test-key")
 
     at = AppTest.from_file(str(APP_PATH), default_timeout=60)
-    at.session_state[state.LLM_SESSION_KEY] = "gsk-test-key"
     at.run()
     open_page(at, "Settings")
     at.button(key=settings_page.TEST_BUTTON).click().run()
@@ -200,9 +212,10 @@ def test_settings_page_test_connection_reports_provider_failure(
     assert not at.exception
     assert any("unreachable" in error.value for error in at.error)
     assert not any("gsk-test-key" in error.value for error in at.error)
+    assert "gsk-test-key" not in str(at.session_state.to_dict())
 
 
-def test_settings_page_test_connection_reports_success(monkeypatch) -> None:
+def test_first_click_connection_test_from_empty_state(monkeypatch, configured_key) -> None:
     class FakeProvider:
         def complete(self, messages, schema=None, *, timeout=None):
             return LLMResponse(
@@ -215,16 +228,23 @@ def test_settings_page_test_connection_reports_success(monkeypatch) -> None:
         return FakeProvider()
 
     monkeypatch.setattr(settings_page, "_build_provider", fake_builder)
+    configured_key("gsk-test-key")
 
     at = AppTest.from_file(str(APP_PATH), default_timeout=60)
-    at.session_state[state.LLM_SESSION_KEY] = "gsk-test-key"
     at.run()
     open_page(at, "Settings")
+    assert not at.button(key=settings_page.TEST_BUTTON).disabled
+    assert all(
+        "key" not in f"{widget.label} {widget.key or ''}".lower()
+        for widget in at.text_input
+    )
+
     at.button(key=settings_page.TEST_BUTTON).click().run()
 
     assert not at.exception
     assert any("llama-test" in success.value for success in at.success)
     assert any("7 token" in success.value for success in at.success)
+    assert "gsk-test-key" not in str(at.session_state.to_dict())
 
 
 def test_settings_page_runs_the_deterministic_plan_from_the_form() -> None:

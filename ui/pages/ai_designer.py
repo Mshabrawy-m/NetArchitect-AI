@@ -72,7 +72,7 @@ def _department_keys(index: int) -> tuple[str, str]:
 
 def _active_key() -> str:
     """Return the session key, else the configured key, else an empty string."""
-    return state.get_llm_session_key() or get_settings().GROQ_API_KEY.strip()
+    return get_settings().GROQ_API_KEY.strip()
 
 
 def _build_provider(api_key: str) -> LLMProvider:

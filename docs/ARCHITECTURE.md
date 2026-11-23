@@ -59,7 +59,7 @@ No layer writes to disk at runtime. Exports and reports are assembled in memory 
 
 ## State and caching
 
-- All interactive state lives in Streamlit Session State (`ui/state.py`): the twin, scenario/optimization/capacity histories, agent traces, security model, and optional session key.
+- All interactive state lives in Streamlit Session State (`ui/state.py`): the twin, scenario/optimization/capacity histories, agent traces, security model, and request budget. The optional API key is read only from Streamlit secrets or environment variables.
 - `ui/cache.py` stores reproducible analyses keyed by canonical inputs. Changing the twin, model, or flow payload invalidates the relevant key.
 - There is no database, file-backed session store, background worker, or cross-user persistence. A restart returns to a fresh session.
 - Snapshot and history stores are bounded by count and serialized byte size. See `docs/RUNTIME_LIMITS.md`.

@@ -9,6 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from config.limits import MAX_SECURITY_FLOW_CHECKS
+from config.settings import get_settings
 from security import SECURITY_DISCLAIMER, FlowRequest, Protocol, get_security_model
 from services.copilot import DecisionKind
 from services.llm.testing import FakeProvider
@@ -19,6 +20,18 @@ from ui.components import copilot as copilot_component
 from ui.pages import security_analysis as page
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
+
+
+@pytest.fixture
+def configured_key(monkeypatch, request):
+    """Set the sole supported key source and clear the cached settings."""
+
+    def _set(secret: str) -> None:
+        monkeypatch.setenv("GROQ_API_KEY", secret)
+        get_settings.cache_clear()
+
+    request.addfinalizer(get_settings.cache_clear)
+    return _set
 
 
 def _page(twin=None) -> AppTest:
@@ -157,17 +170,20 @@ def test_c3_finding_explanation_without_key() -> None:
     assert any("Deterministic explanation" in item.value for item in at.caption)
 
 
-def test_c3_finding_explanation_with_key_is_audited(monkeypatch) -> None:
+def test_c3_finding_explanation_with_key_is_audited(
+    monkeypatch,
+    configured_key,
+) -> None:
     reply = json.dumps({"text": "The modeled zones are described in the finding."})
     monkeypatch.setattr(
         copilot_component,
         "_provider",
         lambda: FakeProvider([reply]),
     )
+    configured_key("environment-test-key")
     twin, _ = case_design("SEC-DW-004")
     at = AppTest.from_file(str(APP_PATH), default_timeout=120).run()
     at.session_state[state.TWIN_KEY] = twin
-    at.session_state[state.LLM_SESSION_KEY] = "session-only-test-key"
     open_page(at, "Security Analysis")
 
     at.button(key="copilot_why_finding").click().run()
@@ -182,7 +198,7 @@ def test_c3_finding_explanation_with_key_is_audited(monkeypatch) -> None:
         + [element.value for element in at.markdown]
     )
     assert "AI-generated" in rendered
-    assert "session-only-test-key" not in rendered
+    assert "environment-test-key" not in rendered
 
 
 def test_security_analysis_adds_a_bounded_modeled_flow_check() -> None:

@@ -13,7 +13,7 @@ This file is the consolidated limitation list for `v1.0.0-rc1`. It is intentiona
 
 ## State and deployment
 
-- All twins, runs, traces, models, and session-entered keys live in Streamlit Session State. Closing or restarting the session discards them. Download reports and exports before leaving.
+- All twins, runs, traces, and models live in Streamlit Session State. Closing or restarting the session discards them. The optional API key is not stored in session state. Download reports and exports before leaving.
 - There is no database, file-backed persistence, background worker, always-on service, or cross-user sharing.
 - The upload widget is capped at 2 MB; in-app parsers enforce tighter per-format caps, including 1,000,000 bytes for CSV and 2,000,000 bytes for JSON.
 - The release was verified locally on Windows with Python 3.11 and 3.12. Streamlit Community Cloud runs Debian Linux and was **not** deployed or measured.
@@ -38,7 +38,7 @@ This file is the consolidated limitation list for `v1.0.0-rc1`. It is intentiona
 - The optional Groq integration requires a key and a currently available model name. Providers retire models; configure `GROQ_MODEL` rather than relying on a hardcoded guarantee.
 - No live provider request was made during release verification. Tests use a fake provider with injected transport and sleep.
 - LLM prose is explanatory only. It cannot change computed values or call tools outside the active agent's allowlist, but it must still be read with the attached disclosure labels.
-- A session-entered key is visible to the browser user for that session by design; it is never logged, serialized into exports, or written to disk.
+- The configured key is held only in process memory for request headers; it is never displayed, logged, serialized into exports, traced, or written to disk.
 - Prompt-injection text is constrained by schema validation and tool allowlists, but adversarial model behavior cannot be exhaustively proven.
 
 ## Reports and exports

@@ -70,7 +70,7 @@ This is a criterion-by-criterion audit for `v1.0.0-rc1`. Evidence refers to loca
 | criterion | evidence | status |
 |---|---|---|
 | No physical equipment, server, Docker, ports, workers, always-on service, local persistence, paid API, or database | architecture is pure Python plus Streamlit; no runtime disk writes; optional Groq only; no sockets opened by application code | PASS |
-| Streamlit Session State for temporary interactive state | `ui/state.py`; all twins, runs, traces, and session keys are session-scoped | PASS |
+| Streamlit Session State for temporary interactive state | `ui/state.py`; twins, runs, traces, and the request budget are session-scoped; the API key is not | PASS |
 | JSON/CSV downloads for user-owned exports | `services/export` builds Markdown, JSON, CSV, PDF, and config bundles in memory | PASS |
 | Optional Groq integration; deterministic Demo Mode | no-key path verified across all pages and in the structured workflow | PASS |
 | Ephemeral restart handling | no dependency on local persisted files; an app restart returns to a fresh session | PASS |

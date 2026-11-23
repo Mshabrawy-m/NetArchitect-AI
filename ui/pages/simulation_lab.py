@@ -799,7 +799,7 @@ def _build_scenario() -> Scenario:
 
 def _copilot_provider():
     """Build a bounded provider, or ``None`` on the deterministic no-key path."""
-    key = state.get_llm_session_key() or get_settings().GROQ_API_KEY.strip()
+    key = get_settings().GROQ_API_KEY.strip()
     if not key:
         return None
     return GroqProvider.from_settings(

@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from agents import WorkflowState
+from config.settings import get_settings
 from core.exceptions import LLMProviderError
 from services.llm.testing import FakeProvider
 from tests.unit.simulation.helpers import diamond_twin
@@ -16,6 +18,18 @@ from ui import state
 from ui.pages import ai_designer
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
+
+
+@pytest.fixture
+def configured_key(monkeypatch, request):
+    """Set the sole supported key source and clear the cached settings."""
+
+    def _set(secret: str) -> None:
+        monkeypatch.setenv("GROQ_API_KEY", secret)
+        get_settings.cache_clear()
+
+    request.addfinalizer(get_settings.cache_clear)
+    return _set
 
 
 def extraction(**overrides: object) -> str:
@@ -109,6 +123,7 @@ def test_form_run_completes_without_a_key_and_keeps_the_baseline() -> None:
 
 def test_free_text_interpretation_keeps_facts_and_assumptions_separate(
     monkeypatch,
+    configured_key,
 ) -> None:
     payload = extraction(
         organization_name="Acme",
@@ -124,8 +139,8 @@ def test_free_text_interpretation_keeps_facts_and_assumptions_separate(
         "_build_provider",
         lambda api_key: FakeProvider([payload]),
     )
+    configured_key("gsk-designer-test-key")
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
-    at.session_state[state.LLM_SESSION_KEY] = "gsk-designer-test-key"
     at.run()
     open_page(at, "AI Network Designer")
 
@@ -149,14 +164,14 @@ def test_free_text_interpretation_keeps_facts_and_assumptions_separate(
     assert any("Facilities" in item.description for item in output.assumptions)
 
 
-def test_provider_failure_is_shown_without_crashing(monkeypatch) -> None:
+def test_provider_failure_is_shown_without_crashing(monkeypatch, configured_key) -> None:
     monkeypatch.setattr(
         ai_designer,
         "_build_provider",
         lambda api_key: FakeProvider([LLMProviderError("provider is down")]),
     )
+    configured_key("gsk-designer-test-key")
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
-    at.session_state[state.LLM_SESSION_KEY] = "gsk-designer-test-key"
     at.run()
     open_page(at, "AI Network Designer")
 
@@ -169,7 +184,10 @@ def test_provider_failure_is_shown_without_crashing(monkeypatch) -> None:
     assert any("provider is down" in error.value for error in at.error)
 
 
-def test_interpreted_requirements_drive_the_workflow(monkeypatch) -> None:
+def test_interpreted_requirements_drive_the_workflow(
+    monkeypatch,
+    configured_key,
+) -> None:
     payload = extraction(
         organization_name="Interpreted Org",
         site_name="Remote",
@@ -184,8 +202,8 @@ def test_interpreted_requirements_drive_the_workflow(monkeypatch) -> None:
         "_build_provider",
         lambda api_key: FakeProvider([payload]),
     )
+    configured_key("gsk-designer-test-key")
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
-    at.session_state[state.LLM_SESSION_KEY] = "gsk-designer-test-key"
     at.run()
     open_page(at, "AI Network Designer")
 
@@ -222,8 +240,9 @@ def test_apply_creates_a_new_snapshot_and_never_replaces_the_baseline() -> None:
     assert any("Baseline unchanged" in success.value for success in at.success)
 
 
-def test_the_session_key_is_never_rendered_or_written_to_the_trace(
+def test_configured_key_is_never_rendered_or_written_to_the_trace(
     monkeypatch,
+    configured_key,
 ) -> None:
     secret = "gsk-designer-secret-must-not-leak"
     payload = extraction(
@@ -236,8 +255,8 @@ def test_the_session_key_is_never_rendered_or_written_to_the_trace(
         "_build_provider",
         lambda api_key: FakeProvider([payload]),
     )
+    configured_key(secret)
     at = AppTest.from_file(str(APP_PATH), default_timeout=120)
-    at.session_state[state.LLM_SESSION_KEY] = secret
     at.run()
     open_page(at, "AI Network Designer")
     at.text_area(key=ai_designer.FREE_TEXT_KEY).set_value(
@@ -251,6 +270,4 @@ def test_the_session_key_is_never_rendered_or_written_to_the_trace(
     plan_state = at.session_state[ai_designer.PLAN_STATE_KEY]
     assert secret not in plan_state.trace.to_json()
     for name, value in at.session_state.to_dict().items():
-        if name == state.LLM_SESSION_KEY:
-            continue
-        assert secret not in str(value), f"session key {name!r} leaked the secret"
+        assert secret not in str(value), f"session value {name!r} leaked the key"
