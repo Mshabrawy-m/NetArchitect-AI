@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+from config.limits import MAX_EDGES, MAX_NODES
+from core.exceptions import AgentValidationError
 from core.schemas.addressing import AddressingPlan, Subnet, VlanPlan
 from core.schemas.network import Device, Link, Topology
 from core.schemas.requirements import Assumption, NetworkRequirements
@@ -35,6 +37,29 @@ DEFAULT_LINK_CAPACITY_MBPS = 1_000.0
 DEFAULT_LINK_COST = 1.0
 DEFAULT_VLAN_START = 10
 DEFAULT_DEMAND_BANDWIDTH_MBPS = 10.0
+MAX_PLANNING_SITES = 8
+
+REDUNDANCY_ASSUMPTION_DESCRIPTION = (
+    "distribution layer raised to 2 switches to support redundant uplinks"
+)
+REDUNDANCY_DISABLED_ASSUMPTION_DESCRIPTION = (
+    "redundant uplinks disabled because resilience was not explicitly requested"
+)
+
+
+class TopologyPolicyError(AgentValidationError):
+    """A requirement or parameter combination no generator can accept safely.
+
+    The message is written for users and names the exact inputs to change. Raw
+    generator exceptions never become this type's display text.
+    """
+
+    def __init__(self, reason: str, *, fields: Sequence[str]) -> None:
+        self.reason = reason
+        self.fields = tuple(fields)
+        field_text = ", ".join(self.fields) or "the supplied requirements"
+        super().__init__(f"{reason} Check: {field_text}.")
+
 
 _REDUNDANCY_TERMS = (
     "redundan",
@@ -141,6 +166,81 @@ def departments(
     ]
 
 
+def _record_topology_assumption(
+    requirements: NetworkRequirements,
+    *,
+    key: str,
+    description: str,
+    rationale: str,
+) -> None:
+    """Append a deterministic, system-inferred topology assumption once.
+
+    Assumptions stay in ``NetworkRequirements.assumptions``; user facts are
+    never modified. The rationale is the provenance shown in the report.
+    """
+    if any(item.description == description for item in requirements.assumptions):
+        return
+    base_id = f"assumption-topology-{key}"
+    taken = {item.id for item in requirements.assumptions}
+    assumption_id = base_id
+    suffix = 2
+    while assumption_id in taken:
+        assumption_id = f"{base_id}-{suffix}"
+        suffix += 1
+    requirements.assumptions.append(
+        Assumption(
+            id=assumption_id,
+            category="topology",
+            description=description,
+            rationale=rationale,
+        )
+    )
+
+
+def _raw_department_count(requirements: NetworkRequirements) -> int:
+    """Count user-supplied departments before planning defaults are applied."""
+    facts = requirements.user_provided
+    sites = (
+        list(facts.organization.sites)
+        if facts.organization is not None and facts.organization.sites
+        else list(facts.sites)
+    )
+    return len({department.id for site in sites for department in site.departments}) + len(
+        facts.departments
+    )
+
+
+def _campus_parameters(
+    department_count: int,
+    *,
+    redundant: bool,
+) -> tuple[int, int, list[tuple[str, str]]]:
+    """Return valid campus counts and the repairs that produced them."""
+    reported = max(1, department_count)
+    distribution_count = max(1, min(8, math.ceil(reported / 4)))
+    access_per_distribution = max(
+        1, min(4, math.ceil(reported / distribution_count))
+    )
+    repairs: list[tuple[str, str]] = []
+    if redundant and distribution_count < 2:
+        distribution_count = 2
+        access_per_distribution = max(
+            1, min(4, math.ceil(reported / distribution_count))
+        )
+        repairs.append(
+            (
+                REDUNDANCY_ASSUMPTION_DESCRIPTION,
+                (
+                    "user_provided.organization.sites[].departments (or "
+                    "user_provided.sites[].departments) implies one distribution "
+                    "switch, while design_goals/user_provided.constraints request "
+                    "redundant uplinks; topology_from_requirements raised it to two."
+                ),
+            )
+        )
+    return distribution_count, access_per_distribution, repairs
+
+
 def base_network_for(requirements: NetworkRequirements) -> str:
     """Return the first user-specified base network, else the documented default."""
     for constraint in requirements.user_provided.constraints:
@@ -222,6 +322,7 @@ def _site_topology(
     *,
     index: int,
     redundant: bool,
+    requirements: NetworkRequirements,
 ) -> Topology:
     prefix = f"site{index + 1}"
     if department_count <= 4 and not redundant:
@@ -234,10 +335,16 @@ def _site_topology(
             link_capacity_mbps=DEFAULT_LINK_CAPACITY_MBPS,
             link_cost=DEFAULT_LINK_COST,
         )
-    distribution_count = max(1, min(8, math.ceil(max(1, department_count) / 4)))
-    access_per_distribution = max(
-        1, min(4, math.ceil(max(1, department_count) / distribution_count))
+    distribution_count, access_per_distribution, repairs = _campus_parameters(
+        department_count, redundant=redundant
     )
+    for description, rationale in repairs:
+        _record_topology_assumption(
+            requirements,
+            key="distribution-redundancy",
+            description=description,
+            rationale=rationale,
+        )
     return generate_hierarchical_campus(
         name=f"{site_name} campus",
         site=site_id,
@@ -248,6 +355,201 @@ def _site_topology(
         link_capacity_mbps=DEFAULT_LINK_CAPACITY_MBPS,
         link_cost=DEFAULT_LINK_COST,
     )
+
+
+def _param_int(
+    family: str,
+    params: dict[str, object],
+    name: str,
+    default: int,
+) -> int:
+    value = params.get(name, default)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TopologyPolicyError(
+            f"{family} parameter {name} must be a whole number.",
+            fields=(f"params.{name}",),
+        )
+    return value
+
+
+def _param_bool(
+    family: str,
+    params: dict[str, object],
+    name: str,
+    default: bool,
+) -> bool:
+    value = params.get(name, default)
+    if not isinstance(value, bool):
+        raise TopologyPolicyError(
+            f"{family} parameter {name} must be true or false.",
+            fields=(f"params.{name}",),
+        )
+    return value
+
+
+def _check_generator_counts(
+    family: str,
+    device_count: int,
+    link_count: int,
+    fields: Sequence[str],
+) -> None:
+    if device_count > MAX_NODES:
+        raise TopologyPolicyError(
+            f"{family} needs {device_count} devices; the limit is {MAX_NODES}.",
+            fields=fields,
+        )
+    if link_count > MAX_EDGES:
+        raise TopologyPolicyError(
+            f"{family} needs {link_count} links; the limit is {MAX_EDGES}.",
+            fields=fields,
+        )
+
+
+def validate_generator_params(
+    family: str,
+    params: dict[str, object],
+) -> dict[str, object]:
+    """Validate generator parameters before a generator is ever called.
+
+    Invalid counts raise :class:`TopologyPolicyError` with the exact parameter
+    names to change. This keeps generator ``ValueError`` text and limit errors
+    out of tool and UI messages.
+    """
+    checked = dict(params)
+    if family == "star":
+        spokes = _param_int(family, checked, "spoke_count", 4)
+        if spokes < 1:
+            raise TopologyPolicyError(
+                "A star topology needs at least one spoke.",
+                fields=("params.spoke_count",),
+            )
+        _check_generator_counts(
+            family, spokes + 1, spokes, ("params.spoke_count",)
+        )
+    elif family == "ring":
+        nodes = _param_int(family, checked, "node_count", 4)
+        if nodes < 3:
+            raise TopologyPolicyError(
+                "A ring topology needs at least three nodes to close the loop.",
+                fields=("params.node_count",),
+            )
+        _check_generator_counts(family, nodes, nodes, ("params.node_count",))
+    elif family == "mesh":
+        nodes = _param_int(family, checked, "node_count", 4)
+        if nodes < 2:
+            raise TopologyPolicyError(
+                "A full mesh topology needs at least two nodes.",
+                fields=("params.node_count",),
+            )
+        _check_generator_counts(
+            family,
+            nodes,
+            nodes * (nodes - 1) // 2,
+            ("params.node_count",),
+        )
+    elif family == "tree":
+        depth = _param_int(family, checked, "depth", 2)
+        branching = _param_int(family, checked, "branching_factor", 2)
+        if depth < 0:
+            raise TopologyPolicyError(
+                "A tree topology needs a depth of zero or more.",
+                fields=("params.depth",),
+            )
+        if branching < 1:
+            raise TopologyPolicyError(
+                "A tree topology needs a branching factor of at least one.",
+                fields=("params.branching_factor",),
+            )
+        if branching == 1:
+            device_count = depth + 1
+        else:
+            device_count = 0
+            for level in range(depth + 1):
+                device_count += branching**level
+                if device_count > MAX_NODES:
+                    break
+        _check_generator_counts(
+            family,
+            device_count,
+            max(0, device_count - 1),
+            ("params.depth", "params.branching_factor"),
+        )
+    elif family == "campus":
+        distribution = _param_int(family, checked, "distribution_count", 2)
+        access = _param_int(family, checked, "access_per_distribution", 4)
+        redundant = _param_bool(family, checked, "redundant_uplinks", False)
+        fields = ("params.distribution_count", "params.access_per_distribution")
+        if distribution < 1:
+            raise TopologyPolicyError(
+                "A campus topology needs at least one distribution switch.",
+                fields=("params.distribution_count",),
+            )
+        if access < 1:
+            raise TopologyPolicyError(
+                "A campus topology needs at least one access switch per "
+                "distribution switch.",
+                fields=("params.access_per_distribution",),
+            )
+        if redundant and distribution < 2:
+            raise TopologyPolicyError(
+                "Redundant uplinks need at least two distribution switches.",
+                fields=("params.redundant_uplinks", "params.distribution_count"),
+            )
+        uplink_factor = 2 if redundant else 1
+        access_count = distribution * access
+        _check_generator_counts(
+            family,
+            (2 if redundant else 1) + distribution + access_count,
+            uplink_factor * distribution + uplink_factor * access_count,
+            (*fields, "params.redundant_uplinks"),
+        )
+    elif family == "spine_leaf":
+        spines = _param_int(family, checked, "spines", 2)
+        leaves = _param_int(family, checked, "leaves", 4)
+        full_mesh = _param_bool(family, checked, "full_mesh", False)
+        fields = ("params.spines", "params.leaves")
+        if spines < 1:
+            raise TopologyPolicyError(
+                "A spine-leaf fabric needs at least one spine.",
+                fields=("params.spines",),
+            )
+        if leaves < 1:
+            raise TopologyPolicyError(
+                "A spine-leaf fabric needs at least one leaf.",
+                fields=("params.leaves",),
+            )
+        uplinks = spines if full_mesh else min(spines, 2)
+        _check_generator_counts(
+            family,
+            spines + leaves,
+            leaves * uplinks,
+            (*fields, "params.full_mesh"),
+        )
+    elif family == "hybrid":
+        cores = _param_int(family, checked, "core_nodes", 4)
+        access = _param_int(family, checked, "access_per_core", 3)
+        fields = ("params.core_nodes", "params.access_per_core")
+        if cores < 3:
+            raise TopologyPolicyError(
+                "A hybrid topology needs at least three core nodes for its ring.",
+                fields=("params.core_nodes",),
+            )
+        if access < 1:
+            raise TopologyPolicyError(
+                "A hybrid topology needs at least one access node per core.",
+                fields=("params.access_per_core",),
+            )
+        _check_generator_counts(
+            family,
+            cores * (2 + access),
+            cores * (access + 2),
+            fields,
+        )
+    else:  # pragma: no cover - the tool contract limits the family literal
+        raise TopologyPolicyError(
+            f"Unknown topology family {family!r}.", fields=("family",)
+        )
+    return checked
 
 
 def build_topology(requirements: NetworkRequirements) -> Topology:
@@ -263,8 +565,61 @@ def build_topology(requirements: NetworkRequirements) -> Topology:
     if user_topology is not None:
         return enforce_limits(user_topology)
 
+    facts = requirements.user_provided
+    site_field = (
+        "user_provided.organization.sites"
+        if facts.organization is not None and facts.organization.sites
+        else "user_provided.sites"
+    )
+    if _raw_department_count(requirements) == 0:
+        _record_topology_assumption(
+            requirements,
+            key="single-department",
+            description="no departments supplied; modeled as one general users department",
+            rationale=(
+                f"{site_field} and user_provided.departments are empty; "
+                "topology_from_requirements used one planning department."
+            ),
+        )
+    if facts.total_user_count <= 0:
+        _record_topology_assumption(
+            requirements,
+            key="zero-users",
+            description="zero reported users modeled as one planning user",
+            rationale=(
+                "user_provided.total_user_count is zero; topology sizing needs "
+                "at least one department with one user."
+            ),
+        )
+
     redundant = redundancy_requested(requirements)
+    if not redundant:
+        _record_topology_assumption(
+            requirements,
+            key="redundancy-disabled",
+            description=REDUNDANCY_DISABLED_ASSUMPTION_DESCRIPTION,
+            rationale=(
+                "design_goals and user_provided.constraints contain no "
+                "explicit resilience request; topology_from_requirements "
+                "disabled redundant uplinks."
+            ),
+        )
+
     catalog = _site_catalog(requirements)
+    if len(catalog) > MAX_PLANNING_SITES:
+        catalog = catalog[:MAX_PLANNING_SITES]
+        _record_topology_assumption(
+            requirements,
+            key="site-cap",
+            description=(
+                f"site list limited to {MAX_PLANNING_SITES} sites for topology sizing"
+            ),
+            rationale=(
+                f"{site_field} supplies more than {MAX_PLANNING_SITES} sites; "
+                "topology_from_requirements kept the first ones to stay within "
+                "the device and link limits."
+            ),
+        )
     parts = [
         _site_topology(
             site_id,
@@ -272,6 +627,7 @@ def build_topology(requirements: NetworkRequirements) -> Topology:
             count,
             index=index,
             redundant=redundant,
+            requirements=requirements,
         )
         for index, (site_id, site_name, count) in enumerate(catalog)
     ]
@@ -439,8 +795,11 @@ __all__ = [
     "DEFAULT_LINK_CAPACITY_MBPS",
     "DEFAULT_LINK_COST",
     "DEFAULT_VLAN_START",
+    "REDUNDANCY_ASSUMPTION_DESCRIPTION",
+    "REDUNDANCY_DISABLED_ASSUMPTION_DESCRIPTION",
     "DemandPlan",
     "IpPlanResult",
+    "TopologyPolicyError",
     "base_network_for",
     "build_demands",
     "build_ip_plan",
@@ -450,4 +809,5 @@ __all__ = [
     "next_base_network",
     "redundancy_requested",
     "user_devices",
+    "validate_generator_params",
 ]

@@ -2,6 +2,26 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-24 - self-consistent topology policy from requirements
+
+### Fixed
+- Small sites that request resilience no longer pass `redundant_uplinks=True`
+  with one distribution switch. The policy raises the distribution layer to two
+  switches and records the system assumption with field-level provenance.
+- When resilience is not explicitly requested, redundant uplinks are disabled
+  and that decision is recorded as a system assumption instead.
+- Direct topology generation and requirement-derived topology now validate
+  generator counts before generation; invalid families, minimum counts, and
+  device/link limit overflows raise typed errors that name the field to change.
+- Zero users or departments and oversized site lists are repaired with recorded
+  assumptions, so the topology step no longer fails or leaks generator text.
+
+### Tests
+- Added first-run structured-form and parsed-free-text regression tests, a size
+  and redundancy grid over one and many sites, a Hypothesis property for valid
+  requirement sets, report provenance assertions, and UI checks that no raw
+  generator error reaches the page.
+
 ## 2026-11-24 - typed 404 and clearer Settings endpoint state
 
 ### Added

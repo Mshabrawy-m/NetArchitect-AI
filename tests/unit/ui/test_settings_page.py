@@ -22,7 +22,7 @@ from services.llm.testing import FakeProvider
 from tests.unit.simulation.helpers import diamond_twin
 from tests.unit.ui.nav_helpers import open_page
 from ui import state
-from ui.components.requirements_form import PLAN_STATE_KEY, RUN_BUTTON_KEY
+from ui.components.requirements_form import GOALS_KEY, PLAN_STATE_KEY, RUN_BUTTON_KEY
 from ui.pages import settings as settings_page
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
@@ -441,6 +441,27 @@ def test_settings_page_runs_the_deterministic_plan_from_the_form() -> None:
         for markdown in at.markdown
     )
     assert at.download_button(key="download_structured_plan_trace")
+
+
+def test_structured_form_shows_topology_repair_assumption_without_raw_tool_error() -> None:
+    at = _settings_page()
+    at.text_area(key=GOALS_KEY).set_value("Provide resilience and failover.")
+
+    at.button(key=RUN_BUTTON_KEY).click().run()
+
+    assert not at.exception
+    plan_state = at.session_state[PLAN_STATE_KEY]
+    assert isinstance(plan_state, WorkflowState)
+    assert plan_state.stop_reason is WorkflowStopReason.completed
+    report = plan_state.results["documentation"]
+    assert any(
+        "distribution layer raised to 2 switches" in item
+        and "topology_from_requirements" in item
+        for item in report.assumptions
+    )
+    text = _rendered_text(at)
+    assert "distribution layer raised to 2 switches" in text
+    assert "redundant_uplinks requires distribution_count" not in text
 
 
 def test_settings_page_reports_a_form_validation_error() -> None:

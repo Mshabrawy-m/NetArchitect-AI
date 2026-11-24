@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 from pydantic import ValidationError
 
-from agents import Orchestrator, WorkflowState
+from agents import DocumentationOutput, Orchestrator, WorkflowState
 from core.exceptions import NetArchitectError
 from core.schemas.organization import Department, Organization, Site
 from core.schemas.requirements import NetworkRequirements, UserFacts
@@ -172,6 +172,11 @@ def _render_plan(plan_state: WorkflowState) -> None:
         for section in report.sections:
             st.markdown(f"**{section.title}**")
             st.write(section.body)
+
+    documentation = plan_state.result("documentation")
+    if isinstance(documentation, DocumentationOutput) and documentation.assumptions:
+        st.markdown("**Assumptions (system-inferred)**")
+        st.markdown("\n".join(f"- {item}" for item in documentation.assumptions))
 
     with st.expander("Execution trace", expanded=False):
         st.dataframe(_trace_frame(plan_state), hide_index=True, width="stretch")

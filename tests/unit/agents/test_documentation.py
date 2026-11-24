@@ -21,6 +21,10 @@ from agents import (
     run_structured_design,
 )
 from agents.network_agents import default_agents
+from agents.planning import (
+    REDUNDANCY_ASSUMPTION_DESCRIPTION,
+    REDUNDANCY_DISABLED_ASSUMPTION_DESCRIPTION,
+)
 from core.exceptions import LLMProviderError
 from core.schemas.requirements import Assumption
 from services.llm.testing import FakeProvider
@@ -158,6 +162,38 @@ def test_assumptions_and_limitations_are_separate() -> None:
     assert any("modeled estimates" in item for item in report.limitations)
     assert any("no PDF" in item for item in report.limitations)
     assert not any("modeled estimates" in item for item in report.assumptions)
+
+
+def test_topology_repair_assumption_is_reported_with_provenance() -> None:
+    requirements = sample_requirements()
+    requirements.design_goals.append("Provide resilience and failover.")
+
+    state = run_structured_design(requirements)
+    report = state.results["documentation"]
+
+    assert state.stop_reason.value == "completed"
+    assert any(
+        REDUNDANCY_ASSUMPTION_DESCRIPTION in item
+        and "topology_from_requirements" in item
+        and "design_goals" in item
+        for item in report.assumptions
+    )
+    assert not any(
+        REDUNDANCY_DISABLED_ASSUMPTION_DESCRIPTION in item
+        for item in report.assumptions
+    )
+
+
+def test_redundancy_disabled_assumption_is_reported_with_provenance() -> None:
+    state = run_structured_design(sample_requirements())
+    report = state.results["documentation"]
+
+    assert any(
+        REDUNDANCY_DISABLED_ASSUMPTION_DESCRIPTION in item
+        and "design_goals" in item
+        and "user_provided.constraints" in item
+        for item in report.assumptions
+    )
 
 
 def test_hostile_model_number_is_rejected_and_replaced() -> None:

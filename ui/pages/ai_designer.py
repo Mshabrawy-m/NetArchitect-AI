@@ -32,7 +32,7 @@ from agents import (
 from config.limits import MAX_REQUIREMENTS_TEXT_CHARS
 from config.settings import get_settings
 from core.exceptions import NetArchitectError
-from core.schemas.requirements import NetworkRequirements, UserFacts
+from core.schemas.requirements import Assumption, NetworkRequirements, UserFacts
 from services.llm import GroqProvider, LLMProvider
 from ui import i18n, state
 from ui.components import format_error, page_header
@@ -189,6 +189,22 @@ def _fact_rows(facts: UserFacts) -> list[dict[str, object]]:
     return rows
 
 
+def _visible_assumptions(output: RequirementsAgentOutput) -> list[Assumption]:
+    """Include assumptions recorded by the deterministic topology policy."""
+    items = list(output.assumptions)
+    if output.requirements is None:
+        return items
+    seen = {
+        (item.category, item.description, item.rationale) for item in items
+    }
+    for assumption in output.requirements.assumptions:
+        key = (assumption.category, assumption.description, assumption.rationale)
+        if key not in seen:
+            items.append(assumption)
+            seen.add(key)
+    return items
+
+
 def _interpret(active_key: str) -> None:
     """Run the requirements agent on the free text and optional form values."""
     text = str(st.session_state.get(FREE_TEXT_KEY, "")).strip()
@@ -219,10 +235,11 @@ def _render_understanding() -> None:
 
     st.divider()
     st.subheader("Requirements interpretation")
+    assumptions = _visible_assumptions(output)
     columns = st.columns(3)
     columns[0].metric("Status", output.status.value)
     columns[1].metric("Model used", "Yes" if output.provider_used else "No")
-    columns[2].metric("Assumptions", len(output.assumptions))
+    columns[2].metric("Assumptions", len(assumptions))
     st.write(output.summary)
 
     if output.status.value == "unavailable":
@@ -248,7 +265,7 @@ def _render_understanding() -> None:
         st.info("No user-provided facts were produced.")
 
     st.markdown("**System assumptions (not user facts)**")
-    if output.assumptions:
+    if assumptions:
         st.dataframe(
             pd.DataFrame(
                 [
@@ -257,7 +274,7 @@ def _render_understanding() -> None:
                         "description": assumption.description,
                         "rationale": assumption.rationale,
                     }
-                    for assumption in output.assumptions
+                    for assumption in assumptions
                 ]
             ),
             hide_index=True,

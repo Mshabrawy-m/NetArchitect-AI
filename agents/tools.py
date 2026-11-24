@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from core.exceptions import (
     AgentValidationError,
+    LimitsExceededError,
     NetArchitectError,
     ToolError,
     ToolInputError,
@@ -67,10 +68,12 @@ from simulation import run_scenario as run_scenario_engine
 from .planning import (
     DemandPlan,
     IpPlanResult,
+    TopologyPolicyError,
     build_demands,
     build_ip_plan,
     build_topology,
     build_working_twin,
+    validate_generator_params,
 )
 
 
@@ -242,7 +245,15 @@ def _generate_topology(payload: TopologyGenerateInput) -> Topology:
         raise ToolInputError(
             f"Unknown {payload.family} parameter(s): {', '.join(unknown)}"
         )
-    return generator(name=payload.name, site=payload.site, **payload.params)
+    checked = validate_generator_params(payload.family, payload.params)
+    try:
+        return generator(name=payload.name, site=payload.site, **checked)
+    except Exception as error:
+        fields = tuple(f"params.{name}" for name in sorted(checked))
+        raise TopologyPolicyError(
+            f"The {payload.family} parameters cannot produce a valid topology.",
+            fields=fields,
+        ) from error
 
 
 def _validate_requirements(
@@ -333,6 +344,55 @@ def _security_analysis(payload: SecurityAnalysisInput) -> SecurityAnalysis:
     return analyze_design(payload.twin, model=payload.model, flows=payload.flows)
 
 
+def _topology_from_requirements(
+    payload: TopologyFromRequirementsInput,
+) -> Topology:
+    """Run the deterministic policy with user-facing, typed failures only."""
+    facts = payload.requirements.user_provided
+    site_field = (
+        "user_provided.organization.sites"
+        if facts.organization is not None and facts.organization.sites
+        else "user_provided.sites"
+    )
+    all_fields = (
+        site_field,
+        "user_provided.departments",
+        "user_provided.total_user_count",
+        "design_goals",
+        "user_provided.constraints",
+        "user_provided.device_requirements",
+        "user_provided.link_requirements",
+    )
+    try:
+        return build_topology(payload.requirements)
+    except TopologyPolicyError:
+        raise
+    except LimitsExceededError as error:
+        fields = (
+            ("user_provided.device_requirements", "user_provided.link_requirements")
+            if facts.device_requirements or facts.link_requirements
+            else (site_field, "user_provided.departments")
+        )
+        raise TopologyPolicyError(
+            "The supplied requirements exceed the topology device or link limits.",
+            fields=fields,
+        ) from error
+    except ValidationError as error:
+        fields = tuple(
+            ".".join(str(part) for part in item["loc"])
+            for item in error.errors()[:5]
+        ) or all_fields
+        raise TopologyPolicyError(
+            "Some supplied requirement values are invalid.",
+            fields=fields,
+        ) from error
+    except Exception as error:
+        raise TopologyPolicyError(
+            "The supplied requirements cannot be turned into a valid topology.",
+            fields=all_fields,
+        ) from error
+
+
 def default_tools() -> tuple[Tool, ...]:
     """Return every built-in tool contract."""
     return (
@@ -355,7 +415,7 @@ def default_tools() -> tuple[Tool, ...]:
             description="Build the structured-form topology policy for requirements.",
             input_model=TopologyFromRequirementsInput,
             output_model=Topology,
-            implementation=lambda payload: build_topology(payload.requirements),
+            implementation=_topology_from_requirements,
         ),
         Tool(
             name="topology_connectivity",

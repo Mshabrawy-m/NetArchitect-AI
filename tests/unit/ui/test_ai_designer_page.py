@@ -169,6 +169,47 @@ def test_free_text_interpretation_keeps_facts_and_assumptions_separate(
     assert any("Facilities" in item.description for item in output.assumptions)
 
 
+def test_ai_designer_parsed_free_text_shows_topology_repair_assumption(
+    monkeypatch,
+    configured_key,
+) -> None:
+    payload = extraction(
+        organization_name="Acme",
+        site_name="Headquarters",
+        departments=[
+            {"name": "Engineering", "user_count": 12},
+            {"name": "Sales", "user_count": 5},
+        ],
+        total_user_count=17,
+        design_goals=["Provide resilience."],
+    )
+    monkeypatch.setattr(
+        ai_designer,
+        "_build_provider",
+        lambda api_key: FakeProvider([payload]),
+    )
+    configured_key("gsk-designer-test-key")
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120)
+    at.run()
+    open_page(at, "AI Network Designer")
+
+    at.text_area(key=ai_designer.FREE_TEXT_KEY).set_value(
+        "Acme has one site. Engineering has 12 users and Sales has 5 users. "
+        "Provide resilience."
+    )
+    at.button(key=ai_designer.INTERPRET_BUTTON).click().run()
+    at.button(key=ai_designer.RUN_BUTTON).click().run()
+
+    assert not at.exception
+    plan_state = at.session_state[ai_designer.PLAN_STATE_KEY]
+    assert plan_state.stop_reason.value == "completed"
+    report = plan_state.results["documentation"]
+    assert any("distribution layer raised to 2 switches" in item for item in report.assumptions)
+    text = rendered_text(at)
+    assert "distribution layer raised to 2 switches" in text
+    assert "redundant_uplinks requires distribution_count" not in text
+
+
 def test_provider_failure_is_shown_without_crashing(monkeypatch, configured_key) -> None:
     monkeypatch.setattr(
         ai_designer,
