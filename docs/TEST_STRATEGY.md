@@ -12,11 +12,14 @@ Run from the repository root:
 & ".venv\Scripts\python.exe" -m pytest -q -m perf
 & ".venv\Scripts\python.exe" -m pytest -q tests/eval
 & ".venv\Scripts\python.exe" -m ruff check .
+& ".venv\Scripts\python.exe" scripts\e2e_live.py https://your-app.example/
 & ".venv\Scripts\python.exe" scripts\profile_phase12.py
 & ".venv\Scripts\python.exe" scripts\profile_phase12.py --no-memory
 ```
 
 `pytest.ini` defines the `smoke` marker, which selects a fast regression subset, and the `perf` marker, which holds opt-in timing budgets with a 2x margin. `addopts = -m "not perf"` excludes timing budgets from default and smoke runs; run them explicitly with `-m perf`. Neither marker replaces the full suite. Real-provider recording (`scripts/record_llm_responses.py`) is a manual local-only command documented in [LLM evaluation](LLM_EVALUATION.md); it is never run by CI and never commits a key or raw response.
+
+`scripts/e2e_live.py` is a separate manual, dev-only Playwright browser check. Install `requirements-dev.txt` (Playwright is pinned there only, never in `requirements.txt`), install the Chromium browser once with `python -m playwright install chromium`, then pass the target app URL as the required argument. The script embeds no URL or secret and writes screenshots, bundles, and PDFs only to the gitignored `e2e_out/` directory. It is not part of CI and does not verify visual correctness or calculation results.
 
 ## Test layers
 

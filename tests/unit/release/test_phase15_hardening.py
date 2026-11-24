@@ -341,6 +341,7 @@ def test_gitignore_and_secret_example_are_deployment_safe() -> None:
         "__pycache__/",
         ".pytest_cache/",
         ".ruff_cache/",
+        "e2e_out/",
         "*.log",
     ):
         assert entry in gitignore
@@ -374,6 +375,9 @@ def test_requirements_pin_all_allowed_packages_inline() -> None:
         "pyarrow",
     ]
 
+    for forbidden in ("pytest", "ruff", "hypothesis", "playwright"):
+        assert forbidden not in names
+
     assert "-c " not in requirements
     assert "-r " not in requirements
     assert not (ROOT / "constraints.txt").exists()
@@ -382,5 +386,8 @@ def test_requirements_pin_all_allowed_packages_inline() -> None:
     dev_lines = [line.strip() for line in dev.splitlines() if line.strip()]
     assert dev_lines[0] == "-r requirements.txt"
     dev_names = [line.split("==", 1)[0] for line in dev_lines[1:]]
-    assert dev_names == ["pytest", "ruff", "hypothesis"]
+    assert dev_names == ["pytest", "ruff", "hypothesis", "playwright"]
     assert all("==" in line for line in dev_lines[1:])
+    assert "playwright==1.65.2" in dev_lines
+    assert "playwright" not in names
+    assert not set(dev_names).intersection(names)
