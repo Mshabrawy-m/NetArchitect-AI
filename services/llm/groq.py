@@ -30,6 +30,7 @@ from config.limits import (
 from config.settings import get_settings
 from core.exceptions import (
     LLMAuthenticationError,
+    LLMForbiddenError,
     LLMMalformedResponseError,
     LLMMissingKeyError,
     LLMProviderError,
@@ -56,6 +57,8 @@ from .structured import (
 Transport = Callable[[urllib.request.Request, float], "HTTPResult"]
 Sleep = Callable[[float], None]
 Clock = Callable[[], float]
+
+USER_AGENT = "NetArchitect-AI/2.0 (+https://github.com/Mshabrawy-m/NetArchitect-AI)"
 
 
 @dataclass(frozen=True)
@@ -281,6 +284,7 @@ class GroqProvider(LLMProvider):
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
+                "User-Agent": USER_AGENT,
             },
         )
         try:
@@ -305,9 +309,15 @@ class GroqProvider(LLMProvider):
         if self.budget is not None:
             self.budget.observe_response(result.headers, timestamp=self._clock())
 
-        if result.status_code in {401, 403}:
+        if result.status_code == 401:
             raise LLMAuthenticationError(
-                "The LLM provider rejected the API key. Check the configured key."
+                "The LLM provider rejected the API key (HTTP 401). "
+                "Check the configured key."
+            )
+        if result.status_code == 403:
+            raise LLMForbiddenError(
+                "The LLM provider blocked the request (HTTP 403). "
+                "Check the configured key or provider permissions."
             )
         if result.status_code == 429:
             return result
@@ -385,4 +395,10 @@ def provider_status(
     }
 
 
-__all__ = ["GroqProvider", "HTTPResult", "default_transport", "provider_status"]
+__all__ = [
+    "USER_AGENT",
+    "GroqProvider",
+    "HTTPResult",
+    "default_transport",
+    "provider_status",
+]

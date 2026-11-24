@@ -14,6 +14,7 @@ from config.settings import get_settings
 from core.exceptions import (
     LLMAuthenticationError,
     LLMBudgetExceededError,
+    LLMForbiddenError,
     LLMMalformedResponseError,
     LLMMissingKeyError,
     LLMProviderError,
@@ -33,6 +34,16 @@ from services.llm import (
 from services.llm.testing import FakeProvider
 
 KEY = "gsk-test-secret-key-that-must-never-appear"
+EXPECTED_USER_AGENT = (
+    "NetArchitect-AI/2.0 (+https://github.com/Mshabrawy-m/NetArchitect-AI)"
+)
+AUTH_MESSAGE = (
+    "The LLM provider rejected the API key (HTTP 401). Check the configured key."
+)
+FORBIDDEN_MESSAGE = (
+    "The LLM provider blocked the request (HTTP 403). "
+    "Check the configured key or provider permissions."
+)
 FIXED_NOW = 1_700_000_123.0
 FULL_LIMIT_HEADERS = {
     "x-ratelimit-limit-requests": "100",
@@ -132,6 +143,7 @@ def test_success_returns_typed_response_and_usage() -> None:
     headers = {key.lower(): value for key, value in request.header_items()}
     assert headers["authorization"] == f"Bearer {KEY}"
     assert headers["content-type"] == "application/json"
+    assert headers["user-agent"] == EXPECTED_USER_AGENT
 
 
 def test_all_rate_limit_headers_and_reported_usage_are_captured() -> None:
@@ -275,6 +287,11 @@ def test_rate_limit_honors_retry_after_and_then_succeeds() -> None:
     assert response.text == "ok"
     assert sleeps == [2.0]
     assert budget.used_calls == 2
+    assert all(
+        {key.lower(): value for key, value in request.header_items()}["user-agent"]
+        == EXPECTED_USER_AGENT
+        for request in transport.requests
+    )
 
 
 def test_rate_limit_retries_are_capped() -> None:
@@ -312,6 +329,62 @@ def test_provider_outage_and_network_errors_are_typed() -> None:
     auth = _provider(ScriptedTransport([HTTPResult(401, {}, b"")]))
     with pytest.raises(LLMAuthenticationError, match="rejected the API key"):
         auth.complete(_messages())
+
+
+def test_401_and_403_are_distinct_typed_errors_with_status_and_no_secret(
+    caplog,
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    captured: list[Exception] = []
+    outcomes = (
+        (401, LLMAuthenticationError, AUTH_MESSAGE),
+        (403, LLMForbiddenError, FORBIDDEN_MESSAGE),
+    )
+    for status, expected_type, expected_message in outcomes:
+        transport = ScriptedTransport(
+            [HTTPResult(status, {}, json.dumps({"error": KEY}).encode("utf-8"))]
+        )
+        provider = _provider(transport)
+
+        with pytest.raises(expected_type) as caught:
+            provider.complete(_messages())
+
+        error = caught.value
+        captured.append(error)
+        assert str(error) == expected_message
+        assert f"HTTP {status}" in str(error)
+        assert KEY not in str(error)
+        assert KEY not in repr(error)
+        assert '"error"' not in str(error)
+        assert '"messages"' not in str(error)
+        headers = {
+            key.lower(): value for key, value in transport.requests[0].header_items()
+        }
+        assert headers["user-agent"] == EXPECTED_USER_AGENT
+
+    assert type(captured[0]) is not type(captured[1])
+    assert str(captured[0]) != str(captured[1])
+    assert KEY not in caplog.text
+
+
+def test_fake_provider_scripts_distinct_authentication_errors() -> None:
+    provider = FakeProvider(
+        [
+            LLMAuthenticationError(AUTH_MESSAGE),
+            LLMForbiddenError(FORBIDDEN_MESSAGE),
+        ]
+    )
+
+    with pytest.raises(LLMAuthenticationError, match=r"HTTP 401") as auth:
+        provider.complete(_messages())
+    with pytest.raises(LLMForbiddenError, match=r"HTTP 403") as forbidden:
+        provider.complete(_messages())
+
+    assert str(auth.value) == AUTH_MESSAGE
+    assert str(forbidden.value) == FORBIDDEN_MESSAGE
+    assert type(auth.value) is not type(forbidden.value)
+    assert KEY not in str(auth.value)
+    assert KEY not in str(forbidden.value)
 
 
 def test_malformed_response_envelopes_are_typed() -> None:
@@ -414,6 +487,7 @@ def test_secret_never_appears_in_errors_logs_or_status(caplog) -> None:
     caplog.set_level(logging.DEBUG)
     outcomes = [
         HTTPResult(401, {}, b""),
+        HTTPResult(403, {}, b""),
         HTTPResult(503, {}, b""),
         HTTPResult(200, {}, b"not json"),
     ]

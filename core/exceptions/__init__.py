@@ -132,7 +132,15 @@ class LLMMissingKeyError(LLMError):
 
 
 class LLMAuthenticationError(LLMError):
-    """The provider rejected the configured API key."""
+    """The provider rejected the configured API key (HTTP 401)."""
+
+    status_code = 401
+
+
+class LLMForbiddenError(LLMError):
+    """The provider blocked the request (HTTP 403)."""
+
+    status_code = 403
 
 
 class LLMTimeoutError(LLMError):

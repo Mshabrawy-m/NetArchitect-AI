@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from core.exceptions import LLMAuthenticationError, LLMForbiddenError
 from tests.unit.ui.nav_helpers import open_page
 from ui import i18n
+from ui.components import format_error
 
 APP_PATH = Path(__file__).resolve().parents[3] / "app.py"
 FSI, PDI = "\u2068", "\u2069"
@@ -23,6 +25,54 @@ def test_catalogs_have_full_arabic_key_and_placeholder_parity() -> None:
     assert i18n.catalog_parity()
     assert i18n.missing_translation_keys() == ()
     assert set(i18n.AR) == set(i18n.EN)
+
+
+PROVIDER_ERROR_CASES = (
+    ("error.llm.authentication", 401, "rejected the API key"),
+    ("error.llm.forbidden", 403, "blocked the request"),
+)
+
+
+def test_provider_error_catalogs_keep_status_and_are_translated() -> None:
+    for key, status, english_phrase in PROVIDER_ERROR_CASES:
+        assert key in i18n.EN
+        assert key in i18n.AR
+        english = i18n.translate(key, {"status": status}, language="en")
+        arabic = i18n.translate(key, {"status": status}, language="ar")
+        assert english_phrase in english
+        assert f"HTTP {status}" in english
+        assert f"HTTP {status}" in _plain(arabic)
+        assert arabic != english
+
+
+def test_format_error_renders_typed_provider_errors_without_secret(monkeypatch) -> None:
+    secret = "gsk-test-secret-must-not-be-rendered"
+    monkeypatch.setattr(i18n, "current_language", lambda: "ar")
+
+    authentication = format_error(LLMAuthenticationError(f"bad key: {secret}"))
+    forbidden = format_error(LLMForbiddenError(f"bad key: {secret}"))
+
+    assert authentication == i18n.translate(
+        "error.llm.authentication", {"status": 401}, language="ar"
+    )
+    assert forbidden == i18n.translate(
+        "error.llm.forbidden", {"status": 403}, language="ar"
+    )
+    assert secret not in authentication + forbidden
+
+
+REMOVED_KEY_PHRASES = (
+    "Keys pasted into this page",
+    "session keys",
+    "المفاتيح الملصقة في هذا الصفح",
+    "مفاتيح الجلسة",
+)
+
+
+def test_removed_session_key_phrases_are_absent_from_both_catalogs() -> None:
+    for phrase in REMOVED_KEY_PHRASES:
+        assert all(phrase not in value for value in i18n.EN.values())
+        assert all(phrase not in value for value in i18n.AR.values())
 
 
 E5_KEYS = (

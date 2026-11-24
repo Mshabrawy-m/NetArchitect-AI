@@ -2,6 +2,26 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-24 - distinct provider auth errors and explicit User-Agent
+
+### Changed
+- `GroqProvider` maps HTTP 401 to `LLMAuthenticationError` ("provider rejected the
+  API key") and HTTP 403 to a new `LLMForbiddenError` ("provider blocked the
+  request"). Both messages include the numeric status code, and neither includes
+  the key or the response body.
+- Every Groq request sends an explicit
+  `NetArchitect-AI/2.0 (+https://github.com/Mshabrawy-m/NetArchitect-AI)`
+  `User-Agent` instead of relying on the default Python-urllib agent.
+- `format_error` renders the two typed errors from ar/en catalog keys, keeping
+  the status code while translating the wording. Credentials remain absent from
+  logs, traces, status summaries, and rendered errors.
+
+### Tests
+- Fake HTTP-layer tests assert different 401/403 types and messages, the status
+  code, the `User-Agent` on every request, and no key in errors, logs, or output.
+- `FakeProvider` scripts both typed errors; i18n parity covers the new catalog
+  keys.
+
 ## 2026-11-23 - G3: disable the Streamlit file watcher
 
 ### Changed

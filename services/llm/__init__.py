@@ -6,7 +6,13 @@ Core deterministic engineering never imports this package.
 """
 
 from .budget import RequestBudget
-from .groq import GroqProvider, HTTPResult, default_transport, provider_status
+from .groq import (
+    USER_AGENT,
+    GroqProvider,
+    HTTPResult,
+    default_transport,
+    provider_status,
+)
 from .models import (
     LLMMessage,
     LLMResponse,
@@ -29,6 +35,7 @@ __all__ = [
     "EXPLAIN_RESULT",
     "INTERPRET_SCENARIO",
     "PROMPTS",
+    "USER_AGENT",
     "GroqProvider",
     "HTTPResult",
     "LLMMessage",

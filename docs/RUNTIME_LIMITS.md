@@ -76,5 +76,6 @@ rejections are explicit rather than silent truncation.
   Agent outputs must still satisfy their Pydantic schemas, and numeric design
   values must still match computed values; a release test verifies that an
   "ignore previous instructions" payload cannot call an unlisted tool.
-- API keys are never displayed, logged, traced, serialized into reports or
+- API keys are read only from Streamlit secrets or environment variables and are
+  never entered in the UI, displayed, logged, traced, serialized into reports or
   exports, or written to disk. A release test checks all of those sinks.

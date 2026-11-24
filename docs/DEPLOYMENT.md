@@ -70,7 +70,7 @@ Add this only after the no-key deployment is healthy.
 4. Click **Save**. Streamlit restarts the app.
 5. Confirm Settings now reports that a key is configured. Do not print, log, export, or commit the key.
 
-`config/settings.py` reads these exact top-level names from `st.secrets` or environment variables. Secrets take precedence over environment variables. Model names are configurable because providers retire models; no specific model is guaranteed by this release.
+`config/settings.py` reads these exact top-level names from `st.secrets` or environment variables. Secrets take precedence over environment variables. The app has no key input; the key is never entered in the UI. Model names are configurable because providers retire models; no specific model is guaranteed by this release.
 
 ## Configuration applied by the repository
 

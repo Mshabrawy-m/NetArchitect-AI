@@ -14,6 +14,7 @@ import streamlit as st
 from pydantic import ValidationError
 
 from core.csv_safe import neutralize_cell
+from core.exceptions import LLMAuthenticationError, LLMForbiddenError
 from core.schemas.validation import Finding, Severity
 from ui import i18n
 
@@ -140,6 +141,10 @@ def model_estimate_note(text: str, *, title: str = "Model scope") -> None:
 
 def format_error(error: Exception) -> str:
     """Return a concise message for domain and validation errors."""
+    if isinstance(error, LLMAuthenticationError):
+        return i18n.t("error.llm.authentication", status=error.status_code)
+    if isinstance(error, LLMForbiddenError):
+        return i18n.t("error.llm.forbidden", status=error.status_code)
     if isinstance(error, ValidationError):
         parts = [
             f"{'.'.join(str(item) for item in detail['loc'])}: {detail['msg']}"

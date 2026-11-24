@@ -87,7 +87,7 @@ GROQ_MODEL = "your-model"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 ```
 
-Never commit the key, paste it into reports, or place it in application logs. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for Community Cloud secrets.
+The app has no key input: the key is read only from Streamlit secrets or environment variables and is never entered in the UI. Never commit it, paste it into reports, or place it in application logs. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for Community Cloud secrets.
 
 ## Verification summary
 

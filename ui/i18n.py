@@ -42,6 +42,14 @@ EN: MappingProxyType[str, str] = MappingProxyType(
             "or guaranteed outcomes. See Settings > Release limitations."
         ),
         "app.sidebar": "NetArchitect AI - deterministic network engineering first.",
+        "error.llm.authentication": (
+            "The LLM provider rejected the API key (HTTP {status}). "
+            "Check the configured key."
+        ),
+        "error.llm.forbidden": (
+            "The LLM provider blocked the request (HTTP {status}). "
+            "Check the configured key or provider permissions."
+        ),
         "nav.group.design": "Design",
         "nav.group.analyze": "Analyze",
         "nav.group.operate": "Operate",
@@ -709,9 +717,9 @@ EN: MappingProxyType[str, str] = MappingProxyType(
             "retires models, so set GROQ_MODEL explicitly for a deployment."
         ),
         "settings.deployment_warning": (
-            "Keys pasted into this page live only in Streamlit session state for "
-            "this browser tab. They are not written to snapshots, traces, logs, "
-            "downloads, or the repository."
+            "The API key is read only from Streamlit secrets or environment "
+            "variables. It is never entered in this UI and is not written to "
+            "snapshots, traces, logs, downloads, or the repository."
         ),
         "settings.limitations": "Release limitations",
         "settings.limitations_warning": (
@@ -723,9 +731,10 @@ EN: MappingProxyType[str, str] = MappingProxyType(
             "- **Modeled, not measured:** simulation, forecasting, capacity, and "
             "security results come from the current twin and stated assumptions. "
             "They are not measurements or guarantees.\n"
-            "- **Session-only state:** twins, runs, traces, and session keys live "
-            "in this browser session only. Download what you need before closing "
-            "it.\n"
+            "- **Session-only state:** twins, runs, and traces live in this browser "
+            "session only. Download what you need before closing it. The API key "
+            "is read only from Streamlit secrets or environment variables and is "
+            "never entered in the UI.\n"
             "- **Optional AI:** the deterministic engines work with no API key. "
             "The optional provider may interpret requirements or write explanatory "
             "text, but it cannot change computed values or call unlisted tools.\n"
@@ -866,6 +875,13 @@ AR: MappingProxyType[str, str] = MappingProxyType(
             "بالأجهزة أو فحص مباشر أو نتائج مضمونة. راجع الإعدادات > قيود الإصدار."
         ),
         "app.sidebar": "نتكاركيت أيه - هندسة الشبكات أولاً.",
+        "error.llm.authentication": (
+            "رفض مزود LLM مفتاح API (HTTP {status}). تحقق من المفتاح المضبط."
+        ),
+        "error.llm.forbidden": (
+            "حظر مزود LLM الطلب (HTTP {status}). "
+            "تحقق من المفتاح المضبط أو أذونات المزود."
+        ),
         "nav.group.design": "التصميم",
         "nav.group.analyze": "التحليل",
         "nav.group.operate": "التشغيل",
@@ -1482,9 +1498,9 @@ AR: MappingProxyType[str, str] = MappingProxyType(
             "الطرازات، لذا اضبط GROQ_MODEL صراحةً عند النشر."
         ),
         "settings.deployment_warning": (
-            "المفاتيح الملصقة في هذا الصفح موجودة في حالة جلسة Streamlit "
-            "لهذا التبويب فقط. لا تكتب إلى اللقطات أو الآثار أو السجلات "
-            "أو التنزيلات أو المستودع."
+            "يُقرأ مفتاح API فقط من أسرار Streamlit أو متغيرات البيئة. "
+            "لا يُدخل في هذه الواجهة ولا يُكتب إلى اللقطات أو الآثار "
+            "أو السجلات أو التنزيلات أو المستودع."
         ),
         "settings.limitations": "قيود الإصدار",
         "settings.limitations_warning": (
@@ -1496,8 +1512,9 @@ AR: MappingProxyType[str, str] = MappingProxyType(
             "- **مشمول بالنمذجة وليس بالقياس:** نتائج المحاكاة والتوقع والسعة "
             "والأمان مشتقة من التوأم الحالي والافتراضات المذكورة. ليست قياسات "
             "أو ضمانات.\n"
-            "- **حالة الجلسة فقط:** التوائم والتشغيلات والآثار ومفاتيح الجلسة "
-            "موجودة في جلسة هذا المتصفح فقط. نزّل ما تحتاجه قبل الإغلاق.\n"
+            "- **حالة الجلسة فقط:** التوائم والتشغيلات والآثار موجودة في جلسة "
+            "هذا المتصفح فقط. نزّل ما تحتاجه قبل الإغلاق. يُقرأ مفتاح API فقط "
+            "من أسرار Streamlit أو متغيرات البيئة ولا يُدخل في الواجهة.\n"
             "- **الذكاء الاصطناعي اختياري:** المحركات الحتمية تعمل دون مفتاح API. "
             "قد يفسر المزود المتطلبات أو يكتب نصوصاً توضيحية، لكنه لا يغير "
             "القيم المحسوبة ولا يستدعي أدوات غير مدرجة.\n"
