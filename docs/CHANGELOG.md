@@ -2,6 +2,20 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-24 - provider status survives every UI path
+
+### Fixed
+- Settings connection test, AI designer interpretation, copilot explanation and
+  scenario interpretation, and report AI notes now preserve the numeric HTTP
+  status when a typed provider error is converted to stored display text.
+- `format_error` and both ar/en catalogs remain the canonical localized renderer;
+  call sites that swallow provider errors now append the status once instead of
+  showing a status-free generic message.
+
+### Tests
+- Added per-call-site coverage for 401 and 403 rendering, including EN/AR
+  `format_error`, Settings, AI designer, copilot bridge, and report notes.
+
 ## 2026-11-24 - distinct provider auth errors and explicit User-Agent
 
 ### Changed

@@ -17,7 +17,12 @@ from config.limits import (
     MAX_COPILOT_EXPLANATION_CHARS,
     MAX_LLM_REPAIR_RETRIES,
 )
-from core.exceptions import LLMError, LLMMissingKeyError, OversizedInputError
+from core.exceptions import (
+    LLMError,
+    LLMMissingKeyError,
+    OversizedInputError,
+    ensure_llm_status,
+)
 from core.inputs import reject_unsafe_text
 from core.schemas.validation import Finding
 from digital_twin import DigitalTwin
@@ -698,14 +703,15 @@ def explain(
         )
     except LLMMissingKeyError:
         return _result(typed, prompt=prompt, provider_used=False)
-    except (LLMError, OversizedInputError):
+    except (LLMError, OversizedInputError) as error:
         return _result(
             typed,
             prompt=prompt,
             provider_used=True,
-            ai_rejection=(
+            ai_rejection=ensure_llm_status(
                 "The AI note was unavailable or failed schema validation; only "
-                "the deterministic explanation is shown."
+                "the deterministic explanation is shown.",
+                error,
             ),
         )
 

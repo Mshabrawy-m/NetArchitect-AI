@@ -21,6 +21,7 @@ from core.exceptions import (
     LLMMissingKeyError,
     OversizedInputError,
     ScenarioValidationError,
+    ensure_llm_status,
 )
 from core.inputs import reject_unsafe_text
 from core.schemas.scenario import Scenario, ScenarioType
@@ -101,6 +102,11 @@ _NO_KEY = (
     "This sentence needs the optional AI interpreter. Add a Groq API key in "
     "Settings, or use a supported phrase: 'fail link <id>', 'fail device <id>', "
     "or 'scale traffic by <N>%'."
+)
+_PROVIDER_FAILED = (
+    "The optional AI interpreter could not complete this sentence. Use a "
+    "supported phrase: 'fail link <id>', 'fail device <id>', or 'scale traffic "
+    "by <N>%'."
 )
 _UNSAFE_DRAFT = "The AI draft was rejected because it did not stay within the twin's data."
 _INVALID_SCENARIO = "The interpreted scenario was rejected by the deterministic validator."
@@ -480,10 +486,15 @@ def _interpret_with_provider(
             prompt=prompt,
             provider_used=False,
         )
-    except LLMError:
+    except LLMError as error:
         return _result(
             source=InterpretationSource.unavailable,
-            clarifications=(_clarification(ClarificationCode.provider_unavailable, _NO_KEY),),
+            clarifications=(
+                _clarification(
+                    ClarificationCode.provider_unavailable,
+                    ensure_llm_status(_PROVIDER_FAILED, error),
+                ),
+            ),
             prompt=prompt,
             provider_used=True,
         )

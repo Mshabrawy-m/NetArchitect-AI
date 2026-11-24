@@ -10,7 +10,11 @@ from streamlit.testing.v1 import AppTest
 
 from agents import WorkflowState
 from config.settings import get_settings
-from core.exceptions import LLMProviderError
+from core.exceptions import (
+    LLMAuthenticationError,
+    LLMForbiddenError,
+    LLMProviderError,
+)
 from services.llm.testing import FakeProvider
 from tests.unit.simulation.helpers import diamond_twin
 from tests.unit.ui.nav_helpers import open_page
@@ -182,6 +186,50 @@ def test_provider_failure_is_shown_without_crashing(monkeypatch, configured_key)
     output = at.session_state[ai_designer.UNDERSTANDING_KEY]
     assert output.status.value == "failed"
     assert any("provider is down" in error.value for error in at.error)
+
+
+@pytest.mark.parametrize(
+    ("provider_error", "status"),
+    (
+        (
+            LLMAuthenticationError(
+                "The LLM provider rejected the API key. Check the configured key."
+            ),
+            401,
+        ),
+        (
+            LLMForbiddenError(
+                "The LLM provider blocked the request. Check provider permissions."
+            ),
+            403,
+        ),
+    ),
+)
+def test_provider_error_status_is_shown_in_interpretation(
+    monkeypatch,
+    configured_key,
+    provider_error: Exception,
+    status: int,
+) -> None:
+    monkeypatch.setattr(
+        ai_designer,
+        "_build_provider",
+        lambda api_key: FakeProvider([provider_error]),
+    )
+    configured_key("gsk-designer-status-key")
+    at = AppTest.from_file(str(APP_PATH), default_timeout=120)
+    at.run()
+    open_page(at, "AI Network Designer")
+
+    at.text_area(key=ai_designer.FREE_TEXT_KEY).set_value("A small office.")
+    at.button(key=ai_designer.INTERPRET_BUTTON).click().run()
+
+    assert not at.exception
+    output = at.session_state[ai_designer.UNDERSTANDING_KEY]
+    assert output.status.value == "failed"
+    assert f"HTTP {status}" in output.error
+    assert any(f"HTTP {status}" in shown.value for shown in at.error)
+    assert "gsk-designer-status-key" not in rendered_text(at)
 
 
 def test_interpreted_requirements_drive_the_workflow(

@@ -127,6 +127,21 @@ class LLMError(NetArchitectError):
     """Base class for language-model provider failures."""
 
 
+def ensure_llm_status(text: str, error: Exception) -> str:
+    """Append a typed provider error's HTTP status to display text once.
+
+    UI helpers use the localized catalogs directly; this helper is for
+    non-UI layers that store a provider failure as text before the UI sees it.
+    It only reads the public ``status_code`` attribute and the supplied display
+    text, never configuration or credentials.
+    """
+    status = getattr(error, "status_code", None)
+    if not isinstance(status, int):
+        return text
+    marker = f"HTTP {status}"
+    return text if marker in text else f"{text} ({marker})"
+
+
 class LLMMissingKeyError(LLMError):
     """No API key is configured for the requested provider."""
 

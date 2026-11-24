@@ -45,19 +45,27 @@ def test_provider_error_catalogs_keep_status_and_are_translated() -> None:
         assert arabic != english
 
 
-def test_format_error_renders_typed_provider_errors_without_secret(monkeypatch) -> None:
+@pytest.mark.parametrize("language", ("en", "ar"))
+def test_format_error_renders_typed_provider_errors_without_secret(
+    monkeypatch,
+    language: str,
+) -> None:
     secret = "gsk-test-secret-must-not-be-rendered"
-    monkeypatch.setattr(i18n, "current_language", lambda: "ar")
+    monkeypatch.setattr(i18n, "current_language", lambda: language)
 
-    authentication = format_error(LLMAuthenticationError(f"bad key: {secret}"))
+    authentication = format_error(
+        LLMAuthenticationError(f"bad key: {secret}")
+    )
     forbidden = format_error(LLMForbiddenError(f"bad key: {secret}"))
 
     assert authentication == i18n.translate(
-        "error.llm.authentication", {"status": 401}, language="ar"
+        "error.llm.authentication", {"status": 401}, language=language
     )
     assert forbidden == i18n.translate(
-        "error.llm.forbidden", {"status": 403}, language="ar"
+        "error.llm.forbidden", {"status": 403}, language=language
     )
+    assert "HTTP 401" in _plain(authentication)
+    assert "HTTP 403" in _plain(forbidden)
     assert secret not in authentication + forbidden
 
 

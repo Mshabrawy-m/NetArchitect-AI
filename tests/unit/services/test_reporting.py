@@ -14,7 +14,11 @@ from pydantic import ValidationError
 
 from agents import run_structured_design
 from capacity import CapacityRun, DemandMapping, evaluate_capacity
-from core.exceptions import LLMProviderError
+from core.exceptions import (
+    LLMAuthenticationError,
+    LLMForbiddenError,
+    LLMProviderError,
+)
 from core.schemas.scenario import ScenarioType
 from digital_twin import DigitalTwin
 from forecasting import DataProvenance
@@ -1006,6 +1010,37 @@ def test_ai_provider_error_leaves_the_report_untouched(
     assert explanation.rejected is False
     assert explanation.text == ""
     assert "unavailable" in explanation.note
+
+
+@pytest.mark.parametrize(
+    ("provider_error", "status"),
+    (
+        (
+            LLMAuthenticationError(
+                "The LLM provider rejected the API key. Check the configured key."
+            ),
+            401,
+        ),
+        (
+            LLMForbiddenError(
+                "The LLM provider blocked the request. Check provider permissions."
+            ),
+            403,
+        ),
+    ),
+)
+def test_ai_provider_status_is_kept_in_report_note(
+    base_report: ReportDocument,
+    provider_error: Exception,
+    status: int,
+) -> None:
+    explanation = generate_ai_explanation(
+        base_report, FakeProvider([provider_error])
+    )
+
+    assert explanation.text == ""
+    assert "unavailable" in explanation.note
+    assert f"HTTP {status}" in explanation.note
 
 
 def test_ai_text_in_a_document_is_checked_like_any_other_text(

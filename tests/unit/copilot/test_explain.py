@@ -7,7 +7,11 @@ import json
 import pytest
 
 from config.limits import MAX_COPILOT_EXPLANATION_CHARS
-from core.exceptions import OversizedInputError
+from core.exceptions import (
+    LLMAuthenticationError,
+    LLMForbiddenError,
+    OversizedInputError,
+)
 from core.schemas.network import Device, DeviceRole, DeviceType, Link, Topology
 from core.schemas.routing import TrafficDemand
 from core.schemas.scenario import Scenario, ScenarioType
@@ -261,6 +265,38 @@ def test_llm_cannot_add_a_verdict_field() -> None:
     )
     assert result.ai_text == ""
     assert result.ai_rejection
+
+
+@pytest.mark.parametrize(
+    ("provider_error", "status"),
+    (
+        (
+            LLMAuthenticationError(
+                "The LLM provider rejected the API key. Check the configured key."
+            ),
+            401,
+        ),
+        (
+            LLMForbiddenError(
+                "The LLM provider blocked the request. Check provider permissions."
+            ),
+            403,
+        ),
+    ),
+)
+def test_provider_error_status_is_kept_in_ai_rejection(
+    provider_error: Exception,
+    status: int,
+) -> None:
+    result = explain(
+        _request(),
+        provider=FakeProvider([provider_error]),
+        max_repair_retries=0,
+    )
+
+    assert result.ai_text == ""
+    assert result.has_ai is False
+    assert f"HTTP {status}" in result.ai_rejection
 
 
 def test_cache_hit_skips_provider_and_budget() -> None:

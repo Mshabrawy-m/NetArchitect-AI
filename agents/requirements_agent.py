@@ -32,7 +32,12 @@ from config.limits import (
     MAX_REQUIREMENTS_LIST_ITEMS,
     MAX_REQUIREMENTS_TEXT_CHARS,
 )
-from core.exceptions import LLMError, LLMMissingKeyError, LLMSchemaError
+from core.exceptions import (
+    LLMError,
+    LLMMissingKeyError,
+    LLMSchemaError,
+    ensure_llm_status,
+)
 from core.schemas.organization import Department, Organization, Site
 from core.schemas.requirements import Assumption, NetworkRequirements, UserFacts
 from core.schemas.validation import Severity
@@ -330,7 +335,7 @@ class RequirementsUnderstandingAgent(BaseAgent):
                 status=RequirementsAgentStatus.failed,
                 requirements=None,
                 summary="Requirement extraction failed; no requirements were produced.",
-                error=str(error),
+                error=ensure_llm_status(str(error), error),
                 provider_used=True,
             )
 

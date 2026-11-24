@@ -7,7 +7,11 @@ import json
 import pytest
 
 from config.limits import MAX_COPILOT_TEXT_CHARS
-from core.exceptions import OversizedInputError
+from core.exceptions import (
+    LLMAuthenticationError,
+    LLMForbiddenError,
+    OversizedInputError,
+)
 from core.schemas.scenario import ScenarioType
 from services.copilot import (
     CopilotCache,
@@ -183,6 +187,38 @@ def test_no_key_path_exposes_a_clear_state() -> None:
     assert result.source.value == "unavailable"
     assert result.clarifications[0].code.value == "provider_unavailable"
     assert "API key" in result.clarifications[0].question
+
+
+@pytest.mark.parametrize(
+    ("provider_error", "status"),
+    (
+        (
+            LLMAuthenticationError(
+                "The LLM provider rejected the API key. Check the configured key."
+            ),
+            401,
+        ),
+        (
+            LLMForbiddenError(
+                "The LLM provider blocked the request. Check provider permissions."
+            ),
+            403,
+        ),
+    ),
+)
+def test_provider_error_status_is_kept_in_clarification(
+    provider_error: Exception,
+    status: int,
+) -> None:
+    result = interpret_scenario(
+        "please scale the traffic up a bit",
+        _twin(),
+        provider=FakeProvider([provider_error]),
+    )
+
+    assert result.source.value == "unavailable"
+    assert result.clarifications[0].code.value == "provider_unavailable"
+    assert f"HTTP {status}" in result.clarifications[0].question
 
 
 def test_cache_hit_does_not_consume_budget() -> None:

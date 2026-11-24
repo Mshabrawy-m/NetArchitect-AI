@@ -16,7 +16,7 @@ import json
 import re
 
 from config.limits import MAX_DOCUMENTATION_EXPLANATION_CHARS
-from core.exceptions import LLMError
+from core.exceptions import LLMError, ensure_llm_status
 from services.llm.models import LLMMessage, MessageRole
 from services.llm.provider import LLMProvider
 
@@ -93,9 +93,11 @@ def generate_ai_explanation(
     ]
     try:
         response = provider.complete(messages)
-    except LLMError:
+    except LLMError as error:
         return AIExplanation(
-            note="The optional AI explanation was unavailable.",
+            note=ensure_llm_status(
+                "The optional AI explanation was unavailable.", error
+            ),
         )
     except Exception:  # noqa: BLE001 - optional prose must never fail a report
         return AIExplanation(

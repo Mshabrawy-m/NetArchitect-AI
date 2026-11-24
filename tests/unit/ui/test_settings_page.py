@@ -10,7 +10,11 @@ from streamlit.testing.v1 import AppTest
 
 from agents import WorkflowState, WorkflowStopReason
 from config.settings import get_settings
-from core.exceptions import LLMProviderError
+from core.exceptions import (
+    LLMAuthenticationError,
+    LLMForbiddenError,
+    LLMProviderError,
+)
 from services.copilot import AIExplanationDraft, CopilotCache, PromptTrace, build_key
 from services.llm import LLMMessage, LLMResponse, LLMUsage, MessageRole, RequestBudget
 from services.llm.testing import FakeProvider
@@ -229,6 +233,51 @@ def test_settings_page_test_connection_reports_provider_failure(
     assert any("unreachable" in error.value for error in at.error)
     assert not any("gsk-test-key" in error.value for error in at.error)
     assert "gsk-test-key" not in str(at.session_state.to_dict())
+
+
+@pytest.mark.parametrize(
+    ("provider_error", "status"),
+    (
+        (
+            LLMAuthenticationError(
+                "The LLM provider rejected the API key. Check the configured key."
+            ),
+            401,
+        ),
+        (
+            LLMForbiddenError(
+                "The LLM provider blocked the request. Check provider permissions."
+            ),
+            403,
+        ),
+    ),
+)
+def test_connection_test_renders_provider_error_status(
+    monkeypatch,
+    configured_key,
+    provider_error: Exception,
+    status: int,
+) -> None:
+    class StatusProvider:
+        def complete(self, messages, schema=None, *, timeout=None):
+            raise provider_error
+
+    def fake_builder(api_key: str, budget: RequestBudget) -> StatusProvider:
+        assert api_key == "gsk-status-test-key"
+        return StatusProvider()
+
+    monkeypatch.setattr(settings_page, "_build_provider", fake_builder)
+    configured_key("gsk-status-test-key")
+
+    at = AppTest.from_file(str(APP_PATH), default_timeout=60)
+    at.run()
+    open_page(at, "Settings")
+    at.button(key=settings_page.TEST_BUTTON).click().run()
+
+    assert not at.exception
+    assert any(f"HTTP {status}" in shown.value for shown in at.error)
+    assert "gsk-status-test-key" not in _rendered_text(at)
+    assert "gsk-status-test-key" not in str(at.session_state.to_dict())
 
 
 def test_first_click_connection_test_from_empty_state(monkeypatch, configured_key) -> None:
