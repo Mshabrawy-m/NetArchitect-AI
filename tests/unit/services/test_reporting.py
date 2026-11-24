@@ -17,6 +17,7 @@ from capacity import CapacityRun, DemandMapping, evaluate_capacity
 from core.exceptions import (
     LLMAuthenticationError,
     LLMForbiddenError,
+    LLMNotFoundError,
     LLMProviderError,
 )
 from core.schemas.scenario import ScenarioType
@@ -1026,6 +1027,13 @@ def test_ai_provider_error_leaves_the_report_untouched(
                 "The LLM provider blocked the request. Check provider permissions."
             ),
             403,
+        ),
+        (
+            LLMNotFoundError(
+                "The LLM provider could not find the requested model or endpoint. "
+                "Check GROQ_MODEL and GROQ_BASE_URL."
+            ),
+            404,
         ),
     ),
 )

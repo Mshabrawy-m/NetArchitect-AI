@@ -33,6 +33,7 @@ from core.exceptions import (
     LLMForbiddenError,
     LLMMalformedResponseError,
     LLMMissingKeyError,
+    LLMNotFoundError,
     LLMProviderError,
     LLMRateLimitError,
     LLMSchemaError,
@@ -59,6 +60,10 @@ Sleep = Callable[[float], None]
 Clock = Callable[[], float]
 
 USER_AGENT = "NetArchitect-AI/2.0 (+https://github.com/Mshabrawy-m/NetArchitect-AI)"
+NOT_FOUND_MESSAGE = (
+    "The LLM provider could not find the requested model or endpoint "
+    "(HTTP 404). Check GROQ_MODEL and GROQ_BASE_URL."
+)
 
 
 @dataclass(frozen=True)
@@ -319,6 +324,8 @@ class GroqProvider(LLMProvider):
                 "The LLM provider blocked the request (HTTP 403). "
                 "Check the configured key or provider permissions."
             )
+        if result.status_code == 404:
+            raise LLMNotFoundError(NOT_FOUND_MESSAGE)
         if result.status_code == 429:
             return result
         if result.status_code >= 500:
@@ -396,6 +403,7 @@ def provider_status(
 
 
 __all__ = [
+    "NOT_FOUND_MESSAGE",
     "USER_AGENT",
     "GroqProvider",
     "HTTPResult",

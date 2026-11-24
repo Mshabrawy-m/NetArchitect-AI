@@ -10,6 +10,7 @@ from config.limits import MAX_COPILOT_EXPLANATION_CHARS
 from core.exceptions import (
     LLMAuthenticationError,
     LLMForbiddenError,
+    LLMNotFoundError,
     OversizedInputError,
 )
 from core.schemas.network import Device, DeviceRole, DeviceType, Link, Topology
@@ -281,6 +282,13 @@ def test_llm_cannot_add_a_verdict_field() -> None:
                 "The LLM provider blocked the request. Check provider permissions."
             ),
             403,
+        ),
+        (
+            LLMNotFoundError(
+                "The LLM provider could not find the requested model or endpoint. "
+                "Check GROQ_MODEL and GROQ_BASE_URL."
+            ),
+            404,
         ),
     ),
 )

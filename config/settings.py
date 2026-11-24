@@ -28,6 +28,8 @@ _SETTING_KEYS: tuple[str, ...] = (
     "GROQ_MODEL",
 )
 
+DEFAULT_GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+
 
 class Settings(BaseModel):
     """Application configuration values.
@@ -45,7 +47,7 @@ class Settings(BaseModel):
     GROQ_KEY_SOURCE: Literal["secrets", "environment", "none"] = "none"
     # OpenAI-compatible Groq endpoint. Kept configurable so a deployment can
     # point at a compatible gateway without code changes.
-    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_BASE_URL: str = DEFAULT_GROQ_BASE_URL
     # Documented default only. Groq retires models, so deployments override
     # this with GROQ_MODEL (environment variable or Streamlit secret) rather
     # than relying on a hardcoded model name.

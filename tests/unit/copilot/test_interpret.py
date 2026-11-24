@@ -10,6 +10,7 @@ from config.limits import MAX_COPILOT_TEXT_CHARS
 from core.exceptions import (
     LLMAuthenticationError,
     LLMForbiddenError,
+    LLMNotFoundError,
     OversizedInputError,
 )
 from core.schemas.scenario import ScenarioType
@@ -203,6 +204,13 @@ def test_no_key_path_exposes_a_clear_state() -> None:
                 "The LLM provider blocked the request. Check provider permissions."
             ),
             403,
+        ),
+        (
+            LLMNotFoundError(
+                "The LLM provider could not find the requested model or endpoint. "
+                "Check GROQ_MODEL and GROQ_BASE_URL."
+            ),
+            404,
         ),
     ),
 )

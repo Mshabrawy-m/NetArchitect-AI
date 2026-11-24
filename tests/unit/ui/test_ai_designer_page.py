@@ -13,6 +13,7 @@ from config.settings import get_settings
 from core.exceptions import (
     LLMAuthenticationError,
     LLMForbiddenError,
+    LLMNotFoundError,
     LLMProviderError,
 )
 from services.llm.testing import FakeProvider
@@ -202,6 +203,13 @@ def test_provider_failure_is_shown_without_crashing(monkeypatch, configured_key)
                 "The LLM provider blocked the request. Check provider permissions."
             ),
             403,
+        ),
+        (
+            LLMNotFoundError(
+                "The LLM provider could not find the requested model or endpoint. "
+                "Check GROQ_MODEL and GROQ_BASE_URL."
+            ),
+            404,
         ),
     ),
 )

@@ -50,6 +50,10 @@ EN: MappingProxyType[str, str] = MappingProxyType(
             "The LLM provider blocked the request (HTTP {status}). "
             "Check the configured key or provider permissions."
         ),
+        "error.llm.not_found": (
+            "The LLM provider could not find the requested model or endpoint "
+            "(HTTP {status}). Check GROQ_MODEL and GROQ_BASE_URL."
+        ),
         "nav.group.design": "Design",
         "nav.group.analyze": "Analyze",
         "nav.group.operate": "Operate",
@@ -605,6 +609,9 @@ EN: MappingProxyType[str, str] = MappingProxyType(
         "settings.key_configured": "API key configured",
         "settings.key_source": "Key source",
         "settings.model": "Model",
+        "settings.base_url": "Base URL",
+        "settings.base_url_default": "default",
+        "settings.base_url_custom": "custom",
         "settings.key_source_secrets": "Streamlit secrets",
         "settings.key_source_environment": "environment variable",
         "settings.key_source_none": "not configured",
@@ -881,6 +888,10 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "error.llm.forbidden": (
             "حظر مزود LLM الطلب (HTTP {status}). "
             "تحقق من المفتاح المضبط أو أذونات المزود."
+        ),
+        "error.llm.not_found": (
+            "تعذّر على مزوّد LLM العثور على الطراز أو نقطة النهاية المطلوبة "
+            "(HTTP {status}). تحقق من GROQ_MODEL و GROQ_BASE_URL."
         ),
         "nav.group.design": "التصميم",
         "nav.group.analyze": "التحليل",
@@ -1390,6 +1401,9 @@ AR: MappingProxyType[str, str] = MappingProxyType(
         "settings.key_configured": "مفتاح API مضبط",
         "settings.key_source": "مصدر المفتاح",
         "settings.model": "الطراز",
+        "settings.base_url": "عنوان URL الأساسي",
+        "settings.base_url_default": "افتراضي",
+        "settings.base_url_custom": "مخصص",
         "settings.key_source_secrets": "أسرار Streamlit",
         "settings.key_source_environment": "متغير البيئة",
         "settings.key_source_none": "غير مضبط",

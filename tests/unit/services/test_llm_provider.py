@@ -17,6 +17,7 @@ from core.exceptions import (
     LLMForbiddenError,
     LLMMalformedResponseError,
     LLMMissingKeyError,
+    LLMNotFoundError,
     LLMProviderError,
     LLMRateLimitError,
     LLMSchemaError,
@@ -31,6 +32,7 @@ from services.llm import (
     RequestBudget,
     provider_status,
 )
+from services.llm.groq import NOT_FOUND_MESSAGE
 from services.llm.testing import FakeProvider
 
 KEY = "gsk-test-secret-key-that-must-never-appear"
@@ -365,6 +367,35 @@ def test_401_and_403_are_distinct_typed_errors_with_status_and_no_secret(
     assert type(captured[0]) is not type(captured[1])
     assert str(captured[0]) != str(captured[1])
     assert KEY not in caplog.text
+
+
+def test_404_is_typed_not_found_error_without_secret_or_body(caplog) -> None:
+    caplog.set_level(logging.DEBUG)
+    configured_base_url = "https://custom.example.invalid/v1"
+    body = json.dumps(
+        {
+            "error": KEY,
+            "base_url": configured_base_url,
+            "message": "model 'test-model' not found",
+        }
+    ).encode("utf-8")
+    transport = ScriptedTransport([HTTPResult(404, {}, body)])
+
+    with pytest.raises(LLMNotFoundError) as caught:
+        _provider(transport).complete(_messages())
+
+    error = caught.value
+    assert error.status_code == 404
+    assert str(error) == NOT_FOUND_MESSAGE
+    assert "HTTP 404" in str(error)
+    for hidden in (KEY, configured_base_url, '"error"', '"messages"', '"base_url"'):
+        assert hidden not in str(error)
+        assert hidden not in repr(error)
+        assert hidden not in caplog.text
+    headers = {
+        key.lower(): value for key, value in transport.requests[0].header_items()
+    }
+    assert headers["user-agent"] == EXPECTED_USER_AGENT
 
 
 def test_fake_provider_scripts_distinct_authentication_errors() -> None:

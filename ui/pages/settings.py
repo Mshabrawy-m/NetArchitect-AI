@@ -26,7 +26,7 @@ from config.limits import (
     MAX_LLM_TOKENS_PER_SESSION,
     MAX_WORKFLOW_STEPS,
 )
-from config.settings import get_settings
+from config.settings import DEFAULT_GROQ_BASE_URL, get_settings
 from core.exceptions import NetArchitectError
 from services.llm import GroqProvider, LLMMessage, MessageRole, RequestBudget
 from ui import i18n, state
@@ -69,6 +69,17 @@ def _build_provider(api_key: str, budget: RequestBudget) -> GroqProvider:
     )
 
 
+def _base_url_kind(value: str) -> str:
+    """Report whether the configured endpoint is the default, never its value."""
+    normalized = value.strip().rstrip("/")
+    default = DEFAULT_GROQ_BASE_URL.rstrip("/")
+    return i18n.t(
+        "settings.base_url_default"
+        if normalized == default
+        else "settings.base_url_custom"
+    )
+
+
 def _render_key_status(settings_key: str, key_source: str) -> str:
     """Render the non-secret key status and return the configured key."""
     source_labels = {
@@ -77,13 +88,17 @@ def _render_key_status(settings_key: str, key_source: str) -> str:
         "none": i18n.t("settings.key_source_none"),
     }
     source = source_labels.get(key_source, source_labels["none"])
-    columns = st.columns(3)
+    settings = get_settings()
+    columns = st.columns(4)
     columns[0].metric(
         i18n.t("settings.key_configured"),
         i18n.t("common.yes") if settings_key else i18n.t("common.no"),
     )
-    columns[1].metric(i18n.t("settings.model"), i18n.ltr(get_settings().GROQ_MODEL))
-    columns[2].metric(i18n.t("settings.key_source"), source)
+    columns[1].metric(i18n.t("settings.model"), i18n.ltr(settings.GROQ_MODEL))
+    columns[2].metric(
+        i18n.t("settings.base_url"), _base_url_kind(settings.GROQ_BASE_URL)
+    )
+    columns[3].metric(i18n.t("settings.key_source"), source)
     st.caption(i18n.t("settings.key_privacy"))
     return settings_key
 

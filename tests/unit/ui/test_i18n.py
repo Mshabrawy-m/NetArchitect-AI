@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from core.exceptions import LLMAuthenticationError, LLMForbiddenError
+from core.exceptions import (
+    LLMAuthenticationError,
+    LLMForbiddenError,
+    LLMNotFoundError,
+)
 from tests.unit.ui.nav_helpers import open_page
 from ui import i18n
 from ui.components import format_error
@@ -30,6 +34,7 @@ def test_catalogs_have_full_arabic_key_and_placeholder_parity() -> None:
 PROVIDER_ERROR_CASES = (
     ("error.llm.authentication", 401, "rejected the API key"),
     ("error.llm.forbidden", 403, "blocked the request"),
+    ("error.llm.not_found", 404, "could not find the requested model"),
 )
 
 
@@ -57,6 +62,7 @@ def test_format_error_renders_typed_provider_errors_without_secret(
         LLMAuthenticationError(f"bad key: {secret}")
     )
     forbidden = format_error(LLMForbiddenError(f"bad key: {secret}"))
+    not_found = format_error(LLMNotFoundError(f"bad key: {secret}"))
 
     assert authentication == i18n.translate(
         "error.llm.authentication", {"status": 401}, language=language
@@ -64,9 +70,13 @@ def test_format_error_renders_typed_provider_errors_without_secret(
     assert forbidden == i18n.translate(
         "error.llm.forbidden", {"status": 403}, language=language
     )
+    assert not_found == i18n.translate(
+        "error.llm.not_found", {"status": 404}, language=language
+    )
     assert "HTTP 401" in _plain(authentication)
     assert "HTTP 403" in _plain(forbidden)
-    assert secret not in authentication + forbidden
+    assert "HTTP 404" in _plain(not_found)
+    assert secret not in authentication + forbidden + not_found
 
 
 REMOVED_KEY_PHRASES = (

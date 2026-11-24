@@ -2,6 +2,21 @@
 
 All notable changes to NetArchitect AI are recorded here. Dates are ISO-8601.
 
+## 2026-11-24 - typed 404 and clearer Settings endpoint state
+
+### Added
+- HTTP 404 from the provider is now `LLMNotFoundError` with a fixed message that
+  names `GROQ_MODEL` and `GROQ_BASE_URL`; the key, response body, and configured
+  base URL value are never included.
+- EN/AR `error.llm.not_found` catalogs render through `format_error`; Settings
+  now shows the configured model name and reports the base URL as default or
+  custom without displaying its value.
+
+### Tests
+- Added 404 coverage for the provider mapping and secrecy rules, both languages,
+  and every call site that preserves status codes (Settings, AI designer,
+  copilot explanations, copilot interpretation, and report notes).
+
 ## 2026-11-24 - provider status survives every UI path
 
 ### Fixed

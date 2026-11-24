@@ -158,6 +158,12 @@ class LLMForbiddenError(LLMError):
     status_code = 403
 
 
+class LLMNotFoundError(LLMError):
+    """The provider could not find the model or endpoint (HTTP 404)."""
+
+    status_code = 404
+
+
 class LLMTimeoutError(LLMError):
     """A provider request exceeded its wall-clock timeout."""
 

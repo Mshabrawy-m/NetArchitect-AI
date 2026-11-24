@@ -14,7 +14,11 @@ import streamlit as st
 from pydantic import ValidationError
 
 from core.csv_safe import neutralize_cell
-from core.exceptions import LLMAuthenticationError, LLMForbiddenError
+from core.exceptions import (
+    LLMAuthenticationError,
+    LLMForbiddenError,
+    LLMNotFoundError,
+)
 from core.schemas.validation import Finding, Severity
 from ui import i18n
 
@@ -145,6 +149,8 @@ def format_error(error: Exception) -> str:
         return i18n.t("error.llm.authentication", status=error.status_code)
     if isinstance(error, LLMForbiddenError):
         return i18n.t("error.llm.forbidden", status=error.status_code)
+    if isinstance(error, LLMNotFoundError):
+        return i18n.t("error.llm.not_found", status=error.status_code)
     if isinstance(error, ValidationError):
         parts = [
             f"{'.'.join(str(item) for item in detail['loc'])}: {detail['msg']}"

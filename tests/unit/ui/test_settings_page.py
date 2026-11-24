@@ -13,6 +13,7 @@ from config.settings import get_settings
 from core.exceptions import (
     LLMAuthenticationError,
     LLMForbiddenError,
+    LLMNotFoundError,
     LLMProviderError,
 )
 from services.copilot import AIExplanationDraft, CopilotCache, PromptTrace, build_key
@@ -120,6 +121,31 @@ def test_settings_page_shows_key_presence_but_never_the_key(configured_key) -> N
     assert secret not in _rendered_text(at)
     for name, value in at.session_state.to_dict().items():
         assert secret not in str(value), f"session value {name!r} leaked the key"
+
+
+def test_settings_reports_default_base_url_without_its_value() -> None:
+    at = _settings_page()
+
+    assert _metric(at, "Model") == get_settings().GROQ_MODEL
+    assert _metric(at, "Base URL") == "default"
+
+
+def test_settings_shows_model_and_custom_base_url_kind_only(
+    monkeypatch,
+    request,
+) -> None:
+    model = "custom-model-for-test"
+    configured_base_url = "https://custom.example.invalid/v1"
+    monkeypatch.setenv("GROQ_MODEL", model)
+    monkeypatch.setenv("GROQ_BASE_URL", configured_base_url)
+    get_settings.cache_clear()
+    request.addfinalizer(get_settings.cache_clear)
+
+    at = _settings_page()
+
+    assert _metric(at, "Model") == model
+    assert _metric(at, "Base URL") == "custom"
+    assert configured_base_url not in _rendered_text(at)
 
 
 def test_settings_page_has_no_session_key_input_widget() -> None:
@@ -249,6 +275,13 @@ def test_settings_page_test_connection_reports_provider_failure(
                 "The LLM provider blocked the request. Check provider permissions."
             ),
             403,
+        ),
+        (
+            LLMNotFoundError(
+                "The LLM provider could not find the requested model or endpoint. "
+                "Check GROQ_MODEL and GROQ_BASE_URL."
+            ),
+            404,
         ),
     ),
 )
